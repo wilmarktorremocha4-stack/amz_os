@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CalculatorLayout, Field, ResultRow, StatusBanner, StatusTier } from "@/components/calculators/CalcUI";
 
 export default function RoiCalculatorPage() {
   const [cost, setCost] = useState("10");
@@ -22,86 +23,53 @@ export default function RoiCalculatorPage() {
     const margin = sellNum > 0 ? (profitPerUnit / sellNum) * 100 : 0;
     const totalProfit = profitPerUnit * unitsNum;
 
-    return { profitPerUnit, roi, margin, totalProfit };
+    let tier: StatusTier = "good";
+    const tips: string[] = [];
+    if (profitPerUnit <= 0) {
+      tier = "bad";
+      tips.push("This product loses money per unit — raise the sell price or negotiate a lower unit cost before sourcing it.");
+    } else if (roi < 30) {
+      tier = "warn";
+      tips.push("ROI under 30% is thin for wholesale. Try negotiating a lower cost, buying a larger volume for better pricing, or raising the sell price.");
+    } else {
+      tips.push("Healthy ROI for wholesale sourcing — confirm sell-through velocity before committing to a large order.");
+    }
+    if (margin < 15 && profitPerUnit > 0) {
+      tier = tier === "good" ? "warn" : tier;
+      tips.push("Margin under 15% leaves little room for price drops or fee changes.");
+    }
+
+    return { profitPerUnit, roi, margin, totalProfit, tier, tips };
   }, [cost, sellPrice, amazonFees, shippingCost, units]);
 
   return (
-    <main className="flex flex-1 flex-col gap-8 p-10">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          ROI Calculator
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Estimate return on investment for a wholesale product.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <div className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+    <CalculatorLayout
+      title="ROI Calculator"
+      description="Estimate return on investment for a wholesale product."
+      inputs={
+        <>
           <Field label="Unit cost ($)" value={cost} onChange={setCost} />
           <Field label="Sell price ($)" value={sellPrice} onChange={setSellPrice} />
           <Field label="Amazon fees per unit ($)" value={amazonFees} onChange={setAmazonFees} />
           <Field label="Shipping/prep cost per unit ($)" value={shippingCost} onChange={setShippingCost} />
           <Field label="Units purchased" value={units} onChange={setUnits} />
-        </div>
-
-        <div className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
-          <ResultRow label="Profit per unit" value={`$${result.profitPerUnit.toFixed(2)}`} />
-          <ResultRow label="ROI" value={`${result.roi.toFixed(1)}%`} />
-          <ResultRow label="Margin" value={`${result.margin.toFixed(1)}%`} />
-          <ResultRow label="Total profit" value={`$${result.totalProfit.toFixed(2)}`} highlight />
-        </div>
-      </div>
-    </main>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-        {label}
-      </span>
-      <input
-        type="number"
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-      />
-    </label>
-  );
-}
-
-function ResultRow({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between border-b border-zinc-100 pb-3 last:border-0 last:pb-0 dark:border-zinc-800">
-      <span className="text-sm text-zinc-500 dark:text-zinc-400">{label}</span>
-      <span
-        className={`text-lg font-semibold ${
-          highlight
-            ? "text-emerald-600 dark:text-emerald-400"
-            : "text-zinc-900 dark:text-zinc-50"
-        }`}
-      >
-        {value}
-      </span>
-    </div>
+        </>
+      }
+      outputs={
+        <>
+          <div className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+            <ResultRow label="Profit per unit" value={`$${result.profitPerUnit.toFixed(2)}`} />
+            <ResultRow label="ROI" value={`${result.roi.toFixed(1)}%`} />
+            <ResultRow label="Margin" value={`${result.margin.toFixed(1)}%`} />
+            <ResultRow label="Total profit" value={`$${result.totalProfit.toFixed(2)}`} highlight />
+          </div>
+          <StatusBanner
+            tier={result.tier}
+            headline={result.profitPerUnit <= 0 ? "Unprofitable at these numbers" : `${result.roi.toFixed(0)}% ROI`}
+            tips={result.tips}
+          />
+        </>
+      }
+    />
   );
 }
