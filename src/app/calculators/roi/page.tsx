@@ -33,26 +33,68 @@ export default function RoiCalculatorPage() {
 
     let tier: StatusTier = "good";
     const tips: string[] = [];
-    if (profitPerUnit <= 0) {
+
+    if (costNum === 0 && sellNum === 0) {
+      tips.push("Enter a unit cost and sell price to see ROI.");
+    } else if (feesNum > sellNum && sellNum > 0) {
       tier = "bad";
       tips.push(
-        "This product loses money per unit — raise the sell price or negotiate a lower unit cost before sourcing it.",
+        `Amazon fees alone ($${feesNum.toFixed(2)}) exceed the sell price ($${sellNum.toFixed(2)}) — check that the fee figure is per-unit, not total, and re-pull referral/FBA fees for this exact listing.`,
+      );
+    } else if (profitPerUnit <= 0) {
+      tier = "bad";
+      const shortfall = Math.abs(profitPerUnit);
+      tips.push(
+        `Losing $${shortfall.toFixed(2)} per unit — raise the sell price by at least that much or negotiate a lower unit cost before sourcing it.`,
+      );
+      if (shipNum / (totalCostPerUnit || 1) > 0.3) {
+        tips.push(
+          "Shipping/prep is a large slice of unit cost — a cheaper freight method or larger order could close most of this gap.",
+        );
+      }
+    } else if (roi < 15) {
+      tier = "bad";
+      tips.push(
+        `ROI of ${roi.toFixed(0)}% barely beats doing nothing with the cash — wholesale resellers typically target 30%+ to absorb returns, storage, and slow movers.`,
       );
     } else if (roi < 30) {
       tier = "warn";
       tips.push(
-        "ROI under 30% is thin for wholesale. Try negotiating a lower cost, buying a larger volume for better pricing, or raising the sell price.",
+        `ROI of ${roi.toFixed(0)}% is thin for wholesale. Try negotiating a lower cost, buying a larger volume for better pricing, or raising the sell price by a few dollars.`,
+      );
+    } else if (roi > 100) {
+      tips.push(
+        `${roi.toFixed(0)}% ROI is exceptional — double-check the cost and fee inputs are accurate, since numbers this strong are uncommon in wholesale.`,
       );
     } else {
       tips.push(
         "Healthy ROI for wholesale sourcing — confirm sell-through velocity before committing to a large order.",
       );
     }
-    if (margin < 15 && profitPerUnit > 0) {
+
+    if (margin < 10 && profitPerUnit > 0) {
+      tier = tier === "good" ? "warn" : tier;
+      tips.push(
+        "Margin under 10% leaves almost no room for a price war, a fee increase, or a return — treat this as a one-time test buy, not a repeat order.",
+      );
+    } else if (margin < 15 && profitPerUnit > 0) {
       tier = tier === "good" ? "warn" : tier;
       tips.push(
         "Margin under 15% leaves little room for price drops or fee changes.",
       );
+    }
+
+    if (unitsNum === 0 && profitPerUnit > 0) {
+      tips.push(
+        "Add the units you plan to purchase to see total profit for this order.",
+      );
+    } else if (unitsNum > 0 && totalProfit > 0 && totalCostPerUnit * unitsNum > 0) {
+      const totalCapital = totalCostPerUnit * unitsNum;
+      if (totalCapital > 5000 && roi < 50) {
+        tips.push(
+          `This order ties up $${totalCapital.toFixed(0)} in capital — consider a smaller test order first if you haven't sold this product before.`,
+        );
+      }
     }
 
     return { profitPerUnit, roi, margin, totalProfit, tier, tips };

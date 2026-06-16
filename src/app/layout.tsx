@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Sidebar } from "@/components/Sidebar";
+import { TopBar } from "@/components/TopBar";
 import { auth } from "@/auth";
 import "./globals.css";
 
@@ -35,7 +36,10 @@ export default async function RootLayout({
         {session?.user && (
           <Sidebar userEmail={session.user.email ?? undefined} />
         )}
-        <div className="flex flex-1 flex-col">{children}</div>
+        <div className="flex flex-1 flex-col">
+          {session?.user && <TopBar />}
+          {children}
+        </div>
       </body>
     </html>
   );

@@ -11,7 +11,9 @@ export async function signUp(formData: FormData) {
     .trim()
     .toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = String(formData.get("lastName") ?? "").trim();
+  const name = [firstName, lastName].filter(Boolean).join(" ").trim();
 
   if (!email || password.length < 8) {
     redirect(
@@ -28,7 +30,13 @@ export async function signUp(formData: FormData) {
 
   const hashed = await bcrypt.hash(password, 10);
   await prisma.user.create({
-    data: { email, password: hashed, name: name || null },
+    data: {
+      email,
+      password: hashed,
+      name: name || null,
+      firstName: firstName || null,
+      lastName: lastName || null,
+    },
   });
 
   await sendEmail({

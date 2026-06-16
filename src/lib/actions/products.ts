@@ -49,10 +49,30 @@ export async function setProductLaunched(productId: string, launched: boolean) {
   revalidatePath("/progress");
 }
 
-export async function deleteProduct(productId: string) {
+export async function archiveProduct(productId: string) {
+  const user = await getCurrentUser();
+  await prisma.product.update({
+    where: { id: productId, userId: user.id },
+    data: { archived: true },
+  });
+  revalidatePath("/research");
+  revalidatePath("/archive");
+}
+
+export async function restoreProduct(productId: string) {
+  const user = await getCurrentUser();
+  await prisma.product.update({
+    where: { id: productId, userId: user.id },
+    data: { archived: false },
+  });
+  revalidatePath("/research");
+  revalidatePath("/archive");
+}
+
+export async function deleteProductPermanently(productId: string) {
   const user = await getCurrentUser();
   await prisma.product.delete({ where: { id: productId, userId: user.id } });
-  revalidatePath("/research");
+  revalidatePath("/archive");
 }
 
 function emptyToNull(value: FormDataEntryValue | null) {

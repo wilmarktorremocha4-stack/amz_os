@@ -27,15 +27,55 @@ export default async function SettingsPage() {
           </label>
           <input value={user.email} disabled className="input opacity-60" />
           <span className="text-xs text-[var(--muted)]">
-            Login isn&apos;t built yet, so this is fixed to a single account.
+            Set at signup — contact support to change it.
           </span>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-sm font-medium text-[var(--muted)]">
+              First name
+            </label>
+            <input
+              name="firstName"
+              defaultValue={user.firstName ?? ""}
+              className="input"
+            />
+          </div>
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-sm font-medium text-[var(--muted)]">
+              Last name
+            </label>
+            <input
+              name="lastName"
+              defaultValue={user.lastName ?? ""}
+              className="input"
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-[var(--muted)]">
-            Name
+            Nickname
           </label>
-          <input name="name" defaultValue={user.name ?? ""} className="input" />
+          <input
+            name="nickname"
+            defaultValue={user.nickname ?? ""}
+            className="input"
+            placeholder="What should the AI Agent call you? (optional)"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-[var(--muted)]">
+            Company website
+          </label>
+          <input
+            name="companyWebsite"
+            defaultValue={user.companyWebsite ?? ""}
+            className="input"
+            placeholder="https://yourcompany.com"
+          />
         </div>
 
         <div className="flex flex-col gap-1">

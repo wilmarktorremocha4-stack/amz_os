@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
-import { createProduct, deleteProduct } from "@/lib/actions/products";
+import { createProduct, archiveProduct } from "@/lib/actions/products";
 import { LaunchedToggle } from "@/components/LaunchedToggle";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function ResearchPage() {
   const user = await getCurrentUser();
   const products = await prisma.product.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, archived: false },
     orderBy: { createdAt: "desc" },
   });
 
@@ -101,14 +101,14 @@ export default async function ResearchPage() {
                 <td className="p-3 text-right">
                   <form
                     action={async () => {
-                      await deleteProduct(p.id);
+                      await archiveProduct(p.id);
                     }}
                   >
                     <button
                       type="submit"
                       className="text-xs text-red-500 hover:underline"
                     >
-                      Remove
+                      Archive
                     </button>
                   </form>
                 </td>

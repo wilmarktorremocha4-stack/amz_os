@@ -32,10 +32,29 @@ export default function MultiPackCalculatorPage() {
 
     let tier: StatusTier = "good";
     const tips: string[] = [];
-    if (profitPerPack <= 0) {
+    const singleUnitProfitEquivalent =
+      qtyNum > 0 ? profitPerPack / qtyNum : 0;
+    const singleUnitFullCost = qtyNum > 0 ? totalCost / qtyNum + feesNum / qtyNum : 0;
+
+    if (qtyNum === 0 && singleCostNum === 0) {
+      tips.push("Enter a unit cost and units per pack to evaluate this multi-pack.");
+    } else if (qtyNum === 0 && sellNum > 0) {
+      tier = "warn";
+      tips.push("Units per pack is zero — enter how many units go in each pack.");
+    } else if (profitPerPack < 0) {
       tier = "bad";
       tips.push(
-        "This multi-pack loses money. Raise the pack price or reduce the pack quantity to lower per-pack cost.",
+        `Losing $${Math.abs(profitPerPack).toFixed(2)} per pack. Raise the pack price or reduce the pack quantity to lower per-pack cost.`,
+      );
+    } else if (profitPerPack === 0) {
+      tier = "bad";
+      tips.push(
+        "Pack breaks even exactly — any return, damaged unit, or fee bump turns this into a loss.",
+      );
+    } else if (margin < 10) {
+      tier = "bad";
+      tips.push(
+        `Margin of ${margin.toFixed(1)}% on this pack is too thin to absorb a single damaged or returned unit out of the ${qtyNum}-pack.`,
       );
     } else if (margin < 15) {
       tier = "warn";
@@ -45,6 +64,29 @@ export default function MultiPackCalculatorPage() {
     } else {
       tips.push(
         "Multi-pack pricing is outperforming a likely single-unit listing.",
+      );
+    }
+
+    if (
+      singleSellEquivalent > 0 &&
+      singleUnitFullCost > 0 &&
+      singleUnitProfitEquivalent > 0 &&
+      qtyNum >= 2
+    ) {
+      const perUnitMargin =
+        singleSellEquivalent > 0
+          ? (singleUnitProfitEquivalent / singleSellEquivalent) * 100
+          : 0;
+      if (perUnitMargin < margin - 5) {
+        tips.push(
+          "Per-unit economics inside the pack are weaker than the headline pack margin suggests — verify Amazon fees scale correctly for multi-unit listings.",
+        );
+      }
+    }
+
+    if (qtyNum > 6 && profitPerPack > 0) {
+      tips.push(
+        `${qtyNum} units per pack increases weight/size tier risk for FBA — confirm the fee figure reflects the correct size tier for this pack.`,
       );
     }
 

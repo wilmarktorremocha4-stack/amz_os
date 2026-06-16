@@ -7,7 +7,7 @@ import {
   CalculatorRunSummary,
   listCalculatorRuns,
   saveCalculatorRun,
-  deleteCalculatorRun,
+  archiveCalculatorRun,
 } from "@/lib/actions/calculators";
 
 export function CalculatorHistory({
@@ -41,7 +41,7 @@ export function CalculatorHistory({
 
   function handleDelete(id: string) {
     startTransition(async () => {
-      await deleteCalculatorRun(id);
+      await archiveCalculatorRun(id);
       setRuns(await listCalculatorRuns(type));
     });
   }

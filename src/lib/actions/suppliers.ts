@@ -51,10 +51,30 @@ export async function updateSupplierStage(supplierId: string, stage: string) {
   revalidatePath("/progress");
 }
 
-export async function deleteSupplier(supplierId: string) {
+export async function archiveSupplier(supplierId: string) {
+  const user = await getCurrentUser();
+  await prisma.supplier.update({
+    where: { id: supplierId, userId: user.id },
+    data: { archived: true },
+  });
+  revalidatePath("/crm");
+  revalidatePath("/archive");
+}
+
+export async function restoreSupplier(supplierId: string) {
+  const user = await getCurrentUser();
+  await prisma.supplier.update({
+    where: { id: supplierId, userId: user.id },
+    data: { archived: false },
+  });
+  revalidatePath("/crm");
+  revalidatePath("/archive");
+}
+
+export async function deleteSupplierPermanently(supplierId: string) {
   const user = await getCurrentUser();
   await prisma.supplier.delete({ where: { id: supplierId, userId: user.id } });
-  revalidatePath("/crm");
+  revalidatePath("/archive");
 }
 
 export async function emailFollowUpDigest() {
