@@ -1,8 +1,44 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
+import { searchAmazonProducts } from "@/lib/rainforest";
+
+export async function lookupBrandOnAmazon(formData: FormData) {
+  const query = String(formData.get("lookupQuery") ?? "").trim();
+  if (!query) return;
+
+  try {
+    const user = await getCurrentUser();
+    const products = await searchAmazonProducts(query);
+
+    if (products.length === 0) {
+      redirect(`/research/brands?lookupError=${encodeURIComponent(`No Amazon results for "${query}".`)}`);
+    }
+
+    const prices = products.map((p) => p.price).filter((p): p is number => p !== null);
+    const reviews = products.map((p) => p.ratingsTotal).filter((r): r is number => r !== null);
+    const avgPrice = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : null;
+    const avgReviews = reviews.length ? Math.round(reviews.reduce((a, b) => a + b, 0) / reviews.length) : null;
+
+    await prisma.brand.create({
+      data: {
+        userId: user.id,
+        name: query,
+        avgPrice,
+        reviewCount: avgReviews,
+        notes: `Avg. price and review count pulled from a live Amazon search (${products.length} listings, via Rainforest API) on ${new Date().toLocaleDateString()}. Seller count and est. monthly sales aren't available from this data source — enter those manually if known.`,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Lookup failed";
+    redirect(`/research/brands?lookupError=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/research/brands");
+}
 
 export async function createBrand(formData: FormData) {
   const user = await getCurrentUser();

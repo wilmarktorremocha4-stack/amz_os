@@ -1,17 +1,22 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
-import { createBrand, deleteBrand } from "@/lib/actions/brands";
+import { createBrand, deleteBrand, lookupBrandOnAmazon } from "@/lib/actions/brands";
 import { computeBrandOpportunityScore } from "@/lib/brandScore";
 import { ApprovedToggle } from "@/components/ApprovedToggle";
 
 export const dynamic = "force-dynamic";
 
-export default async function BrandResearchPage() {
+export default async function BrandResearchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lookupError?: string }>;
+}) {
   const user = await getCurrentUser();
   const brands = await prisma.brand.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
   });
+  const { lookupError } = await searchParams;
 
   return (
     <main className="flex flex-1 flex-col gap-8 p-10">
@@ -20,11 +25,33 @@ export default async function BrandResearchPage() {
           Brand Research
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          An internal opportunity-scoring tool in place of SmartScout. There
-          is no live Amazon data feed — enter what you find researching
-          storefronts, Keepa, or supplier sheets, and this scores it for you.
+          An internal opportunity-scoring tool in place of SmartScout. Pull
+          real price/review data straight from Amazon below, or enter what
+          you find researching storefronts, Keepa, or supplier sheets — this
+          scores it for you either way.
         </p>
       </div>
+
+      {lookupError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          {lookupError}
+        </div>
+      )}
+
+      <form
+        action={lookupBrandOnAmazon}
+        className="flex gap-3 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950"
+      >
+        <input
+          name="lookupQuery"
+          placeholder="Search a brand or product on Amazon (e.g. &quot;Stanley tumbler&quot;)"
+          required
+          className="input flex-1"
+        />
+        <button type="submit" className="btn-primary whitespace-nowrap">
+          Pull real Amazon data
+        </button>
+      </form>
 
       <form
         action={createBrand}

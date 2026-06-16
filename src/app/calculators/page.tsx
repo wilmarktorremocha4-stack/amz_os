@@ -2,14 +2,14 @@ import Link from "next/link";
 
 const calculators = [
   { href: "/calculators/roi", name: "ROI Calculator", status: "live" },
-  { href: "/calculators/margin", name: "Margin Calculator", status: "soon" },
-  { href: "/calculators/break-even", name: "Break-Even Calculator", status: "soon" },
-  { href: "/calculators/inventory-cost", name: "Inventory Cost Calculator", status: "soon" },
-  { href: "/calculators/multi-pack", name: "Multi-Pack Calculator", status: "soon" },
-  { href: "/calculators/bundle", name: "Wholesale Bundle Calculator", status: "soon" },
-  { href: "/calculators/sales-tax", name: "Sales Tax Calculator", status: "soon" },
-  { href: "/calculators/prep-center", name: "Prep Center Calculator", status: "soon" },
-  { href: "/calculators/reorder", name: "Reorder Calculator", status: "soon" },
+  { href: "/calculators/margin", name: "Margin Calculator", status: "live" },
+  { href: "/calculators/break-even", name: "Break-Even Calculator", status: "live" },
+  { href: "/calculators/inventory-cost", name: "Inventory Cost Calculator", status: "live" },
+  { href: "/calculators/multi-pack", name: "Multi-Pack Calculator", status: "live" },
+  { href: "/calculators/bundle", name: "Wholesale Bundle Calculator", status: "live" },
+  { href: "/calculators/sales-tax", name: "Sales Tax Calculator", status: "live" },
+  { href: "/calculators/prep-center", name: "Prep Center Calculator", status: "live" },
+  { href: "/calculators/reorder", name: "Reorder Calculator", status: "live" },
 ];
 
 export default function CalculatorsPage() {

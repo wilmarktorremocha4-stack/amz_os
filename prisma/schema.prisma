@@ -30,6 +30,8 @@ model User {
   skoolId   String?  @unique
   // Manually self-reported until a Skool API/webhook integration exists.
   skoolCourseProgressPct Int @default(0)
+  // Target monthly recurring revenue, used by the MRR-vs-goal chart.
+  monthlyRevenueGoal Decimal? @db.Decimal(12, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

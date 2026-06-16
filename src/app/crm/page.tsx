@@ -5,12 +5,17 @@ import { StageSelect } from "@/components/StageSelect";
 
 export const dynamic = "force-dynamic";
 
-export default async function CrmPage() {
+export default async function CrmPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const user = await getCurrentUser();
   const suppliers = await prisma.supplier.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
   });
+  const { error } = await searchParams;
 
   return (
     <main className="flex flex-1 flex-col gap-8 p-10">
@@ -22,6 +27,12 @@ export default async function CrmPage() {
           Track outreach, brand approvals, and onboarding pipeline.
         </p>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          Couldn&apos;t add supplier: {error}
+        </div>
+      )}
 
       <form
         action={createSupplier}

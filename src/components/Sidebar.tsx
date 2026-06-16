@@ -7,6 +7,7 @@ const links = [
   { href: "/research", label: "Product Research" },
   { href: "/research/brands", label: "Brand Research" },
   { href: "/progress", label: "Progress Tracker" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function Sidebar() {
