@@ -26,19 +26,49 @@ export default function BreakEvenCalculatorPage() {
 
     let tier: StatusTier = "good";
     const tips: string[] = [];
-    if (profitNum <= 0) {
+    if (investmentNum === 0 && profitNum === 0) {
+      tips.push(
+        "Enter your total investment and profit per unit to estimate break-even.",
+      );
+    } else if (profitNum < 0) {
       tier = "bad";
       tips.push(
-        "Profit per unit is zero or negative — this investment never breaks even at these numbers.",
+        `Profit per unit is negative ($${profitNum.toFixed(2)}) — this investment never breaks even and loses more money the more you sell. Fix unit economics before ordering.`,
+      );
+    } else if (profitNum === 0) {
+      tier = "bad";
+      tips.push(
+        "Profit per unit is exactly zero — you'll recover the cash but never turn a profit. Raise the price or cut costs before committing.",
+      );
+    } else if (monthlyUnitsNum === 0) {
+      tier = "warn";
+      tips.push(
+        `You'll need to sell ${breakEvenUnits.toFixed(0)} units to break even — add an estimated monthly sales pace to see how long that will take.`,
+      );
+    } else if (monthsToBreakEven > 6) {
+      tier = "bad";
+      tips.push(
+        `${monthsToBreakEven.toFixed(1)} months to break even ties up capital for a long stretch — consider a smaller initial order, a higher sell price, or finding faster-turning inventory.`,
       );
     } else if (monthsToBreakEven > 3) {
       tier = "warn";
       tips.push(
-        "Over 3 months to break even ties up cash for a while — consider a smaller initial order or improving profit per unit.",
+        `${monthsToBreakEven.toFixed(1)} months to break even ties up cash for a while — consider a smaller initial order or improving profit per unit.`,
+      );
+    } else if (monthsToBreakEven <= 1) {
+      tips.push(
+        `Breaks even in under a month — capital recycles fast, which supports scaling this order size up if demand allows.`,
       );
     } else {
       tips.push(
-        "Fast payback period — capital is recovered quickly, freeing it up for the next order.",
+        `Fast payback period of ${monthsToBreakEven.toFixed(1)} months — capital is recovered quickly, freeing it up for the next order.`,
+      );
+    }
+
+    if (breakEvenUnits > 0 && monthlyUnitsNum > 0 && breakEvenUnits > monthlyUnitsNum * 24) {
+      tier = "bad";
+      tips.push(
+        "At this sales pace, break-even is over 2 years out — this is more a long-term hold than a flippable wholesale order.",
       );
     }
 

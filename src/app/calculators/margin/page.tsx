@@ -24,19 +24,43 @@ export default function MarginCalculatorPage() {
 
     let tier: StatusTier = "good";
     const tips: string[] = [];
-    if (profit <= 0) {
+    if (costNum === 0 && sellNum === 0) {
+      tips.push("Enter a unit cost and sell price to see margin and markup.");
+    } else if (sellNum === 0 && costNum > 0) {
+      tier = "bad";
+      tips.push("No sell price entered yet — add one to evaluate this product.");
+    } else if (profit < 0) {
       tier = "bad";
       tips.push(
-        "Selling below cost. Raise the price or source the product cheaper.",
+        `Selling $${Math.abs(profit).toFixed(2)} below cost. Raise the price or source the product cheaper before listing it.`,
+      );
+    } else if (profit === 0) {
+      tier = "bad";
+      tips.push(
+        "Sell price exactly equals cost — every sale is break-even before fees, shipping, or returns, which guarantees a loss in practice.",
+      );
+    } else if (margin < 10) {
+      tier = "bad";
+      tips.push(
+        `Margin of ${margin.toFixed(1)}% is razor-thin even before Amazon fees — this almost certainly loses money once referral/FBA fees and shipping are added.`,
       );
     } else if (margin < 20) {
       tier = "warn";
       tips.push(
-        "Margin under 20% is tight once Amazon fees and shipping are layered on — run this through the ROI calculator with real fees before committing.",
+        `Margin of ${margin.toFixed(1)}% is tight once Amazon fees and shipping are layered on — run this through the ROI calculator with real fees before committing.`,
+      );
+    } else if (margin > 70) {
+      tips.push(
+        `${margin.toFixed(1)}% margin is unusually high — double check the cost figure includes everything (freight, customs, packaging), since numbers this strong are rare in wholesale.`,
       );
     } else {
       tips.push(
         "Solid gross margin before fees — confirm it still holds up after Amazon referral/FBA fees.",
+      );
+    }
+    if (markup > 0 && markup < 15 && profit > 0) {
+      tips.push(
+        `Markup of only ${markup.toFixed(1)}% over cost gives almost no cushion for a price match or discount promotion.`,
       );
     }
 

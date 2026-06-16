@@ -2,8 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import {
   createBrand,
-  deleteBrand,
+  archiveBrand,
   lookupBrandOnAmazon,
+  sendBrandOutreachEmail,
 } from "@/lib/actions/brands";
 import { computeBrandOpportunityScore } from "@/lib/brandScore";
 import { ApprovedToggle } from "@/components/ApprovedToggle";
@@ -17,7 +18,7 @@ export default async function BrandResearchPage({
 }) {
   const user = await getCurrentUser();
   const brands = await prisma.brand.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, archived: false },
     orderBy: { createdAt: "desc" },
   });
   const { lookupError } = await searchParams;
@@ -170,17 +171,37 @@ export default async function BrandResearchPage({
                 <ApprovedToggle id={b.id} approved={b.approved} />
                 <form
                   action={async () => {
-                    await deleteBrand(b.id);
+                    await archiveBrand(b.id);
                   }}
                 >
                   <button
                     type="submit"
                     className="text-xs text-red-500 hover:underline"
                   >
-                    Remove
+                    Archive
                   </button>
                 </form>
               </div>
+
+              <form
+                action={sendBrandOutreachEmail}
+                className="flex gap-2 border-t border-[var(--border)] pt-3"
+              >
+                <input type="hidden" name="brandId" value={b.id} />
+                <input
+                  name="contactEmail"
+                  type="email"
+                  placeholder="Contact email"
+                  required
+                  className="input flex-1 text-xs"
+                />
+                <button
+                  type="submit"
+                  className="btn-secondary whitespace-nowrap text-xs"
+                >
+                  Draft &amp; send outreach
+                </button>
+              </form>
             </div>
           );
         })}

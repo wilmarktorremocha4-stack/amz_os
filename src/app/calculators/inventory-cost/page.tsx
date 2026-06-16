@@ -34,19 +34,49 @@ export default function InventoryCostCalculatorPage() {
     const tips: string[] = [];
     const freightSharePct =
       totalCost > 0 ? ((shippingNum + miscNum) / totalCost) * 100 : 0;
-    if (sellNum > 0 && landedCostPerUnit >= sellNum) {
+
+    if (unitsNum === 0 && unitCostNum === 0) {
+      tips.push("Enter unit cost and units purchased to calculate landed cost.");
+    } else if (unitsNum === 0 && (shippingNum > 0 || miscNum > 0)) {
+      tier = "warn";
+      tips.push(
+        "No units entered yet — shipping and misc fees can't be spread per-unit without a unit count.",
+      );
+    } else if (sellNum > 0 && landedCostPerUnit > sellNum) {
+      tier = "bad";
+      const shortfall = landedCostPerUnit - sellNum;
+      tips.push(
+        `Landed cost per unit is $${shortfall.toFixed(2)} above your sell price — this order loses money before Amazon fees even apply.`,
+      );
+    } else if (sellNum > 0 && landedCostPerUnit === sellNum) {
       tier = "bad";
       tips.push(
-        "Landed cost per unit is at or above your sell price — this order loses money before Amazon fees.",
+        "Landed cost exactly equals sell price — break-even before any Amazon fees means a guaranteed loss in practice.",
+      );
+    } else if (freightSharePct > 35) {
+      tier = "bad";
+      tips.push(
+        `Shipping/misc fees are ${freightSharePct.toFixed(0)}% of total landed cost — this is unusually high. Check for express freight, small order surcharges, or excessive customs/misc charges.`,
       );
     } else if (freightSharePct > 20) {
       tier = "warn";
       tips.push(
-        "Shipping/misc fees are over 20% of total cost — see if a different freight method or larger order size brings this down.",
+        `Shipping/misc fees are ${freightSharePct.toFixed(0)}% of total cost — see if a different freight method or larger order size brings this down.`,
+      );
+    } else if (sellNum > 0 && landedMargin < 15) {
+      tier = "warn";
+      tips.push(
+        `Margin vs. sell price is only ${landedMargin.toFixed(1)}% after landed cost — there's little room left once Amazon fees are factored in.`,
       );
     } else {
       tips.push(
         "Freight and misc costs are a reasonable share of total landed cost.",
+      );
+    }
+
+    if (sellNum === 0 && landedCostPerUnit > 0) {
+      tips.push(
+        "Add a sell price to see how landed cost compares to your margin.",
       );
     }
 

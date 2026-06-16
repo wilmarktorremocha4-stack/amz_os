@@ -28,7 +28,18 @@ export default async function SignupPage({
           )}
 
           <form action={signUp} className="flex flex-col gap-3">
-            <input name="name" placeholder="Name" className="input" />
+            <div className="flex gap-3">
+              <input
+                name="firstName"
+                placeholder="First name"
+                className="input"
+              />
+              <input
+                name="lastName"
+                placeholder="Last name"
+                className="input"
+              />
+            </div>
             <input
               name="email"
               type="email"

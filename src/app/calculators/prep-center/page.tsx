@@ -37,19 +37,51 @@ export default function PrepCenterCalculatorPage() {
 
     let tier: StatusTier = "good";
     const tips: string[] = [];
-    if (sellNum > 0 && fullCostPerUnit >= sellNum) {
-      tier = "bad";
-      tips.push(
-        "Prep + shipping pushes total cost above sell price — this won't be profitable through a prep center at this volume.",
-      );
-    } else if (unitsNum > 0 && logisticsCostPerUnit / (sellNum || 1) > 0.15) {
+    const logisticsSharePct = sellNum > 0 ? (logisticsCostPerUnit / sellNum) * 100 : 0;
+
+    if (unitsNum === 0 && productCostNum === 0) {
+      tips.push("Enter units, product cost, and prep/shipping fees to evaluate logistics cost.");
+    } else if (unitsNum === 0) {
       tier = "warn";
       tips.push(
-        "Prep center + shipping is eating over 15% of the sell price — a larger shipment could spread fixed shipping costs further and lower this.",
+        "No units entered — shipping costs can't be spread per-unit without a unit count, so per-unit figures will read as zero.",
+      );
+    } else if (sellNum === 0) {
+      tier = "warn";
+      tips.push("Add a sell price to see margin after prep and shipping costs.");
+    } else if (fullCostPerUnit > sellNum) {
+      tier = "bad";
+      tips.push(
+        `Prep + shipping + product cost ($${fullCostPerUnit.toFixed(2)}) exceeds sell price ($${sellNum.toFixed(2)}) — this won't be profitable through a prep center at this volume.`,
+      );
+    } else if (fullCostPerUnit === sellNum) {
+      tier = "bad";
+      tips.push(
+        "Full cost exactly equals sell price — break-even before Amazon fees means a guaranteed loss once referral/FBA fees apply.",
+      );
+    } else if (logisticsSharePct > 25) {
+      tier = "bad";
+      tips.push(
+        `Prep + shipping is eating ${logisticsSharePct.toFixed(0)}% of the sell price — this is too high to be sustainable. A much larger shipment or a cheaper prep center quote is needed.`,
+      );
+    } else if (logisticsSharePct > 15) {
+      tier = "warn";
+      tips.push(
+        `Prep center + shipping is eating ${logisticsSharePct.toFixed(0)}% of the sell price — a larger shipment could spread fixed shipping costs further and lower this.`,
+      );
+    } else if (unitsNum < 25 && (inboundShipNum > 0 || outboundShipNum > 0)) {
+      tips.push(
+        "Small shipment size means fixed shipping costs are spread thin — consolidating into larger, less frequent shipments usually lowers cost per unit.",
       );
     } else {
       tips.push(
         "Prep center costs are a reasonable share of the sell price at this volume.",
+      );
+    }
+
+    if (marginAfterLogistics > 0 && marginAfterLogistics < 10 && fullCostPerUnit < sellNum) {
+      tips.push(
+        `Margin after logistics is only ${marginAfterLogistics.toFixed(1)}% — Amazon referral and FBA fees haven't even been subtracted yet, so real margin will likely go negative.`,
       );
     }
 

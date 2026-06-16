@@ -32,19 +32,47 @@ export default function BundleCalculatorPage() {
 
     let tier: StatusTier = "good";
     const tips: string[] = [];
-    if (profit <= 0) {
+
+    if (componentsCostNum === 0 && sellNum === 0) {
+      tips.push("Enter component cost and bundle sell price to evaluate this bundle.");
+    } else if (profit < 0) {
       tier = "bad";
       tips.push(
-        "Bundle loses money at this price — raise the bundle price or cut a low-value component.",
+        `Bundle loses $${Math.abs(profit).toFixed(2)} at this price — raise the bundle price or cut a low-value component.`,
       );
-    } else if (bundlePremium <= 0) {
+    } else if (profit === 0) {
+      tier = "bad";
+      tips.push(
+        "Bundle breaks even exactly before any returns or damage — there's no real profit cushion here.",
+      );
+    } else if (soloSumNum === 0) {
       tier = "warn";
       tips.push(
-        "Bundle sells for the same or less than the components would separately — there's no bundling premium to justify the extra packaging/listing effort.",
+        "Add the sum of solo sell prices to see whether bundling actually beats selling these components separately.",
+      );
+    } else if (bundlePremium < 0) {
+      tier = "bad";
+      tips.push(
+        `Bundle sells for ${Math.abs(bundlePremium).toFixed(1)}% less than the components would separately — selling them as singles would make more money and avoid extra packaging work.`,
+      );
+    } else if (bundlePremium === 0) {
+      tier = "warn";
+      tips.push(
+        "Bundle sells for exactly the same as the components separately — there's no bundling premium to justify the extra packaging/listing effort.",
+      );
+    } else if (bundlePremium < 5) {
+      tier = "warn";
+      tips.push(
+        `Only a ${bundlePremium.toFixed(1)}% premium over solo pricing — that may not cover the extra labor of assembling and listing a bundle.`,
+      );
+    } else if (margin < 15) {
+      tier = "warn";
+      tips.push(
+        `Bundle margin of ${margin.toFixed(1)}% is thin even with a pricing premium — confirm it survives Amazon referral fees and any bundle-specific FBA size tier.`,
       );
     } else {
       tips.push(
-        "Bundle commands a premium over selling components separately.",
+        `Bundle commands a ${bundlePremium.toFixed(1)}% premium over selling components separately — a strong case for keeping it bundled.`,
       );
     }
 

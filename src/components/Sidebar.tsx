@@ -14,6 +14,7 @@ import {
   Bot,
   Boxes,
   LogOut,
+  Archive,
 } from "lucide-react";
 import { logOut } from "@/lib/actions/auth";
 
@@ -26,7 +27,7 @@ const links = [
   { href: "/progress", label: "Progress Tracker", icon: TrendingUp },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/ai-agent", label: "AI Agent", icon: Bot },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/archive", label: "Archive", icon: Archive },
 ];
 
 export function Sidebar({ userEmail }: { userEmail?: string }) {
@@ -34,7 +35,7 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-5">
-      <div className="mb-8 flex items-center gap-2 px-1">
+      <div className="mb-6 flex items-center gap-2 px-1">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/30">
           <Boxes size={18} />
         </div>
@@ -48,7 +49,7 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1">
+      <nav className="flex flex-col gap-0.5">
         {links.map((link) => {
           const isActive = pathname === link.href;
           const Icon = link.icon;
@@ -56,7 +57,7 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
             <Link
               key={link.href}
               href={link.href}
-              className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
                   ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/25"
                   : "text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
@@ -73,7 +74,18 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
         })}
       </nav>
 
-      <div className="flex flex-col gap-2">
+      <div className="mt-auto flex flex-col gap-1 border-t border-[var(--border)] pt-3">
+        <Link
+          href="/settings"
+          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            pathname === "/settings"
+              ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/25"
+              : "text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+          }`}
+        >
+          <Settings size={17} strokeWidth={2} />
+          Settings
+        </Link>
         {userEmail && (
           <div className="truncate rounded-lg border border-[var(--border)] bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--muted)]">
             {userEmail}

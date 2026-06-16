@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { searchAmazonProducts, getOffersSummary } from "@/lib/rainforest";
+import { draftBrandOutreachEmail } from "@/lib/openai";
+import { sendEmail } from "@/lib/email";
 
 export async function lookupBrandOnAmazon(formData: FormData) {
   const query = String(formData.get("lookupQuery") ?? "").trim();
@@ -59,6 +61,44 @@ export async function lookupBrandOnAmazon(formData: FormData) {
   revalidatePath("/research/brands");
 }
 
+export async function sendBrandOutreachEmail(formData: FormData) {
+  const user = await getCurrentUser();
+  const brandId = String(formData.get("brandId") ?? "");
+  const contactEmail = String(formData.get("contactEmail") ?? "").trim();
+
+  if (!brandId || !contactEmail) {
+    redirect(
+      `/research/brands?lookupError=${encodeURIComponent("Contact email is required to send outreach.")}`,
+    );
+  }
+
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId, userId: user.id },
+  });
+  if (!brand) {
+    redirect(`/research/brands?lookupError=${encodeURIComponent("Brand not found.")}`);
+  }
+
+  try {
+    const draft = await draftBrandOutreachEmail({
+      brandName: brand!.name,
+      category: brand!.category,
+      notes: brand!.notes,
+    });
+
+    await sendEmail({
+      to: contactEmail,
+      subject: draft.subject,
+      html: draft.body.replace(/\n/g, "<br />"),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Outreach email failed";
+    redirect(`/research/brands?lookupError=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/research/brands");
+}
+
 export async function createBrand(formData: FormData) {
   const user = await getCurrentUser();
   const name = String(formData.get("name") ?? "").trim();
@@ -98,10 +138,30 @@ export async function setBrandApproved(brandId: string, approved: boolean) {
   revalidatePath("/progress");
 }
 
-export async function deleteBrand(brandId: string) {
+export async function archiveBrand(brandId: string) {
+  const user = await getCurrentUser();
+  await prisma.brand.update({
+    where: { id: brandId, userId: user.id },
+    data: { archived: true },
+  });
+  revalidatePath("/research/brands");
+  revalidatePath("/archive");
+}
+
+export async function restoreBrand(brandId: string) {
+  const user = await getCurrentUser();
+  await prisma.brand.update({
+    where: { id: brandId, userId: user.id },
+    data: { archived: false },
+  });
+  revalidatePath("/research/brands");
+  revalidatePath("/archive");
+}
+
+export async function deleteBrandPermanently(brandId: string) {
   const user = await getCurrentUser();
   await prisma.brand.delete({ where: { id: brandId, userId: user.id } });
-  revalidatePath("/research/brands");
+  revalidatePath("/archive");
 }
 
 function emptyToNull(value: FormDataEntryValue | null) {

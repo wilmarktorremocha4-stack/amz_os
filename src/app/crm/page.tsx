@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/currentUser";
 import {
   createSupplier,
   updateSupplierStage,
-  deleteSupplier,
+  archiveSupplier,
   emailFollowUpDigest,
 } from "@/lib/actions/suppliers";
 import { StageSelect } from "@/components/StageSelect";
@@ -18,7 +18,7 @@ export default async function CrmPage({
 }) {
   const user = await getCurrentUser();
   const suppliers = await prisma.supplier.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, archived: false },
     orderBy: { createdAt: "desc" },
   });
   const { error, digestSent } = await searchParams;
@@ -123,14 +123,14 @@ export default async function CrmPage({
                 <td className="p-3 text-right">
                   <form
                     action={async () => {
-                      await deleteSupplier(s.id);
+                      await archiveSupplier(s.id);
                     }}
                   >
                     <button
                       type="submit"
                       className="text-xs text-red-500 hover:underline"
                     >
-                      Remove
+                      Archive
                     </button>
                   </form>
                 </td>

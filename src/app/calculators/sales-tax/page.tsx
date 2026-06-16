@@ -25,14 +25,40 @@ export default function SalesTaxCalculatorPage() {
 
     let tier: StatusTier = "good";
     const tips: string[] = [];
-    if (!hasResaleCertificate && rateNum > 0) {
-      tier = "warn";
+
+    if (priceNum === 0 && rateNum === 0) {
+      tips.push("Enter a purchase price and tax rate to estimate tax owed.");
+    } else if (!hasResaleCertificate && rateNum > 0 && priceNum > 0) {
+      if (savedByExemption > 100) {
+        tier = "bad";
+        tips.push(
+          `A resale certificate would exempt this purchase from sales tax, saving $${savedByExemption.toFixed(2)} on this order alone — at this order size, getting one on file with this supplier should be a priority, not an afterthought.`,
+        );
+      } else {
+        tier = "warn";
+        tips.push(
+          `A resale certificate would exempt this purchase from sales tax, saving $${savedByExemption.toFixed(2)} on this order — wholesale suppliers generally accept one on file.`,
+        );
+      }
+      if (rateNum > 9) {
+        tips.push(
+          `${rateNum.toFixed(1)}% is a high tax rate — double-check it matches the destination state's combined state+local rate, since paying tax twice (here and at resale) erodes margin fast without an exemption.`,
+        );
+      }
+    } else if (hasResaleCertificate && rateNum === 0) {
       tips.push(
-        `A resale certificate would exempt this purchase from sales tax, saving $${savedByExemption.toFixed(2)} on this order — wholesale suppliers generally accept one on file.`,
+        "No tax rate entered — resale certificate has no effect until you add the supplier's rate.",
       );
     } else if (hasResaleCertificate) {
       tips.push(
-        "Resale certificate applied — no sales tax owed on this wholesale purchase.",
+        `Resale certificate applied — no sales tax owed on this wholesale purchase, saving $${savedByExemption.toFixed(2)}.`,
+      );
+      tips.push(
+        "Remember you'll need to collect and remit sales tax (or rely on Amazon's marketplace facilitator collection) when this inventory is resold.",
+      );
+    } else if (rateNum === 0 && priceNum > 0) {
+      tips.push(
+        "Tax rate is zero — confirm this supplier/state genuinely charges no sales tax rather than leaving the field blank by mistake.",
       );
     }
 

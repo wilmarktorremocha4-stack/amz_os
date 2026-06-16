@@ -29,7 +29,7 @@ export async function listCalculatorRuns(
 ): Promise<CalculatorRunSummary[]> {
   const user = await getCurrentUser();
   const runs = await prisma.calculatorRun.findMany({
-    where: { userId: user.id, type },
+    where: { userId: user.id, type, archived: false },
     orderBy: { createdAt: "desc" },
   });
 
@@ -65,8 +65,51 @@ export async function saveCalculatorRun(
   revalidatePath("/calculators");
 }
 
-export async function deleteCalculatorRun(id: string): Promise<void> {
+export async function archiveCalculatorRun(id: string): Promise<void> {
+  const user = await getCurrentUser();
+  await prisma.calculatorRun.update({
+    where: { id, userId: user.id },
+    data: { archived: true },
+  });
+  revalidatePath("/calculators");
+  revalidatePath("/archive");
+}
+
+export async function restoreCalculatorRun(id: string): Promise<void> {
+  const user = await getCurrentUser();
+  await prisma.calculatorRun.update({
+    where: { id, userId: user.id },
+    data: { archived: false },
+  });
+  revalidatePath("/calculators");
+  revalidatePath("/archive");
+}
+
+export async function deleteCalculatorRunPermanently(id: string): Promise<void> {
   const user = await getCurrentUser();
   await prisma.calculatorRun.delete({ where: { id, userId: user.id } });
-  revalidatePath("/calculators");
+  revalidatePath("/archive");
+}
+
+export type ArchivedCalculatorRunSummary = CalculatorRunSummary & {
+  type: CalculatorType;
+};
+
+export async function listArchivedCalculatorRuns(): Promise<
+  ArchivedCalculatorRunSummary[]
+> {
+  const user = await getCurrentUser();
+  const runs = await prisma.calculatorRun.findMany({
+    where: { userId: user.id, archived: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return runs.map((run) => ({
+    id: run.id,
+    name: run.name,
+    type: run.type as CalculatorType,
+    inputs: run.inputs as Record<string, string>,
+    result: run.result as Record<string, unknown>,
+    createdAt: run.createdAt.toISOString(),
+  }));
 }

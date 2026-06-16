@@ -1,0 +1,10 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "firstName" TEXT;
+ALTER TABLE "User" ADD COLUMN "lastName" TEXT;
+ALTER TABLE "User" ADD COLUMN "nickname" TEXT;
+ALTER TABLE "User" ADD COLUMN "companyWebsite" TEXT;
+
+ALTER TABLE "Supplier" ADD COLUMN "archived" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Brand" ADD COLUMN "archived" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Product" ADD COLUMN "archived" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "CalculatorRun" ADD COLUMN "archived" BOOLEAN NOT NULL DEFAULT false;
