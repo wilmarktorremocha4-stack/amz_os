@@ -28,6 +28,8 @@ model User {
   name      String?
   role      Role     @default(STUDENT)
   skoolId   String?  @unique
+  // Manually self-reported until a Skool API/webhook integration exists.
+  skoolCourseProgressPct Int @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -36,6 +38,8 @@ model User {
   products       Product[]
   calculatorRuns CalculatorRun[]
   activities     ActivityLog[]
+  tasks          Task[]
+  revenueEntries RevenueEntry[]
 }
 
 // --- CRM: Wholesale supplier/brand pipeline ---
@@ -72,6 +76,13 @@ model Brand {
   notes       String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  // Brand research inputs (manually entered — no live Amazon data feed).
+  // Used to compute an opportunity score; see lib/brandScore.ts.
+  estimatedMonthlySales Decimal? @db.Decimal(12, 2)
+  sellerCount           Int?
+  avgPrice              Decimal? @db.Decimal(10, 2)
+  reviewCount           Int?
 
   products Product[]
 }
@@ -149,4 +160,28 @@ model ActivityLog {
   type      ActivityType
   metadata  Json?
   createdAt DateTime     @default(now())
+}
+
+// --- Action-plan checklist (distinct from Skool lesson tasks) ---
+
+model Task {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
+  title     String
+  dueDate   DateTime?
+  completed Boolean   @default(false)
+  createdAt DateTime  @default(now())
+}
+
+// --- Revenue milestones ---
+
+model RevenueEntry {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  amount    Decimal  @db.Decimal(12, 2)
+  note      String?
+  earnedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 }

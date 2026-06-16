@@ -1,11 +1,26 @@
-const cards = [
-  { label: "Suppliers Contacted", value: "—", hint: "Connect DB to track" },
-  { label: "Brands Approved", value: "—", hint: "Connect DB to track" },
-  { label: "Products Analyzed", value: "—", hint: "Connect DB to track" },
-  { label: "Products Launched", value: "—", hint: "Connect DB to track" },
-];
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/currentUser";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const user = await getCurrentUser();
+
+  const [suppliersContacted, brandsApproved, productsAnalyzed, productsLaunched] = await Promise.all([
+    prisma.supplier.count({ where: { userId: user.id, stage: { not: "RESEARCHING" } } }),
+    prisma.brand.count({ where: { userId: user.id, approved: true } }),
+    prisma.product.count({ where: { userId: user.id } }),
+    prisma.product.count({ where: { userId: user.id, launched: true } }),
+  ]);
+
+  const cards = [
+    { label: "Suppliers Contacted", value: suppliersContacted, href: "/crm" },
+    { label: "Brands Approved", value: brandsApproved, href: "/research/brands" },
+    { label: "Products Analyzed", value: productsAnalyzed, href: "/research" },
+    { label: "Products Launched", value: productsLaunched, href: "/research" },
+  ];
+
   return (
     <main className="flex flex-1 flex-col gap-8 p-10">
       <div>
@@ -19,9 +34,10 @@ export default function Home() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
-          <div
+          <Link
             key={card.label}
-            className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950"
+            href={card.href}
+            className="rounded-xl border border-zinc-200 bg-white p-5 transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-600"
           >
             <div className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
               {card.label}
@@ -29,16 +45,17 @@ export default function Home() {
             <div className="mt-2 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
               {card.value}
             </div>
-            <div className="mt-1 text-xs text-zinc-400">{card.hint}</div>
-          </div>
+          </Link>
         ))}
       </div>
 
-      <div className="rounded-xl border border-dashed border-zinc-300 p-6 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-        Set <code className="font-mono">DATABASE_URL</code> and run{" "}
-        <code className="font-mono">npx prisma migrate dev</code> to wire up
-        live data for this dashboard, the CRM, and the progress tracker.
-      </div>
+      <Link
+        href="/progress"
+        className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400 dark:hover:border-zinc-600"
+      >
+        View your full Progress Tracker (business activity, revenue, course
+        progress, and community engagement) →
+      </Link>
     </main>
   );
 }
