@@ -1,11 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalculatorLayout, Field, ResultRow, StatusBanner, StatusTier } from "@/components/calculators/CalcUI";
+import {
+  CalculatorLayout,
+  Field,
+  ResultRow,
+  StatusBanner,
+  StatusTier,
+} from "@/components/calculators/CalcUI";
+import { CalculatorHistory } from "@/components/calculators/CalculatorHistory";
 
 export default function SalesTaxCalculatorPage() {
-  const [purchasePrice, setPurchasePrice] = useState("2000");
-  const [taxRate, setTaxRate] = useState("7.25");
+  const [purchasePrice, setPurchasePrice] = useState("");
+  const [taxRate, setTaxRate] = useState("");
   const [hasResaleCertificate, setHasResaleCertificate] = useState(false);
 
   const result = useMemo(() => {
@@ -21,10 +28,12 @@ export default function SalesTaxCalculatorPage() {
     if (!hasResaleCertificate && rateNum > 0) {
       tier = "warn";
       tips.push(
-        `A resale certificate would exempt this purchase from sales tax, saving $${savedByExemption.toFixed(2)} on this order — wholesale suppliers generally accept one on file.`
+        `A resale certificate would exempt this purchase from sales tax, saving $${savedByExemption.toFixed(2)} on this order — wholesale suppliers generally accept one on file.`,
       );
     } else if (hasResaleCertificate) {
-      tips.push("Resale certificate applied — no sales tax owed on this wholesale purchase.");
+      tips.push(
+        "Resale certificate applied — no sales tax owed on this wholesale purchase.",
+      );
     }
 
     return { taxOwed, totalCost, savedByExemption, tier, tips };
@@ -36,14 +45,22 @@ export default function SalesTaxCalculatorPage() {
       description="Estimate sales tax owed on a wholesale purchase, and the impact of a resale certificate."
       inputs={
         <>
-          <Field label="Purchase price ($)" value={purchasePrice} onChange={setPurchasePrice} />
-          <Field label="Sales tax rate (%)" value={taxRate} onChange={setTaxRate} />
-          <label className="mt-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <Field
+            label="Purchase price ($)"
+            value={purchasePrice}
+            onChange={setPurchasePrice}
+          />
+          <Field
+            label="Sales tax rate (%)"
+            value={taxRate}
+            onChange={setTaxRate}
+          />
+          <label className="mt-2 flex items-center gap-2 text-sm text-[var(--muted)]">
             <input
               type="checkbox"
               checked={hasResaleCertificate}
               onChange={(e) => setHasResaleCertificate(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+              className="h-4 w-4 rounded border-[var(--border)] "
             />
             I have a resale certificate on file with this supplier
           </label>
@@ -51,18 +68,45 @@ export default function SalesTaxCalculatorPage() {
       }
       outputs={
         <>
-          <div className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
-            <ResultRow label="Tax owed" value={`$${result.taxOwed.toFixed(2)}`} />
-            <ResultRow label="Total cost" value={`$${result.totalCost.toFixed(2)}`} highlight />
+          <div className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 ">
+            <ResultRow
+              label="Tax owed"
+              value={`$${result.taxOwed.toFixed(2)}`}
+            />
+            <ResultRow
+              label="Total cost"
+              value={`$${result.totalCost.toFixed(2)}`}
+              highlight
+            />
           </div>
           {result.tips.length > 0 && (
             <StatusBanner
               tier={result.tier}
-              headline={hasResaleCertificate ? "Tax-exempt purchase" : `$${result.taxOwed.toFixed(2)} sales tax owed`}
+              headline={
+                hasResaleCertificate
+                  ? "Tax-exempt purchase"
+                  : `$${result.taxOwed.toFixed(2)} sales tax owed`
+              }
               tips={result.tips}
             />
           )}
         </>
+      }
+      history={
+        <CalculatorHistory
+          type="SALES_TAX"
+          inputs={{
+            purchasePrice,
+            taxRate,
+            hasResaleCertificate: String(hasResaleCertificate),
+          }}
+          result={result}
+          onLoad={(loaded) => {
+            setPurchasePrice(loaded.purchasePrice ?? "");
+            setTaxRate(loaded.taxRate ?? "");
+            setHasResaleCertificate(loaded.hasResaleCertificate === "true");
+          }}
+        />
       }
     />
   );

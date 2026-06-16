@@ -66,8 +66,14 @@ export function computeProgress(inputs: ProgressInputs) {
     },
     {
       label: "Action Plan Tasks",
-      raw: inputs.tasksTotal === 0 ? "No tasks yet" : `${inputs.tasksCompleted}/${inputs.tasksTotal} done`,
-      score: inputs.tasksTotal === 0 ? 0 : Math.round((inputs.tasksCompleted / inputs.tasksTotal) * 100),
+      raw:
+        inputs.tasksTotal === 0
+          ? "No tasks yet"
+          : `${inputs.tasksCompleted}/${inputs.tasksTotal} done`,
+      score:
+        inputs.tasksTotal === 0
+          ? 0
+          : Math.round((inputs.tasksCompleted / inputs.tasksTotal) * 100),
       hint: "Self-assigned business tasks (not Skool lessons)",
     },
     {
@@ -78,7 +84,9 @@ export function computeProgress(inputs: ProgressInputs) {
     },
   ];
 
-  const overall = Math.round(kpis.reduce((sum, k) => sum + k.score, 0) / kpis.length);
+  const overall = Math.round(
+    kpis.reduce((sum, k) => sum + k.score, 0) / kpis.length,
+  );
 
   return { kpis, overall };
 }

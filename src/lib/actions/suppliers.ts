@@ -24,7 +24,11 @@ export async function createSupplier(formData: FormData) {
     });
 
     await prisma.activityLog.create({
-      data: { userId: user.id, type: "SUPPLIER_CONTACTED", metadata: { companyName } },
+      data: {
+        userId: user.id,
+        type: "SUPPLIER_CONTACTED",
+        metadata: { companyName },
+      },
     });
   } catch (err) {
     console.error("createSupplier failed:", err);

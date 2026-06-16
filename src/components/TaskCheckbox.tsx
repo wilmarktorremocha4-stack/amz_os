@@ -23,7 +23,13 @@ export function TaskCheckbox({
         disabled={isPending}
         onChange={(e) => startTransition(() => onToggle(id, e.target.checked))}
       />
-      <span className={completed ? "text-zinc-400 line-through" : "text-zinc-700 dark:text-zinc-300"}>
+      <span
+        className={
+          completed
+            ? "text-[var(--muted)] line-through"
+            : "text-[var(--foreground)]"
+        }
+      >
         {title}
       </span>
     </label>
