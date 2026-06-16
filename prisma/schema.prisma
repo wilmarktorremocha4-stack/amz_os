@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+}
+
+enum OutreachStage {
+  RESEARCHING
+  CONTACTED
+  FOLLOWED_UP
+  NEGOTIATING
+  APPROVED
+  REJECTED
+  ONBOARDED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      Role     @default(STUDENT)
+  skoolId   String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  suppliers      Supplier[]
+  brands         Brand[]
+  products       Product[]
+  calculatorRuns CalculatorRun[]
+  activities     ActivityLog[]
+}
+
+// --- CRM: Wholesale supplier/brand pipeline ---
+
+model Supplier {
+  id           String        @id @default(cuid())
+  user         User          @relation(fields: [userId], references: [id])
+  userId       String
+  companyName  String
+  contactName  String?
+  email        String?
+  phone        String?
+  website      String?
+  stage        OutreachStage @default(RESEARCHING)
+  notes        String?
+  invoiceTotal Decimal?      @db.Decimal(12, 2)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  brands     Brand[]
+  followUps  FollowUp[]
+}
+
+model Brand {
+  id          String        @id @default(cuid())
+  user        User          @relation(fields: [userId], references: [id])
+  userId      String
+  supplier    Supplier?     @relation(fields: [supplierId], references: [id])
+  supplierId  String?
+  name        String
+  category    String?
+  stage       OutreachStage @default(RESEARCHING)
+  approved    Boolean       @default(false)
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  products Product[]
+}
+
+model FollowUp {
+  id         String   @id @default(cuid())
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  supplierId String
+  dueDate    DateTime
+  completed  Boolean  @default(false)
+  note       String?
+  createdAt  DateTime @default(now())
+}
+
+// --- Product research (internal data only, no live Amazon API) ---
+
+model Product {
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String
+  brand         Brand?   @relation(fields: [brandId], references: [id])
+  brandId       String?
+  title         String
+  asin          String?
+  upc           String?
+  cost          Decimal? @db.Decimal(10, 2)
+  estimatedSell Decimal? @db.Decimal(10, 2)
+  monthlyUnits  Int?
+  notes         String?
+  launched      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// --- Calculators: store user runs for history/reporting ---
+
+enum CalculatorType {
+  ROI
+  MARGIN
+  BREAK_EVEN
+  INVENTORY_COST
+  MULTI_PACK
+  BUNDLE
+  SALES_TAX
+  PREP_CENTER
+  REORDER
+}
+
+model CalculatorRun {
+  id        String         @id @default(cuid())
+  user      User           @relation(fields: [userId], references: [id])
+  userId    String
+  type      CalculatorType
+  inputs    Json
+  result    Json
+  createdAt DateTime       @default(now())
+}
+
+// --- Success tracker: business-progress signals (not video consumption) ---
+
+enum ActivityType {
+  SUPPLIER_CONTACTED
+  BRAND_APPROVED
+  PRODUCT_ANALYZED
+  PRODUCT_LAUNCHED
+  REVENUE_MILESTONE
+  COMMUNITY_ENGAGEMENT
+  TASK_COMPLETED
+}
+
+model ActivityLog {
+  id        String       @id @default(cuid())
+  user      User         @relation(fields: [userId], references: [id])
+  userId    String
+  type      ActivityType
+  metadata  Json?
+  createdAt DateTime     @default(now())
+}
