@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
-import { searchAmazonProducts } from "@/lib/rainforest";
+import { searchAmazonProducts, getOffersSummary } from "@/lib/rainforest";
 
 export async function lookupBrandOnAmazon(formData: FormData) {
   const query = String(formData.get("lookupQuery") ?? "").trim();
@@ -15,13 +15,31 @@ export async function lookupBrandOnAmazon(formData: FormData) {
     const products = await searchAmazonProducts(query);
 
     if (products.length === 0) {
-      redirect(`/research/brands?lookupError=${encodeURIComponent(`No Amazon results for "${query}".`)}`);
+      redirect(
+        `/research/brands?lookupError=${encodeURIComponent(`No Amazon results for "${query}".`)}`,
+      );
     }
 
-    const prices = products.map((p) => p.price).filter((p): p is number => p !== null);
-    const reviews = products.map((p) => p.ratingsTotal).filter((r): r is number => r !== null);
-    const avgPrice = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : null;
-    const avgReviews = reviews.length ? Math.round(reviews.reduce((a, b) => a + b, 0) / reviews.length) : null;
+    const prices = products
+      .map((p) => p.price)
+      .filter((p): p is number => p !== null);
+    const reviews = products
+      .map((p) => p.ratingsTotal)
+      .filter((r): r is number => r !== null);
+    const avgPrice = prices.length
+      ? prices.reduce((a, b) => a + b, 0) / prices.length
+      : null;
+    const avgReviews = reviews.length
+      ? Math.round(reviews.reduce((a, b) => a + b, 0) / reviews.length)
+      : null;
+
+    let sellerCount: number | null = null;
+    try {
+      const offers = await getOffersSummary(products[0].asin);
+      sellerCount = offers.sellerCount;
+    } catch {
+      // offers lookup is best-effort; fall back to manual entry if it fails
+    }
 
     await prisma.brand.create({
       data: {
@@ -29,7 +47,8 @@ export async function lookupBrandOnAmazon(formData: FormData) {
         name: query,
         avgPrice,
         reviewCount: avgReviews,
-        notes: `Avg. price and review count pulled from a live Amazon search (${products.length} listings, via Rainforest API) on ${new Date().toLocaleDateString()}. Seller count and est. monthly sales aren't available from this data source — enter those manually if known.`,
+        sellerCount,
+        notes: `Avg. price and review count pulled from a live Amazon search (${products.length} listings)${sellerCount !== null ? `, seller count from the top result's live offers` : ""}, via Rainforest API on ${new Date().toLocaleDateString()}. Est. monthly sales aren't available from this data source — enter manually if known.`,
       },
     });
   } catch (err) {
@@ -50,7 +69,9 @@ export async function createBrand(formData: FormData) {
       userId: user.id,
       name,
       category: emptyToNull(formData.get("category")),
-      estimatedMonthlySales: toDecimalOrNull(formData.get("estimatedMonthlySales")),
+      estimatedMonthlySales: toDecimalOrNull(
+        formData.get("estimatedMonthlySales"),
+      ),
       sellerCount: toIntOrNull(formData.get("sellerCount")),
       avgPrice: toDecimalOrNull(formData.get("avgPrice")),
       reviewCount: toIntOrNull(formData.get("reviewCount")),

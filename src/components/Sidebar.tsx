@@ -1,32 +1,79 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Calculator,
+  Users,
+  PackageSearch,
+  Sparkles,
+  TrendingUp,
+  Settings,
+  BarChart3,
+  Bot,
+  Boxes,
+} from "lucide-react";
 
 const links = [
-  { href: "/", label: "Dashboard" },
-  { href: "/calculators", label: "Calculators" },
-  { href: "/crm", label: "Supplier CRM" },
-  { href: "/research", label: "Product Research" },
-  { href: "/research/brands", label: "Brand Research" },
-  { href: "/progress", label: "Progress Tracker" },
-  { href: "/settings", label: "Settings" },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/calculators", label: "Calculators", icon: Calculator },
+  { href: "/crm", label: "Supplier CRM", icon: Users },
+  { href: "/research", label: "Product Research", icon: PackageSearch },
+  { href: "/research/brands", label: "Brand Research", icon: Sparkles },
+  { href: "/progress", label: "Progress Tracker", icon: TrendingUp },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/ai-agent", label: "AI Agent", icon: Bot },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
+  const pathname = usePathname();
+
   return (
-    <aside className="w-60 shrink-0 border-r border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mb-8 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-        AMZ OS
+    <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-5">
+      <div className="mb-8 flex items-center gap-2 px-1">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/30">
+          <Boxes size={18} />
+        </div>
+        <div>
+          <div className="text-sm font-semibold tracking-tight text-[var(--foreground)]">
+            AMZ OS
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
+            Wholesale Operating System
+          </div>
+        </div>
       </div>
-      <nav className="flex flex-col gap-1">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="rounded-md px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-200/60 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
-          >
-            {link.label}
-          </Link>
-        ))}
+
+      <nav className="flex flex-1 flex-col gap-1">
+        {links.map((link) => {
+          const isActive = pathname === link.href;
+          const Icon = link.icon;
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/25"
+                  : "text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+              }`}
+            >
+              <Icon
+                size={17}
+                strokeWidth={2}
+                className={isActive ? "text-white" : ""}
+              />
+              {link.label}
+            </Link>
+          );
+        })}
       </nav>
+
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--accent-soft)] p-3 text-xs text-[var(--muted)]">
+        Business progress, not video consumption.
+      </div>
     </aside>
   );
 }

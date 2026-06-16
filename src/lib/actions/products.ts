@@ -37,7 +37,11 @@ export async function setProductLaunched(productId: string, launched: boolean) {
 
   if (launched) {
     await prisma.activityLog.create({
-      data: { userId: user.id, type: "PRODUCT_LAUNCHED", metadata: { productId } },
+      data: {
+        userId: user.id,
+        type: "PRODUCT_LAUNCHED",
+        metadata: { productId },
+      },
     });
   }
 

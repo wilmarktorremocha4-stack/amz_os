@@ -17,7 +17,9 @@ export async function updateProfile(formData: FormData) {
       name: name || null,
       skoolId: skoolId || null,
       monthlyRevenueGoal:
-        monthlyRevenueGoal !== null && !Number.isNaN(monthlyRevenueGoal) ? monthlyRevenueGoal : null,
+        monthlyRevenueGoal !== null && !Number.isNaN(monthlyRevenueGoal)
+          ? monthlyRevenueGoal
+          : null,
     },
   });
 

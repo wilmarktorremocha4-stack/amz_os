@@ -60,7 +60,11 @@ export async function logCommunityEngagement(formData: FormData) {
   const note = String(formData.get("note") ?? "").trim();
 
   await prisma.activityLog.create({
-    data: { userId: user.id, type: "COMMUNITY_ENGAGEMENT", metadata: note ? { note } : undefined },
+    data: {
+      userId: user.id,
+      type: "COMMUNITY_ENGAGEMENT",
+      metadata: note ? { note } : undefined,
+    },
   });
 
   revalidatePath("/progress");
@@ -68,7 +72,10 @@ export async function logCommunityEngagement(formData: FormData) {
 
 export async function updateSkoolProgress(formData: FormData) {
   const user = await getCurrentUser();
-  const pct = Math.max(0, Math.min(100, parseInt(String(formData.get("pct") ?? "0"), 10) || 0));
+  const pct = Math.max(
+    0,
+    Math.min(100, parseInt(String(formData.get("pct") ?? "0"), 10) || 0),
+  );
 
   await prisma.user.update({
     where: { id: user.id },
