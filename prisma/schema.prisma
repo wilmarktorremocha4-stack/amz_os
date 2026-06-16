@@ -25,6 +25,7 @@ enum OutreachStage {
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
+  password  String?
   name      String?
   role      Role     @default(STUDENT)
   skoolId   String?  @unique

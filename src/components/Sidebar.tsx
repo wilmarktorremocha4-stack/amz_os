@@ -13,7 +13,9 @@ import {
   BarChart3,
   Bot,
   Boxes,
+  LogOut,
 } from "lucide-react";
+import { logOut } from "@/lib/actions/auth";
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -27,7 +29,7 @@ const links = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ userEmail }: { userEmail?: string }) {
   const pathname = usePathname();
 
   return (
@@ -71,8 +73,21 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--accent-soft)] p-3 text-xs text-[var(--muted)]">
-        Business progress, not video consumption.
+      <div className="flex flex-col gap-2">
+        {userEmail && (
+          <div className="truncate rounded-lg border border-[var(--border)] bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--muted)]">
+            {userEmail}
+          </div>
+        )}
+        <form action={logOut}>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+          >
+            <LogOut size={16} />
+            Log out
+          </button>
+        </form>
       </div>
     </aside>
   );
