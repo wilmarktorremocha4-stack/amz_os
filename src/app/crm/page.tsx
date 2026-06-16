@@ -1,9 +1,11 @@
+import { Mail } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import {
   createSupplier,
   updateSupplierStage,
   deleteSupplier,
+  emailFollowUpDigest,
 } from "@/lib/actions/suppliers";
 import { StageSelect } from "@/components/StageSelect";
 
@@ -12,29 +14,49 @@ export const dynamic = "force-dynamic";
 export default async function CrmPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; digestSent?: string }>;
 }) {
   const user = await getCurrentUser();
   const suppliers = await prisma.supplier.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
   });
-  const { error } = await searchParams;
+  const { error, digestSent } = await searchParams;
 
   return (
     <main className="flex flex-1 flex-col gap-8 p-10">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
-          Supplier CRM
-        </h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Track outreach, brand approvals, and onboarding pipeline.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
+            Supplier CRM
+          </h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Track outreach, brand approvals, and onboarding pipeline.
+          </p>
+        </div>
+        <form action={emailFollowUpDigest}>
+          <button type="submit" className="btn-secondary whitespace-nowrap">
+            <Mail size={14} />
+            Email me a follow-up digest
+          </button>
+        </form>
       </div>
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           Couldn&apos;t add supplier: {error}
+        </div>
+      )}
+
+      {digestSent === "empty" && (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--accent-soft)] p-4 text-sm text-[var(--muted)]">
+          No open suppliers to follow up on right now.
+        </div>
+      )}
+      {digestSent && digestSent !== "empty" && digestSent !== "0" && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+          Follow-up digest emailed for {digestSent} supplier(s). (Requires
+          RESEND_API_KEY to actually deliver — otherwise this is a no-op.)
         </div>
       )}
 
