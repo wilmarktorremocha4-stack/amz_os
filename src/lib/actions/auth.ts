@@ -22,14 +22,14 @@ export async function signUp(formData: FormData) {
     );
   }
 
-  // Email whitelist — if ALLOWED_EMAILS is set, only those addresses may register
-  const allowedRaw = process.env.ALLOWED_EMAILS ?? "";
-  if (allowedRaw.trim()) {
-    const allowed = allowedRaw
-      .split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean);
-    if (!allowed.includes(email)) {
+  // Email whitelist — check AllowedEmail table; if the table has any rows,
+  // only listed emails may register (empty table = open access for setup)
+  const allowedCount = await prisma.allowedEmail.count();
+  if (allowedCount > 0) {
+    const approved = await prisma.allowedEmail.findUnique({
+      where: { email },
+    });
+    if (!approved) {
       redirect(
         `/signup?error=${encodeURIComponent("This email hasn't been approved for access. Contact the admin.")}`,
       );
