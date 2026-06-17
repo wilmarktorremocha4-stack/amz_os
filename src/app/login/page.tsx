@@ -1,9 +1,9 @@
 import Link from "next/link";
+import Image from "next/image";
 import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
 import { redirect } from "next/navigation";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
-import { Boxes } from "lucide-react";
 
 async function login(formData: FormData) {
   "use server";
@@ -41,17 +41,14 @@ export default async function LoginPage({
       <div className="relative z-10 w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 shadow-lg backdrop-blur-sm ring-1 ring-white/20">
-            <Boxes size={24} className="text-white" />
-          </div>
-          <div className="text-center">
-            <div className="text-xl font-bold tracking-tight text-white">
-              AMZ OS
-            </div>
-            <div className="text-xs text-blue-200/60">
-              Wholesale Operating System
-            </div>
-          </div>
+          <Image
+            src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/68de916c065f281e19a858a2.png"
+            alt="AMZ OS"
+            width={120}
+            height={48}
+            className="h-12 w-auto object-contain drop-shadow-lg"
+            unoptimized
+          />
         </div>
 
         {/* Card */}
