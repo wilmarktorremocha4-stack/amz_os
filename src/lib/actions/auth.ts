@@ -2,6 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { signIn, signOut } from "@/auth";
@@ -19,6 +20,20 @@ export async function signUp(formData: FormData) {
     redirect(
       `/signup?error=${encodeURIComponent("Email and an 8+ character password are required.")}`,
     );
+  }
+
+  // Email whitelist — if ALLOWED_EMAILS is set, only those addresses may register
+  const allowedRaw = process.env.ALLOWED_EMAILS ?? "";
+  if (allowedRaw.trim()) {
+    const allowed = allowedRaw
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (!allowed.includes(email)) {
+      redirect(
+        `/signup?error=${encodeURIComponent("This email hasn't been approved for access. Contact the admin.")}`,
+      );
+    }
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -45,7 +60,15 @@ export async function signUp(formData: FormData) {
     html: `<p>Your AMZ OS account is ready. Log in to start tracking suppliers, brand research, and revenue.</p>`,
   });
 
-  await signIn("credentials", { email, password, redirectTo: "/" });
+  try {
+    await signIn("credentials", { email, password, redirectTo: "/" });
+  } catch (err) {
+    // signIn throws a NEXT_REDIRECT — let it propagate; catch only real errors
+    if (isRedirectError(err)) throw err;
+    redirect(
+      `/login?success=${encodeURIComponent("Account created! Log in to continue.")}`,
+    );
+  }
 }
 
 export async function logOut() {
