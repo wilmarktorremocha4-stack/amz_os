@@ -2,10 +2,9 @@
 
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
-import { signIn, signOut } from "@/auth";
+import { signOut } from "@/auth";
 
 export async function signUp(formData: FormData) {
   const email = String(formData.get("email") ?? "")
@@ -60,15 +59,9 @@ export async function signUp(formData: FormData) {
     html: `<p>Your AMZ OS account is ready. Log in to start tracking suppliers, brand research, and revenue.</p>`,
   });
 
-  try {
-    await signIn("credentials", { email, password, redirectTo: "/" });
-  } catch (err) {
-    // signIn throws a NEXT_REDIRECT — let it propagate; catch only real errors
-    if (isRedirectError(err)) throw err;
-    redirect(
-      `/login?success=${encodeURIComponent("Account created! Log in to continue.")}`,
-    );
-  }
+  redirect(
+    `/login?success=${encodeURIComponent("Account created! Log in to continue.")}`,
+  );
 }
 
 export async function logOut() {
