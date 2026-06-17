@@ -22,17 +22,21 @@ export async function signUp(formData: FormData) {
   }
 
   // Email whitelist — check AllowedEmail table; if the table has any rows,
-  // only listed emails may register (empty table = open access for setup)
-  const allowedCount = await prisma.allowedEmail.count();
-  if (allowedCount > 0) {
-    const approved = await prisma.allowedEmail.findUnique({
-      where: { email },
-    });
-    if (!approved) {
-      redirect(
-        `/signup?error=${encodeURIComponent("This email hasn't been approved for access. Contact the admin.")}`,
-      );
+  // only listed emails may register (empty table or missing table = open access)
+  try {
+    const allowedCount = await prisma.allowedEmail.count();
+    if (allowedCount > 0) {
+      const approved = await prisma.allowedEmail.findUnique({
+        where: { email },
+      });
+      if (!approved) {
+        redirect(
+          `/signup?error=${encodeURIComponent("This email hasn't been approved for access. Contact the admin.")}`,
+        );
+      }
     }
+  } catch {
+    // Table may not exist yet — fail open so signup still works
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
