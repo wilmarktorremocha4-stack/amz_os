@@ -6,7 +6,7 @@ const { auth } = NextAuth(authConfig);
 
 const PUBLIC_PATHS = ["/login", "/signup"];
 
-export default auth((req) => {
+const proxyHandler = auth((req) => {
   const { pathname } = req.nextUrl;
   const isPublic =
     PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/api/auth");
@@ -23,6 +23,9 @@ export default auth((req) => {
 
   return NextResponse.next();
 });
+
+export default proxyHandler;
+export const proxy = proxyHandler;
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
