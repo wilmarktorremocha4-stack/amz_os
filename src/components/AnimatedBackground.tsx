@@ -5,28 +5,52 @@ import { useEffect, useRef } from "react";
 export function AnimatedBackground() {
   const blob1 = useRef<HTMLDivElement>(null);
   const blob2 = useRef<HTMLDivElement>(null);
+  const blob3 = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let rafId: number;
-    let targetX = 50;
-    let targetY = 50;
-    let currentX = 50;
-    let currentY = 50;
+    let mouseX = 0.5;
+    let mouseY = 0.5;
+    let currentX = 0.5;
+    let currentY = 0.5;
+    let hasMouseMoved = false;
+    let t = 0;
 
     function onMouseMove(e: MouseEvent) {
-      targetX = (e.clientX / window.innerWidth) * 100;
-      targetY = (e.clientY / window.innerHeight) * 100;
+      mouseX = e.clientX / window.innerWidth;
+      mouseY = e.clientY / window.innerHeight;
+      hasMouseMoved = true;
     }
 
     function animate() {
-      currentX += (targetX - currentX) * 0.06;
-      currentY += (targetY - currentY) * 0.06;
+      t += 0.005;
+
+      // Idle drift — slow sine wave orbits
+      if (!hasMouseMoved) {
+        mouseX = 0.5 + Math.sin(t * 0.7) * 0.3;
+        mouseY = 0.5 + Math.cos(t * 0.5) * 0.25;
+      }
+
+      // Smooth follow
+      currentX += (mouseX - currentX) * 0.04;
+      currentY += (mouseY - currentY) * 0.04;
+
+      const dx = (currentX - 0.5) * 300;
+      const dy = (currentY - 0.5) * 300;
 
       if (blob1.current) {
-        blob1.current.style.transform = `translate(${(currentX - 50) * 0.6}px, ${(currentY - 50) * 0.6}px)`;
+        blob1.current.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
       }
       if (blob2.current) {
-        blob2.current.style.transform = `translate(${(50 - currentX) * 0.4}px, ${(50 - currentY) * 0.4}px)`;
+        // second blob drifts opposite + own idle sine
+        const idleX2 = Math.sin(t * 0.9 + 2) * 120;
+        const idleY2 = Math.cos(t * 0.6 + 1) * 100;
+        blob2.current.style.transform = `translate(calc(-50% + ${-dx * 0.6 + idleX2}px), calc(-50% + ${-dy * 0.6 + idleY2}px))`;
+      }
+      if (blob3.current) {
+        const idleX3 = Math.cos(t * 0.4 + 3) * 80;
+        const idleY3 = Math.sin(t * 0.8 + 2) * 90;
+        blob3.current.style.transform = `translate(calc(-50% + ${dx * 0.3 + idleX3}px), calc(-50% + ${dy * 0.3 + idleY3}px))`;
       }
 
       rafId = requestAnimationFrame(animate);
@@ -43,33 +67,39 @@ export function AnimatedBackground() {
 
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden">
-      {/* base gradient */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_60%_40%,#1a3a6e_0%,#0a1128_60%,#050a18_100%)]" />
+      {/* base dark navy */}
+      <div className="absolute inset-0 bg-[#040d1e]" />
 
-      {/* moving blob 1 — blue */}
+      {/* blob 1 — bright blue, follows mouse */}
       <div
         ref={blob1}
-        className="absolute left-1/3 top-1/4 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-600/25 blur-[120px] transition-none"
+        className="absolute left-1/2 top-1/2 h-[700px] w-[700px] rounded-full bg-blue-500/30 blur-[130px]"
       />
 
-      {/* moving blob 2 — indigo */}
+      {/* blob 2 — indigo, counter-drift */}
       <div
         ref={blob2}
-        className="absolute right-1/3 bottom-1/4 h-[500px] w-[500px] translate-x-1/2 translate-y-1/2 rounded-full bg-indigo-500/20 blur-[100px] transition-none"
+        className="absolute left-1/2 top-1/2 h-[500px] w-[500px] rounded-full bg-indigo-600/25 blur-[110px]"
       />
 
-      {/* static accent — top right */}
-      <div className="absolute -right-32 -top-32 h-[400px] w-[400px] rounded-full bg-blue-500/10 blur-[80px]" />
-
-      {/* grid overlay */}
+      {/* blob 3 — cyan accent */}
       <div
-        className="absolute inset-0 opacity-[0.04]"
+        ref={blob3}
+        className="absolute left-1/2 top-1/2 h-[350px] w-[350px] rounded-full bg-cyan-500/15 blur-[90px]"
+      />
+
+      {/* subtle grid */}
+      <div
+        className="absolute inset-0 opacity-[0.035]"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
+            "linear-gradient(rgba(100,160,255,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(100,160,255,0.8) 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
         }}
       />
+
+      {/* vignette */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,#040d1e_100%)]" />
     </div>
   );
 }
