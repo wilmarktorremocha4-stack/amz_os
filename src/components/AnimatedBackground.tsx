@@ -13,8 +13,9 @@ export function AnimatedBackground() {
 
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
-      targetX = (e.clientX / window.innerWidth) * 100;
-      targetY = (e.clientY / window.innerHeight) * 100;
+      mouseX = e.clientX / window.innerWidth;
+      mouseY = e.clientY / window.innerHeight;
+      hasMouseMoved = true;
     }
 
     function tick() {
