@@ -15,6 +15,7 @@ import {
   Boxes,
   LogOut,
   Archive,
+  Telescope,
 } from "lucide-react";
 import { logOut } from "@/lib/actions/auth";
 
@@ -26,6 +27,7 @@ const links = [
   { href: "/research/brands", label: "Brand Research", icon: Sparkles },
   { href: "/progress", label: "Progress Tracker", icon: TrendingUp },
   { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/scout", label: "Market Scout", icon: Telescope },
   { href: "/ai-agent", label: "AI Agent", icon: Bot },
   { href: "/archive", label: "Archive", icon: Archive },
 ];

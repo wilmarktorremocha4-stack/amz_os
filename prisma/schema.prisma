@@ -47,6 +47,8 @@ model User {
   activities     ActivityLog[]
   tasks          Task[]
   revenueEntries RevenueEntry[]
+  pipelines      Pipeline[]
+  opportunities  Opportunity[]
 }
 
 // --- CRM: Wholesale supplier/brand pipeline ---
@@ -67,8 +69,9 @@ model Supplier {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  brands     Brand[]
-  followUps  FollowUp[]
+  brands        Brand[]
+  followUps     FollowUp[]
+  opportunities Opportunity[]
 }
 
 model Brand {
@@ -196,6 +199,49 @@ model RevenueEntry {
   note      String?
   earnedAt  DateTime @default(now())
   createdAt DateTime @default(now())
+}
+
+// --- Sales pipelines & opportunities ---
+
+model Pipeline {
+  id        String          @id @default(cuid())
+  user      User            @relation(fields: [userId], references: [id])
+  userId    String
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  stages        PipelineStage[]
+  opportunities Opportunity[]
+}
+
+model PipelineStage {
+  id         String      @id @default(cuid())
+  pipeline   Pipeline    @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  pipelineId String
+  name       String
+  order      Int         @default(0)
+  createdAt  DateTime    @default(now())
+
+  opportunities Opportunity[]
+}
+
+model Opportunity {
+  id         String         @id @default(cuid())
+  user       User           @relation(fields: [userId], references: [id])
+  userId     String
+  supplier   Supplier?      @relation(fields: [supplierId], references: [id])
+  supplierId String?
+  pipeline   Pipeline       @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  pipelineId String
+  stage      PipelineStage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  stageId    String
+  name       String
+  value      Decimal?       @db.Decimal(12, 2)
+  status     String         @default("open")
+  notes      String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 }
 
 // --- Access control: only pre-approved emails may register ---
