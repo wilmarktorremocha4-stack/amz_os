@@ -11,49 +11,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-function ArchivedRow({
-  title,
-  subtitle,
-  restoreAction,
-  deleteAction,
-}: {
-  title: string;
-  subtitle?: string | null;
-  restoreAction: () => Promise<void>;
-  deleteAction: () => Promise<void>;
-}) {
-  return (
-    <li className="flex items-center justify-between gap-3 p-3">
-      <div className="min-w-0">
-        <div className="truncate font-medium text-[var(--foreground)]">
-          {title}
-        </div>
-        {subtitle && (
-          <div className="text-xs text-[var(--muted)]">{subtitle}</div>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <form action={restoreAction}>
-          <button
-            type="submit"
-            className="text-xs text-[var(--accent)] hover:underline"
-          >
-            Restore
-          </button>
-        </form>
-        <form action={deleteAction}>
-          <button
-            type="submit"
-            className="text-xs text-red-500 hover:underline"
-          >
-            Delete permanently
-          </button>
-        </form>
-      </div>
-    </li>
-  );
-}
-
 function Section({
   title,
   children,
@@ -105,73 +62,126 @@ export default async function ArchivePage() {
           Archive
         </h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Everything you&apos;ve removed, categorized by type. Restore it or
-          delete it for good.
+          Everything you&apos;ve removed. Restore it or delete permanently.
         </p>
       </div>
 
-      <Section title="Suppliers" empty={suppliers.length === 0}>
-        {suppliers.map((s) => (
-          <ArchivedRow
-            key={s.id}
-            title={s.companyName}
-            subtitle={s.email ?? s.website ?? undefined}
-            restoreAction={async () => {
-              await restoreSupplier(s.id);
-            }}
-            deleteAction={async () => {
-              await deleteSupplierPermanently(s.id);
-            }}
-          />
-        ))}
+      <Section title="Contacts" empty={suppliers.length === 0}>
+        {suppliers.map((s) => {
+          async function restore() {
+            "use server";
+            await restoreSupplier(s.id);
+          }
+          async function deletePerm() {
+            "use server";
+            await deleteSupplierPermanently(s.id);
+          }
+          return (
+            <li key={s.id} className="flex items-center justify-between gap-3 p-3">
+              <div className="min-w-0">
+                <div className="truncate font-medium text-[var(--foreground)]">{s.companyName}</div>
+                {(s.email ?? s.website) && (
+                  <div className="text-xs text-[var(--muted)]">{s.email ?? s.website}</div>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <form action={restore}>
+                  <button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button>
+                </form>
+                <form action={deletePerm}>
+                  <button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button>
+                </form>
+              </div>
+            </li>
+          );
+        })}
       </Section>
 
       <Section title="Brands" empty={brands.length === 0}>
-        {brands.map((b) => (
-          <ArchivedRow
-            key={b.id}
-            title={b.name}
-            subtitle={b.category ?? undefined}
-            restoreAction={async () => {
-              await restoreBrand(b.id);
-            }}
-            deleteAction={async () => {
-              await deleteBrandPermanently(b.id);
-            }}
-          />
-        ))}
+        {brands.map((b) => {
+          async function restore() {
+            "use server";
+            await restoreBrand(b.id);
+          }
+          async function deletePerm() {
+            "use server";
+            await deleteBrandPermanently(b.id);
+          }
+          return (
+            <li key={b.id} className="flex items-center justify-between gap-3 p-3">
+              <div className="min-w-0">
+                <div className="truncate font-medium text-[var(--foreground)]">{b.name}</div>
+                {b.category && <div className="text-xs text-[var(--muted)]">{b.category}</div>}
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <form action={restore}>
+                  <button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button>
+                </form>
+                <form action={deletePerm}>
+                  <button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button>
+                </form>
+              </div>
+            </li>
+          );
+        })}
       </Section>
 
       <Section title="Products" empty={products.length === 0}>
-        {products.map((p) => (
-          <ArchivedRow
-            key={p.id}
-            title={p.title}
-            subtitle={p.asin ?? undefined}
-            restoreAction={async () => {
-              await restoreProduct(p.id);
-            }}
-            deleteAction={async () => {
-              await deleteProductPermanently(p.id);
-            }}
-          />
-        ))}
+        {products.map((p) => {
+          async function restore() {
+            "use server";
+            await restoreProduct(p.id);
+          }
+          async function deletePerm() {
+            "use server";
+            await deleteProductPermanently(p.id);
+          }
+          return (
+            <li key={p.id} className="flex items-center justify-between gap-3 p-3">
+              <div className="min-w-0">
+                <div className="truncate font-medium text-[var(--foreground)]">{p.title}</div>
+                {p.asin && <div className="text-xs text-[var(--muted)]">{p.asin}</div>}
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <form action={restore}>
+                  <button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button>
+                </form>
+                <form action={deletePerm}>
+                  <button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button>
+                </form>
+              </div>
+            </li>
+          );
+        })}
       </Section>
 
       <Section title="Calculator history" empty={calculatorRuns.length === 0}>
-        {calculatorRuns.map((run) => (
-          <ArchivedRow
-            key={run.id}
-            title={run.name}
-            subtitle={run.type.replaceAll("_", " ")}
-            restoreAction={async () => {
-              await restoreCalculatorRun(run.id);
-            }}
-            deleteAction={async () => {
-              await deleteCalculatorRunPermanently(run.id);
-            }}
-          />
-        ))}
+        {calculatorRuns.map((run) => {
+          async function restore() {
+            "use server";
+            await restoreCalculatorRun(run.id);
+          }
+          async function deletePerm() {
+            "use server";
+            await deleteCalculatorRunPermanently(run.id);
+          }
+          return (
+            <li key={run.id} className="flex items-center justify-between gap-3 p-3">
+              <div className="min-w-0">
+                <div className="truncate font-medium text-[var(--foreground)]">{run.name}</div>
+                <div className="text-xs text-[var(--muted)]">{run.type.replaceAll("_", " ")}</div>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <form action={restore}>
+                  <button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button>
+                </form>
+                <form action={deletePerm}>
+                  <button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button>
+                </form>
+              </div>
+            </li>
+          );
+        })}
       </Section>
     </main>
   );

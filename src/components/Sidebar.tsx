@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
 import {
   LayoutDashboard,
   Calculator,
@@ -39,7 +39,16 @@ const links = [
 ];
 
 export function Sidebar({ userEmail }: { userEmail?: string }) {
+  return (
+    <Suspense fallback={null}>
+      <SidebarInner userEmail={userEmail} />
+    </Suspense>
+  );
+}
+
+function SidebarInner({ userEmail }: { userEmail?: string }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -62,7 +71,20 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
-    return pathname.startsWith(href.split("?")[0]) && href.split("?")[0] !== "/";
+    if (href.includes("?")) {
+      const [hrefPath, hrefQuery] = href.split("?");
+      if (!pathname.startsWith(hrefPath)) return false;
+      const [paramKey, paramVal] = hrefQuery.split("=");
+      return searchParams.get(paramKey) === paramVal;
+    }
+    // Plain path: active only when no conflicting query-param link would match
+    if (!pathname.startsWith(href)) return false;
+    // For /crm, only active when no tab param is set (or tab=contacts)
+    if (href === "/crm") {
+      const tab = searchParams.get("tab");
+      return !tab || tab === "contacts";
+    }
+    return true;
   };
 
   const NavLinks = () => (

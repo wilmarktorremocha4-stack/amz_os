@@ -40,16 +40,18 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  suppliers      Supplier[]
-  brands         Brand[]
-  products       Product[]
-  calculatorRuns CalculatorRun[]
-  activities     ActivityLog[]
-  tasks          Task[]
-  revenueEntries RevenueEntry[]
-  pipelines      Pipeline[]
-  opportunities  Opportunity[]
-  tags           Tag[]
+  suppliers          Supplier[]
+  brands             Brand[]
+  products           Product[]
+  calculatorRuns     CalculatorRun[]
+  activities         ActivityLog[]
+  tasks              Task[]
+  revenueEntries     RevenueEntry[]
+  pipelines          Pipeline[]
+  opportunities      Opportunity[]
+  tags               Tag[]
+  customFieldFolders CustomFieldFolder[]
+  customFields       CustomField[]
 }
 
 // --- CRM: Wholesale supplier/brand pipeline ---
@@ -74,6 +76,7 @@ model Supplier {
   followUps     FollowUp[]
   opportunities Opportunity[]
   tags          ContactTag[]
+  fieldValues   ContactFieldValue[]
 }
 
 model Brand {
@@ -266,6 +269,46 @@ model Opportunity {
   notes      String?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
+}
+
+// --- Custom fields ---
+
+model CustomFieldFolder {
+  id        String        @id @default(cuid())
+  user      User          @relation(fields: [userId], references: [id])
+  userId    String
+  name      String
+  order     Int           @default(0)
+  createdAt DateTime      @default(now())
+
+  fields    CustomField[]
+}
+
+model CustomField {
+  id        String             @id @default(cuid())
+  user      User               @relation(fields: [userId], references: [id])
+  userId    String
+  folder    CustomFieldFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folderId  String?
+  name      String
+  type      String
+  options   Json?
+  order     Int                @default(0)
+  createdAt DateTime           @default(now())
+
+  values    ContactFieldValue[]
+}
+
+model ContactFieldValue {
+  id         String      @id @default(cuid())
+  field      CustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  fieldId    String
+  supplier   Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplierId String
+  value      String
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([fieldId, supplierId])
 }
 
 // --- Access control: only pre-approved emails may register ---
