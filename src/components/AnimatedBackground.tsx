@@ -16,30 +16,34 @@ export function AnimatedBackground() {
     canvas.width = W;
     canvas.height = H;
 
-    let mx = W * 0.5, my = H * 0.4;
+    let mx = W * 0.5, my = H * 0.45;
     let smx = mx, smy = my;
-    let pmx = mx, pmy = my; // previous mouse for velocity
-    let velX = 0, velY = 0;
 
-    // Orbs — vivid, slow, large
+    // Trail points for the flowing wave
+    const TRAIL = 80;
+    const trail: { x: number; y: number }[] = Array.from({ length: TRAIL }, () => ({
+      x: mx, y: my,
+    }));
+
+    // Blues only — no purple, no magenta
     const orbs = [
-      { cx: 0.18, cy: 0.22, r: 0.52, color: [0, 100, 255],   spd: 0.00012, phase: 0    },
-      { cx: 0.78, cy: 0.18, r: 0.46, color: [0, 220, 255],   spd: 0.00015, phase: 1.2  },
-      { cx: 0.55, cy: 0.78, r: 0.50, color: [100, 0, 255],   spd: 0.00010, phase: 2.5  },
-      { cx: 0.88, cy: 0.58, r: 0.42, color: [0, 160, 230],   spd: 0.00018, phase: 0.7  },
-      { cx: 0.22, cy: 0.72, r: 0.40, color: [180, 0, 255],   spd: 0.00014, phase: 3.8  },
+      { cx: 0.15, cy: 0.20, r: 0.55, color: [0, 90, 220],  spd: 0.000045, phase: 0   },
+      { cx: 0.80, cy: 0.15, r: 0.50, color: [0, 180, 255], spd: 0.000055, phase: 1.8 },
+      { cx: 0.50, cy: 0.80, r: 0.52, color: [0, 60, 180],  spd: 0.000038, phase: 3.1 },
+      { cx: 0.88, cy: 0.60, r: 0.44, color: [0, 150, 230], spd: 0.000062, phase: 0.9 },
+      { cx: 0.20, cy: 0.70, r: 0.42, color: [20, 120, 255],spd: 0.000050, phase: 4.2 },
     ];
 
-    // Particles
-    const PARTICLE_COUNT = 55;
+    // Floating particles — blue shades only
+    const PARTICLE_COUNT = 40;
     const particles = Array.from({ length: PARTICLE_COUNT }, () => ({
       x: Math.random() * W,
       y: Math.random() * H,
-      r: Math.random() * 1.4 + 0.3,
-      vx: (Math.random() - 0.5) * 0.25,
-      vy: -Math.random() * 0.3 - 0.05,
-      alpha: Math.random() * 0.5 + 0.15,
-      color: [[0,180,255],[120,80,255],[0,220,200]][Math.floor(Math.random()*3)],
+      r: Math.random() * 1.2 + 0.3,
+      vx: (Math.random() - 0.5) * 0.18,
+      vy: -Math.random() * 0.22 - 0.04,
+      alpha: Math.random() * 0.35 + 0.10,
+      color: [[0,160,255],[0,120,220],[0,200,255]][Math.floor(Math.random() * 3)] as [number,number,number],
     }));
 
     let t = 0;
@@ -48,25 +52,23 @@ export function AnimatedBackground() {
     function draw() {
       t += 1;
 
-      // Mouse velocity for extra ripple
-      velX += (mx - pmx) * 0.08;
-      velY += (my - pmy) * 0.08;
-      velX *= 0.88;
-      velY *= 0.88;
-      pmx = smx; pmy = smy;
+      // Very slow smooth cursor follow
+      smx += (mx - smx) * 0.035;
+      smy += (my - smy) * 0.035;
 
-      smx += (mx - smx) * 0.04;
-      smy += (my - smy) * 0.04;
+      // Shift trail and push new smoothed position
+      trail.shift();
+      trail.push({ x: smx, y: smy });
 
-      // ── Base ──────────────────────────────────────────────
-      ctx!.fillStyle = "#060a14";
+      // ── Base ─────────────────────────────────────────────
+      ctx!.fillStyle = "#050c18";
       ctx!.fillRect(0, 0, W, H);
 
-      // ── Subtle grid ───────────────────────────────────────
-      const GRID = 70;
+      // ── Subtle grid ──────────────────────────────────────
       ctx!.save();
-      ctx!.strokeStyle = "rgba(40,100,200,0.07)";
+      ctx!.strokeStyle = "rgba(0,80,180,0.055)";
       ctx!.lineWidth = 0.5;
+      const GRID = 72;
       for (let x = 0; x < W; x += GRID) {
         ctx!.beginPath(); ctx!.moveTo(x, 0); ctx!.lineTo(x, H); ctx!.stroke();
       }
@@ -75,75 +77,79 @@ export function AnimatedBackground() {
       }
       ctx!.restore();
 
-      // ── Orbs ──────────────────────────────────────────────
+      // ── Orbs ─────────────────────────────────────────────
       for (const orb of orbs) {
-        const ox = Math.sin(t * orb.spd * 1000 + orb.phase) * W * 0.10
-                 + Math.cos(t * orb.spd * 700  + orb.phase * 1.3) * W * 0.05;
-        const oy = Math.cos(t * orb.spd * 900  + orb.phase) * H * 0.09
-                 + Math.sin(t * orb.spd * 600  + orb.phase * 0.8) * H * 0.05;
+        const ox = Math.sin(t * orb.spd * 1000 + orb.phase) * W * 0.09
+                 + Math.cos(t * orb.spd * 680  + orb.phase * 1.4) * W * 0.04;
+        const oy = Math.cos(t * orb.spd * 880  + orb.phase) * H * 0.08
+                 + Math.sin(t * orb.spd * 560  + orb.phase * 0.9) * H * 0.04;
 
-        // Cursor pulls orbs slightly
-        const dx = smx - orb.cx * W;
-        const dy = smy - orb.cy * H;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        const pull = Math.max(0, 1 - dist / (W * 0.7)) * 0.06;
-
-        const px = orb.cx * W + ox + dx * pull;
-        const py = orb.cy * H + oy + dy * pull;
+        const px = orb.cx * W + ox;
+        const py = orb.cy * H + oy;
         const r  = orb.r * Math.max(W, H);
 
         const g = ctx!.createRadialGradient(px, py, 0, px, py, r);
         const [R, G, B] = orb.color;
-        g.addColorStop(0,    `rgba(${R},${G},${B},0.42)`);
-        g.addColorStop(0.3,  `rgba(${R},${G},${B},0.20)`);
-        g.addColorStop(0.65, `rgba(${R},${G},${B},0.06)`);
+        g.addColorStop(0,    `rgba(${R},${G},${B},0.38)`);
+        g.addColorStop(0.35, `rgba(${R},${G},${B},0.16)`);
+        g.addColorStop(0.7,  `rgba(${R},${G},${B},0.05)`);
         g.addColorStop(1,    `rgba(${R},${G},${B},0)`);
         ctx!.fillStyle = g;
         ctx!.fillRect(0, 0, W, H);
       }
 
-      // ── Cursor spotlight ──────────────────────────────────
-      // Outer wide glow
-      const sg = ctx!.createRadialGradient(smx, smy, 0, smx, smy, Math.min(W,H) * 0.38);
-      sg.addColorStop(0,    "rgba(80,160,255,0.14)");
-      sg.addColorStop(0.4,  "rgba(40,100,255,0.06)");
-      sg.addColorStop(1,    "rgba(0,0,0,0)");
-      ctx!.fillStyle = sg;
-      ctx!.fillRect(0, 0, W, H);
+      // ── Flowing wave trail (cursor) ───────────────────────
+      // Draw multiple overlapping curved lines through the trail
+      // for a soft abstract light-stream look
+      for (let layer = 0; layer < 3; layer++) {
+        const width  = [6, 3, 1.2][layer];
+        const alphaM = [0.22, 0.14, 0.28][layer];
+        const colorR = [0, 80, 180][layer];
+        const colorG = [160, 200, 230][layer];
+        const colorB = [255, 255, 255][layer];
 
-      // Inner bright core
-      const cg = ctx!.createRadialGradient(smx, smy, 0, smx, smy, 90);
-      cg.addColorStop(0,   "rgba(160,210,255,0.28)");
-      cg.addColorStop(0.5, "rgba(80,160,255,0.10)");
-      cg.addColorStop(1,   "rgba(0,0,0,0)");
-      ctx!.fillStyle = cg;
-      ctx!.fillRect(0, 0, W, H);
-
-      // Velocity streak — moves toward where the cursor is going
-      if (Math.abs(velX) + Math.abs(velY) > 0.5) {
-        const ex = smx + velX * 18;
-        const ey = smy + velY * 18;
-        const streak = ctx!.createLinearGradient(smx, smy, ex, ey);
-        streak.addColorStop(0,   "rgba(100,200,255,0.18)");
-        streak.addColorStop(1,   "rgba(100,200,255,0)");
         ctx!.save();
-        ctx!.filter = "blur(8px)";
-        ctx!.strokeStyle = streak;
-        ctx!.lineWidth = 22;
+        ctx!.lineWidth = width;
         ctx!.lineCap = "round";
+        ctx!.lineJoin = "round";
+
         ctx!.beginPath();
-        ctx!.moveTo(smx, smy);
-        ctx!.lineTo(ex, ey);
+        ctx!.moveTo(trail[0].x, trail[0].y);
+        for (let i = 1; i < TRAIL - 1; i++) {
+          const cx2 = (trail[i].x + trail[i + 1].x) / 2;
+          const cy2 = (trail[i].y + trail[i + 1].y) / 2;
+          ctx!.quadraticCurveTo(trail[i].x, trail[i].y, cx2, cy2);
+        }
+
+        // Gradient along the trail: fades from transparent at start to bright at tip
+        const grad = ctx!.createLinearGradient(
+          trail[0].x, trail[0].y,
+          trail[TRAIL - 1].x, trail[TRAIL - 1].y
+        );
+        grad.addColorStop(0,    `rgba(${colorR},${colorG},${colorB},0)`);
+        grad.addColorStop(0.55, `rgba(${colorR},${colorG},${colorB},${alphaM * 0.4})`);
+        grad.addColorStop(1,    `rgba(${colorR},${colorG},${colorB},${alphaM})`);
+
+        ctx!.strokeStyle = grad;
         ctx!.stroke();
         ctx!.restore();
       }
 
-      // ── Particles ─────────────────────────────────────────
+      // Small glow dot at cursor tip
+      const tip = trail[TRAIL - 1];
+      const tipG = ctx!.createRadialGradient(tip.x, tip.y, 0, tip.x, tip.y, 28);
+      tipG.addColorStop(0,   "rgba(140,210,255,0.30)");
+      tipG.addColorStop(0.5, "rgba(0,160,255,0.10)");
+      tipG.addColorStop(1,   "rgba(0,0,0,0)");
+      ctx!.fillStyle = tipG;
+      ctx!.fillRect(0, 0, W, H);
+
+      // ── Particles ────────────────────────────────────────
       for (const p of particles) {
         p.x += p.vx;
         p.y += p.vy;
-        if (p.y < -4) { p.y = H + 4; p.x = Math.random() * W; }
-        if (p.x < -4) p.x = W + 4;
+        if (p.y < -4)  { p.y = H + 4; p.x = Math.random() * W; }
+        if (p.x < -4)   p.x = W + 4;
         if (p.x > W + 4) p.x = -4;
 
         const [R,G,B] = p.color;
@@ -153,16 +159,14 @@ export function AnimatedBackground() {
         ctx!.fill();
       }
 
-      // ── Scanlines ─────────────────────────────────────────
-      ctx!.fillStyle = "rgba(0,0,0,0.06)";
-      for (let y = 0; y < H; y += 3) {
-        ctx!.fillRect(0, y, W, 1);
-      }
+      // ── Scanlines ────────────────────────────────────────
+      ctx!.fillStyle = "rgba(0,0,0,0.055)";
+      for (let y = 0; y < H; y += 3) ctx!.fillRect(0, y, W, 1);
 
-      // ── Vignette ──────────────────────────────────────────
-      const vg = ctx!.createRadialGradient(W/2, H/2, H * 0.15, W/2, H/2, H * 0.95);
+      // ── Vignette ─────────────────────────────────────────
+      const vg = ctx!.createRadialGradient(W/2, H/2, H * 0.12, W/2, H/2, H * 0.92);
       vg.addColorStop(0, "rgba(0,0,0,0)");
-      vg.addColorStop(1, "rgba(0,0,15,0.72)");
+      vg.addColorStop(1, "rgba(0,4,18,0.78)");
       ctx!.fillStyle = vg;
       ctx!.fillRect(0, 0, W, H);
 
