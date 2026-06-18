@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-// Instantly.ai-inspired: dark bg + large soft color blobs that drift + follow cursor
+// Instantly.ai-style: neon blue, turquoise, deep blue liquid gradient that follows mouse
 export function AnimatedBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -17,62 +17,79 @@ export function AnimatedBackground() {
     canvas.width = W;
     canvas.height = H;
 
+    // Mouse position (smoothly interpolated)
     let mx = W * 0.5, my = H * 0.5;
-    let tx = mx, ty = my;
+    let smx = mx, smy = my; // smoothed
 
+    // Blobs: neon blue, turquoise, electric blue, deep indigo, cyan
     const blobs = [
-      { x: W * 0.15, y: H * 0.2, r: 550, color: [88, 28, 220], speed: 0.00025, ox: 0, oy: 0 },
-      { x: W * 0.75, y: H * 0.15, r: 480, color: [30, 80, 220], speed: 0.0003, ox: 1, oy: 0.5 },
-      { x: W * 0.5, y: H * 0.7, r: 520, color: [120, 30, 180], speed: 0.0002, ox: -0.5, oy: 1 },
-      { x: W * 0.85, y: H * 0.65, r: 420, color: [15, 120, 200], speed: 0.00035, ox: 1, oy: -0.5 },
-      { x: W * 0.3, y: H * 0.8, r: 400, color: [60, 20, 150], speed: 0.00028, ox: -1, oy: 0.3 },
+      { bx: 0.2, by: 0.3, r: 0.65, color: [0, 120, 255],   speed: 0.00018, px: 0.12, py: 0.08 },
+      { bx: 0.75, by: 0.2, r: 0.55, color: [0, 220, 240],  speed: 0.00022, px: -0.08, py: 0.14 },
+      { bx: 0.5, by: 0.75, r: 0.60, color: [30, 60, 220],  speed: 0.00015, px: 0.10, py: -0.10 },
+      { bx: 0.85, by: 0.6, r: 0.50, color: [0, 180, 255],  speed: 0.00028, px: -0.15, py: 0.06 },
+      { bx: 0.15, by: 0.75, r: 0.45, color: [80, 0, 220],  speed: 0.00020, px: 0.06, py: -0.12 },
+      { bx: 0.6, by: 0.1,  r: 0.40, color: [0, 255, 220],  speed: 0.00025, px: -0.10, py: 0.10 },
     ];
 
     let t = 0;
-    let rafId: number;
+    let raf: number;
 
     function draw() {
       t += 1;
 
-      // Smooth mouse follow
-      tx += (mx - tx) * 0.04;
-      ty += (my - ty) * 0.04;
+      // Smooth mouse lerp
+      smx += (mx - smx) * 0.05;
+      smy += (my - smy) * 0.05;
 
-      // Fill black
-      ctx!.fillStyle = "#050508";
+      // Deep dark base
+      ctx!.fillStyle = "#03060f";
       ctx!.fillRect(0, 0, W, H);
 
-      // Draw blobs
-      for (const blob of blobs) {
-        const bx = blob.x + Math.sin(t * blob.speed * 1000 + blob.ox) * W * 0.12
-          + (tx - W / 2) * 0.04 * (blob.ox + 1);
-        const by = blob.y + Math.cos(t * blob.speed * 800 + blob.oy) * H * 0.1
-          + (ty - H / 2) * 0.04 * (blob.oy + 1);
+      ctx!.globalCompositeOperation = "screen";
 
-        const grad = ctx!.createRadialGradient(bx, by, 0, bx, by, blob.r);
-        const [r, g, b] = blob.color;
-        grad.addColorStop(0, `rgba(${r},${g},${b},0.55)`);
-        grad.addColorStop(0.4, `rgba(${r},${g},${b},0.25)`);
-        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-        ctx!.fillStyle = grad;
+      for (const blob of blobs) {
+        // Organic drift: two sine waves at different frequencies
+        const ox = Math.sin(t * blob.speed * 1000 + blob.px * 10) * W * 0.13
+                 + Math.cos(t * blob.speed * 700 + blob.py * 7) * W * 0.06;
+        const oy = Math.cos(t * blob.speed * 900 + blob.py * 10) * H * 0.11
+                 + Math.sin(t * blob.speed * 600 + blob.px * 5) * H * 0.07;
+
+        // Cursor attraction (each blob has different sensitivity)
+        const cx = (smx - W * 0.5) * blob.px;
+        const cy = (smy - H * 0.5) * blob.py;
+
+        const bx = blob.bx * W + ox + cx;
+        const by = blob.by * H + oy + cy;
+        const r = blob.r * Math.min(W, H);
+
+        const g = ctx!.createRadialGradient(bx, by, 0, bx, by, r);
+        const [R, G, B] = blob.color;
+        g.addColorStop(0,   `rgba(${R},${G},${B},0.50)`);
+        g.addColorStop(0.35,`rgba(${R},${G},${B},0.22)`);
+        g.addColorStop(0.7, `rgba(${R},${G},${B},0.07)`);
+        g.addColorStop(1,   `rgba(${R},${G},${B},0)`);
+        ctx!.fillStyle = g;
         ctx!.fillRect(0, 0, W, H);
       }
 
-      // Cursor glow
-      const cgr = ctx!.createRadialGradient(tx, ty, 0, tx, ty, 120);
-      cgr.addColorStop(0, "rgba(130,80,255,0.18)");
-      cgr.addColorStop(1, "rgba(0,0,0,0)");
-      ctx!.fillStyle = cgr;
+      ctx!.globalCompositeOperation = "source-over";
+
+      // Cursor glow — neon cyan ring
+      const cg = ctx!.createRadialGradient(smx, smy, 0, smx, smy, 160);
+      cg.addColorStop(0,    "rgba(0,220,255,0.22)");
+      cg.addColorStop(0.4,  "rgba(0,140,255,0.10)");
+      cg.addColorStop(1,    "rgba(0,0,0,0)");
+      ctx!.fillStyle = cg;
       ctx!.fillRect(0, 0, W, H);
 
-      // Subtle vignette
-      const vgr = ctx!.createRadialGradient(W/2, H/2, H*0.3, W/2, H/2, H*0.85);
-      vgr.addColorStop(0, "rgba(0,0,0,0)");
-      vgr.addColorStop(1, "rgba(0,0,0,0.6)");
-      ctx!.fillStyle = vgr;
+      // Edge vignette
+      const vg = ctx!.createRadialGradient(W/2, H/2, H * 0.25, W/2, H/2, H * 0.9);
+      vg.addColorStop(0, "rgba(0,0,0,0)");
+      vg.addColorStop(1, "rgba(0,0,0,0.65)");
+      ctx!.fillStyle = vg;
       ctx!.fillRect(0, 0, W, H);
 
-      rafId = requestAnimationFrame(draw);
+      raf = requestAnimationFrame(draw);
     }
 
     function onMove(e: MouseEvent) { mx = e.clientX; my = e.clientY; }
@@ -87,13 +104,13 @@ export function AnimatedBackground() {
     window.addEventListener("mousemove", onMove);
     window.addEventListener("touchmove", onTouch, { passive: true });
     window.addEventListener("resize", onResize);
-    rafId = requestAnimationFrame(draw);
+    raf = requestAnimationFrame(draw);
 
     return () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("touchmove", onTouch);
       window.removeEventListener("resize", onResize);
-      cancelAnimationFrame(rafId);
+      cancelAnimationFrame(raf);
     };
   }, []);
 

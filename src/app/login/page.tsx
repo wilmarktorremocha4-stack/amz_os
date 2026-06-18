@@ -52,11 +52,11 @@ export default async function LoginPage({
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center">
           <Image
-            src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/68de919caf128ea07f29c095.png"
+            src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a3427f3671890ccaac6cf63.png"
             alt="AMZ OS"
-            width={160}
-            height={64}
-            className="h-16 w-auto object-contain drop-shadow-[0_0_20px_rgba(96,165,250,0.4)]"
+            width={220}
+            height={88}
+            className="h-24 w-auto object-contain drop-shadow-[0_0_30px_rgba(0,200,255,0.5)]"
             unoptimized
           />
         </div>

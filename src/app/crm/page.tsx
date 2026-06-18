@@ -7,6 +7,7 @@ import { OpportunitiesTab } from "@/components/OpportunitiesTab";
 import { PipelinesTab } from "@/components/PipelinesTab";
 import { TagsManager } from "@/components/TagsManager";
 import { ContactsTable } from "@/components/ContactsTable";
+import { EmailTemplatesTab } from "@/components/EmailTemplatesTab";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ const STAGE_ORDER = [
   "REJECTED",
 ] as const;
 
-const TABS = ["contacts", "opportunities", "pipelines", "tags"] as const;
+const TABS = ["contacts", "opportunities", "pipelines", "tags", "email-templates"] as const;
 type Tab = (typeof TABS)[number];
 
 export default async function CrmPage({
@@ -37,7 +38,7 @@ export default async function CrmPage({
   const { error, digestSent, add, tab: tabParam } = await searchParams;
   const tab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : "contacts";
 
-  const [suppliers, pipelines, opportunities, allTags] = await Promise.all([
+  const [suppliers, pipelines, opportunities, allTags, emailTemplates] = await Promise.all([
     prisma.supplier.findMany({
       where: { userId: user.id, archived: false },
       include: { tags: { include: { tag: true } } },
@@ -57,6 +58,10 @@ export default async function CrmPage({
       orderBy: { createdAt: "desc" },
     }),
     prisma.tag.findMany({
+      where: { userId: user.id },
+      orderBy: { name: "asc" },
+    }),
+    prisma.emailTemplate.findMany({
       where: { userId: user.id },
       orderBy: { name: "asc" },
     }),
@@ -130,7 +135,7 @@ export default async function CrmPage({
                   : "text-[var(--muted)] hover:text-[var(--foreground)]"
               }`}
             >
-              {t}
+              {t === "email-templates" ? "Email Templates" : t.charAt(0).toUpperCase() + t.slice(1)}
             </a>
           ))}
         </div>
@@ -209,6 +214,11 @@ export default async function CrmPage({
         {/* Tags Tab */}
         {tab === "tags" && (
           <TagsManager tags={allTags} />
+        )}
+
+        {/* Email Templates Tab */}
+        {tab === "email-templates" && (
+          <EmailTemplatesTab templates={emailTemplates} />
         )}
       </main>
     </>
