@@ -21,17 +21,32 @@ import {
   ChevronRight,
   Menu,
   X,
+  Mail,
+  Send,
+  LineChart,
+  Store,
+  Zap,
+  SearchCheck,
 } from "lucide-react";
 import { logOut } from "@/lib/actions/auth";
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/calculators", label: "Calculators", icon: Calculator },
+  { label: "─── CRM", icon: Users, href: "", divider: true },
   { href: "/crm", label: "Contacts", icon: Users },
   { href: "/crm?tab=opportunities", label: "Opportunities", icon: TrendingUp },
+  { href: "/contacts/enrich", label: "Enrich Contacts", icon: SearchCheck },
+  { label: "─── Sourcing", icon: Store, href: "", divider: true },
+  { href: "/brands/finder", label: "Brand Finder", icon: Store },
   { href: "/research", label: "Product Research", icon: PackageSearch },
   { href: "/research/brands", label: "Brand Research", icon: Sparkles },
   { href: "/scout", label: "Market Scout", icon: Telescope },
+  { label: "─── Email", icon: Mail, href: "", divider: true },
+  { href: "/email/campaigns", label: "Campaigns", icon: Send },
+  { href: "/email/sequences", label: "Sequences", icon: Zap },
+  { href: "/email/analytics", label: "Email Analytics", icon: LineChart },
+  { label: "─── Reports", icon: BarChart3, href: "", divider: true },
   { href: "/progress", label: "Progress Tracker", icon: BarChart3 },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/ai-agent", label: "AI Agent", icon: Bot },
@@ -88,8 +103,16 @@ function SidebarInner({ userEmail }: { userEmail?: string }) {
   };
 
   const NavLinks = () => (
-    <nav className="flex flex-col gap-0.5">
+    <nav className="flex flex-col gap-0.5 overflow-y-auto">
       {links.map((link) => {
+        if ((link as { divider?: boolean }).divider) {
+          if (collapsed) return null;
+          return (
+            <div key={link.label} className="mt-3 mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]/60">
+              {link.label.replace("─── ", "")}
+            </div>
+          );
+        }
         const active = isActive(link.href);
         const Icon = link.icon;
         return (

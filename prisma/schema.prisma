@@ -53,6 +53,9 @@ model User {
   customFieldFolders CustomFieldFolder[]
   customFields       CustomField[]
   emailTemplates     EmailTemplate[]
+  emailCampaigns     EmailCampaign[]
+  emailSequences     EmailSequence[]
+  brandScans         BrandScan[]
 }
 
 // --- CRM: Wholesale supplier/brand pipeline ---
@@ -73,12 +76,16 @@ model Supplier {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  brands        Brand[]
-  followUps     FollowUp[]
-  opportunities Opportunity[]
-  tags          ContactTag[]
-  fieldValues   ContactFieldValue[]
-  contactNotes  ContactNote[]
+  brands              Brand[]
+  followUps           FollowUp[]
+  opportunities       Opportunity[]
+  tags                ContactTag[]
+  fieldValues         ContactFieldValue[]
+  contactNotes        ContactNote[]
+  emailRecipients     EmailRecipient[]
+  sequenceEnrollments SequenceEnrollment[]
+  enrichment          ContactEnrichment?
+  leadScore           LeadScore?
 }
 
 model Brand {
@@ -304,7 +311,8 @@ model EmailTemplate {
   userId    String
   name      String
   subject   String
-  body      String
+  body      String   @default("")
+  bodyJson  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -354,6 +362,131 @@ model ContactFieldValue {
 model AllowedEmail {
   id        String   @id @default(cuid())
   email     String   @unique
-  note      String?  // optional label, e.g. the person's name
+  note      String?
   createdAt DateTime @default(now())
+}
+
+// --- Email campaigns ---
+
+model EmailCampaign {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  name      String
+  subject   String
+  bodyJson  Json
+  fromName  String?
+  fromEmail String?
+  status    String   @default("draft") // draft | sending | sent
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients EmailRecipient[]
+}
+
+model EmailRecipient {
+  id         String         @id @default(cuid())
+  campaign   EmailCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String?
+  step       EmailSequenceStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  stepId     String?
+  supplier   Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplierId String?
+  email      String
+  status     String         @default("queued") // queued | sent | opened | clicked | bounced | unsubscribed
+  token      String         @unique @default(cuid())
+  sentAt     DateTime?
+  openedAt   DateTime?
+  clickedAt  DateTime?
+  bouncedAt  DateTime?
+  createdAt  DateTime       @default(now())
+
+  events     EmailEvent[]
+}
+
+model EmailEvent {
+  id          String         @id @default(cuid())
+  recipient   EmailRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  recipientId String
+  type        String         // open | click | bounce | unsubscribe | delivery
+  url         String?
+  occurredAt  DateTime       @default(now())
+}
+
+model EmailSequence {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  name        String
+  description String?
+  status      String   @default("active") // active | paused
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps       EmailSequenceStep[]
+  enrollments SequenceEnrollment[]
+}
+
+model EmailSequenceStep {
+  id         String        @id @default(cuid())
+  sequence   EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  sequenceId String
+  subject    String
+  bodyJson   Json
+  delayDays  Int           @default(0)
+  order      Int           @default(0)
+  createdAt  DateTime      @default(now())
+
+  recipients EmailRecipient[]
+}
+
+model SequenceEnrollment {
+  id          String        @id @default(cuid())
+  sequence    EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  sequenceId  String
+  supplier    Supplier      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplierId  String
+  currentStep Int           @default(0)
+  status      String        @default("active") // active | completed | paused | unsubscribed
+  startedAt   DateTime      @default(now())
+  nextSendAt  DateTime?
+
+  @@unique([sequenceId, supplierId])
+}
+
+model ContactEnrichment {
+  id              String   @id @default(cuid())
+  supplier        Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplierId      String   @unique
+  websiteUrl      String?
+  contactPageUrl  String?
+  linkedinUrl     String?
+  instagramUrl    String?
+  facebookUrl     String?
+  twitterUrl      String?
+  phone           String?
+  discoveredEmail String?
+  source          String   @default("manual") // manual | ai | apify
+  enrichedAt      DateTime @default(now())
+}
+
+model BrandScan {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  query       String
+  status      String    @default("pending") // pending | running | complete | error
+  results     Json?
+  runAt       DateTime  @default(now())
+  completedAt DateTime?
+}
+
+model LeadScore {
+  id         String   @id @default(cuid())
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplierId String   @unique
+  score      Int      @default(0)
+  signals    Json?
+  scoredAt   DateTime @default(now())
 }

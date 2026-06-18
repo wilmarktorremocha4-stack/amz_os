@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, DollarSign, Trash2, ChevronDown } from "lucide-react";
+import { Plus, DollarSign, Trash2, ChevronDown, LayoutGrid, List } from "lucide-react";
 import {
   createOpportunity,
   moveOpportunityStage,
   deleteOpportunity,
   updateOpportunityStatus,
 } from "@/lib/actions/pipelines";
+import { OpportunityKanban } from "@/components/OpportunityKanban";
 
 type Stage = { id: string; name: string; order: number };
 type Pipeline = { id: string; name: string; stages: Stage[] };
@@ -189,6 +190,7 @@ export function OpportunitiesTab({
 }) {
   const [selectedId, setSelectedId] = useState(pipelines[0]?.id ?? "");
   const [showAdd, setShowAdd] = useState(false);
+  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
 
   const pipeline = pipelines.find((p) => p.id === selectedId);
   const stageIds = new Set(pipeline?.stages.map((s) => s.id) ?? []);
@@ -233,14 +235,33 @@ export function OpportunitiesTab({
           </span>{" "}
           total
         </span>
-        <button onClick={() => setShowAdd(true)} className="btn-primary ml-auto whitespace-nowrap">
-          <Plus size={14} />
-          Add opportunity
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex rounded-lg border border-[var(--border)] overflow-hidden">
+            <button onClick={() => setViewMode("kanban")} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition ${viewMode === "kanban" ? "bg-blue-600 text-white" : "text-[var(--muted)] hover:bg-[var(--accent-soft)]"}`}>
+              <LayoutGrid size={13} /> Kanban
+            </button>
+            <button onClick={() => setViewMode("list")} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition ${viewMode === "list" ? "bg-blue-600 text-white" : "text-[var(--muted)] hover:bg-[var(--accent-soft)]"}`}>
+              <List size={13} /> List
+            </button>
+          </div>
+          <button onClick={() => setShowAdd(true)} className="btn-primary whitespace-nowrap">
+            <Plus size={14} />
+            Add opportunity
+          </button>
+        </div>
       </div>
 
-      {/* Kanban */}
-      {pipeline && (
+      {/* Drag-drop Kanban */}
+      {viewMode === "kanban" && pipeline && (
+        <OpportunityKanban
+          stages={pipeline.stages}
+          opportunities={pipelineOpps.map((o) => ({ ...o, value: o.value }))}
+          pipelineName={pipeline.name}
+        />
+      )}
+
+      {/* List view */}
+      {viewMode === "list" && pipeline && (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {[...pipeline.stages]
             .sort((a, b) => a.order - b.order)
@@ -275,3 +296,4 @@ export function OpportunitiesTab({
     </div>
   );
 }
+
