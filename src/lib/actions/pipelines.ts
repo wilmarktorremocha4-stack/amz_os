@@ -73,7 +73,6 @@ export async function deletePipelineStage(stageId: string) {
 
 export async function createOpportunity(formData: FormData) {
   const user = await getCurrentUser();
-  const name = String(formData.get("name") ?? "").trim();
   const pipelineId = String(formData.get("pipelineId") ?? "");
   const stageId = String(formData.get("stageId") ?? "");
   const supplierId = String(formData.get("supplierId") ?? "") || null;
@@ -81,7 +80,10 @@ export async function createOpportunity(formData: FormData) {
   const value = valueStr ? parseFloat(valueStr) : null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
-  if (!name || !pipelineId || !stageId) return;
+  if (!pipelineId || !stageId) return;
+
+  const pipeline = await prisma.pipeline.findUnique({ where: { id: pipelineId } });
+  const name = pipeline?.name ?? "Opportunity";
 
   await prisma.opportunity.create({
     data: { userId: user.id, name, pipelineId, stageId, supplierId, value, notes },

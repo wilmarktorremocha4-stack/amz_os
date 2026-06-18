@@ -3,13 +3,12 @@
 import { useState, useTransition, useRef } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft, Mail, Phone, Globe, Tag as TagIcon, Plus, X,
-  ExternalLink, ChevronDown, Send, StickyNote, FileText,
-  Clock, Check,
+  ArrowLeft, Mail, Phone, Globe, Plus, X,
+  ExternalLink, Send, StickyNote,
+  Check, Pencil,
 } from "lucide-react";
-import { updateSupplierStage } from "@/lib/actions/suppliers";
+import { updateSupplierStage, updateContactDetails } from "@/lib/actions/suppliers";
 import { addTagToContact, removeTagFromContact } from "@/lib/actions/tags";
-import { createOpportunity } from "@/lib/actions/pipelines";
 import { addContactNote, sendContactEmail } from "@/lib/actions/contactNotes";
 
 const STAGES = [
@@ -57,8 +56,16 @@ export function ContactDetailClient({
 }) {
   const [stage, setStage] = useState(supplier.stage);
   const [showTagPicker, setShowTagPicker] = useState(false);
-  const [showAddOpportunity, setShowAddOpportunity] = useState(false);
   const [hideEmptyFields, setHideEmptyFields] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editData, setEditData] = useState({
+    companyName: supplier.companyName,
+    contactName: supplier.contactName ?? "",
+    email: supplier.email ?? "",
+    phone: supplier.phone ?? "",
+    website: supplier.website ?? "",
+  });
+  const [savePending, startSaveTransition] = useTransition();
   const [, startTransition] = useTransition();
   const [stagePending, startStageTransition] = useTransition();
 
@@ -114,46 +121,76 @@ export function ContactDetailClient({
 
           {/* Contact fields */}
           <div className="border-b border-[var(--border)] px-5 py-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Contact Info</p>
-            <div className="flex flex-col gap-3 text-sm">
-              {supplier.email && (
-                <div>
-                  <div className="mb-0.5 text-[10px] text-[var(--muted)]">Email</div>
-                  <a href={`mailto:${supplier.email}`} className="flex items-center gap-1 text-blue-500 hover:underline break-all text-xs">
-                    <Mail size={11} />
-                    {supplier.email}
-                  </a>
-                </div>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Contact Info</p>
+              {!editing && (
+                <button onClick={() => setEditing(true)}
+                  className="flex items-center gap-0.5 text-[10px] text-[var(--muted)] hover:text-blue-400">
+                  <Pencil size={9} /> Edit
+                </button>
               )}
-              {supplier.phone && (
-                <div>
-                  <div className="mb-0.5 text-[10px] text-[var(--muted)]">Phone</div>
-                  <div className="flex items-center gap-1 text-xs text-[var(--foreground)]">
-                    <Phone size={11} className="text-[var(--muted)]" />
-                    {supplier.phone}
+            </div>
+            {editing ? (
+              <div className="flex flex-col gap-2">
+                {(["companyName","contactName","email","phone","website"] as const).map((field) => (
+                  <div key={field}>
+                    <div className="mb-0.5 text-[10px] capitalize text-[var(--muted)]">
+                      {field === "companyName" ? "Company" : field === "contactName" ? "Contact" : field.charAt(0).toUpperCase() + field.slice(1)}
+                    </div>
+                    <input
+                      value={editData[field]}
+                      onChange={(e) => setEditData((d) => ({ ...d, [field]: e.target.value }))}
+                      className="input w-full text-xs"
+                    />
                   </div>
-                </div>
-              )}
-              {supplier.website && (
-                <div>
-                  <div className="mb-0.5 text-[10px] text-[var(--muted)]">Website</div>
-                  <a
-                    href={supplier.website.startsWith("http") ? supplier.website : `https://${supplier.website}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-blue-500 hover:underline truncate">
-                    <Globe size={11} />
-                    {supplier.website}
-                    <ExternalLink size={9} />
-                  </a>
-                </div>
-              )}
-              <div>
-                <div className="mb-0.5 text-[10px] text-[var(--muted)]">Added</div>
-                <div className="text-xs text-[var(--foreground)]">
-                  {new Date(supplier.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={() => { setEditing(false); setEditData({ companyName: supplier.companyName, contactName: supplier.contactName ?? "", email: supplier.email ?? "", phone: supplier.phone ?? "", website: supplier.website ?? "" }); }}
+                    className="flex-1 rounded-lg border border-[var(--border)] py-1.5 text-xs text-[var(--muted)]">
+                    Cancel
+                  </button>
+                  <button type="button" disabled={savePending}
+                    onClick={() => startSaveTransition(async () => { await updateContactDetails(supplier.id, { companyName: editData.companyName || undefined, contactName: editData.contactName || undefined, email: editData.email || undefined, phone: editData.phone || undefined, website: editData.website || undefined }); setEditing(false); })}
+                    className="flex-1 rounded-lg bg-blue-600 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+                    {savePending ? "Saving…" : "Save"}
+                  </button>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col gap-3 text-sm">
+                {(editData.email || supplier.email) && (
+                  <div>
+                    <div className="mb-0.5 text-[10px] text-[var(--muted)]">Email</div>
+                    <a href={`mailto:${editData.email || supplier.email}`} className="flex items-center gap-1 text-blue-500 hover:underline break-all text-xs">
+                      <Mail size={11} />
+                      {editData.email || supplier.email}
+                    </a>
+                  </div>
+                )}
+                {(editData.phone || supplier.phone) && (
+                  <div>
+                    <div className="mb-0.5 text-[10px] text-[var(--muted)]">Phone</div>
+                    <div className="flex items-center gap-1 text-xs text-[var(--foreground)]">
+                      <Phone size={11} className="text-[var(--muted)]" />
+                      {editData.phone || supplier.phone}
+                    </div>
+                  </div>
+                )}
+                {(editData.website || supplier.website) && (
+                  <div>
+                    <div className="mb-0.5 text-[10px] text-[var(--muted)]">Website</div>
+                    <a
+                      href={(editData.website || supplier.website || "").startsWith("http") ? (editData.website || supplier.website)! : `https://${editData.website || supplier.website}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-blue-500 hover:underline truncate">
+                      <Globe size={11} />
+                      {editData.website || supplier.website}
+                      <ExternalLink size={9} />
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Tags */}
@@ -239,46 +276,6 @@ export function ContactDetailClient({
             </div>
           )}
 
-          {/* Opportunities */}
-          <div className="border-t border-[var(--border)] px-5 py-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Opportunities</p>
-              {pipelines.length > 0 && (
-                <button
-                  onClick={() => setShowAddOpportunity(true)}
-                  className="flex items-center gap-0.5 rounded-full border border-dashed border-[var(--border)] px-2 py-0.5 text-[10px] text-[var(--muted)] hover:border-blue-400 hover:text-blue-400">
-                  <Plus size={9} /> Add
-                </button>
-              )}
-            </div>
-            {opportunities.length === 0 ? (
-              <p className="text-[11px] text-[var(--muted)]">No opportunities yet.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {opportunities.map((opp) => (
-                  <div key={opp.id}
-                    className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2.5">
-                    <div className="font-medium text-xs text-[var(--foreground)] truncate">{opp.name}</div>
-                    <div className="mt-0.5 text-[10px] text-[var(--muted)]">
-                      {opp.pipeline.name} › <span className="text-blue-500">{opp.stage.name}</span>
-                    </div>
-                    {opp.value && (
-                      <div className="mt-1 text-[10px] font-semibold text-green-600">
-                        ${Number(opp.value).toLocaleString()}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {showAddOpportunity && pipelines.length > 0 && (
-              <AddOpportunityForm
-                supplierId={supplier.id}
-                pipelines={pipelines}
-                onClose={() => setShowAddOpportunity(false)}
-              />
-            )}
-          </div>
         </div>
 
         {/* ── CENTER PANE: Conversation / email ── */}
@@ -540,60 +537,3 @@ function ActivityPane({
   );
 }
 
-/* ─── Add opportunity form ──────────────────────────────────── */
-function AddOpportunityForm({
-  supplierId,
-  pipelines,
-  onClose,
-}: {
-  supplierId: string;
-  pipelines: Pipeline[];
-  onClose: () => void;
-}) {
-  const [selectedPipelineId, setSelectedPipelineId] = useState(pipelines[0]?.id ?? "");
-  const [pending, startTransition] = useTransition();
-  const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    fd.set("supplierId", supplierId);
-    startTransition(async () => {
-      await createOpportunity(fd);
-      onClose();
-    });
-  }
-
-  return (
-    <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-        <input name="name" placeholder="Opportunity name" required className="input w-full text-xs" />
-        <input name="value" type="number" placeholder="Value ($)" className="input w-full text-xs" />
-        <select name="pipelineId" value={selectedPipelineId}
-          onChange={(e) => setSelectedPipelineId(e.target.value)}
-          className="input w-full bg-[var(--surface)] text-xs">
-          {pipelines.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        {selectedPipeline && (
-          <select name="stageId" className="input w-full bg-[var(--surface)] text-xs">
-            {selectedPipeline.stages.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        )}
-        <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose}
-            className="flex-1 rounded-lg border border-[var(--border)] py-1.5 text-xs text-[var(--muted)]">
-            Cancel
-          </button>
-          <button type="submit" disabled={pending}
-            className="flex-1 rounded-lg bg-blue-600 py-1.5 text-xs font-medium text-white disabled:opacity-50">
-            {pending ? "Adding…" : "Add"}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}

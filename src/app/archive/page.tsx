@@ -8,33 +8,9 @@ import {
   deleteCalculatorRunPermanently,
   listArchivedCalculatorRuns,
 } from "@/lib/actions/calculators";
+import { ArchiveSection } from "@/components/ArchiveSection";
 
 export const dynamic = "force-dynamic";
-
-function Section({
-  title,
-  children,
-  empty,
-}: {
-  title: string;
-  children: React.ReactNode;
-  empty: boolean;
-}) {
-  return (
-    <section>
-      <h2 className="mb-2 text-sm font-medium text-[var(--muted)]">{title}</h2>
-      {empty ? (
-        <div className="rounded-xl border border-dashed border-[var(--border)] p-4 text-center text-sm text-[var(--muted)]">
-          Nothing archived here.
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-          <ul className="divide-y divide-[var(--border)]">{children}</ul>
-        </div>
-      )}
-    </section>
-  );
-}
 
 export default async function ArchivePage() {
   const user = await getCurrentUser();
@@ -66,7 +42,7 @@ export default async function ArchivePage() {
         </p>
       </div>
 
-      <Section title="Contacts" empty={suppliers.length === 0}>
+      <ArchiveSection title="Contacts" count={suppliers.length}>
         {suppliers.map((s) => {
           async function restore() {
             "use server";
@@ -85,28 +61,18 @@ export default async function ArchivePage() {
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <form action={restore}>
-                  <button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button>
-                </form>
-                <form action={deletePerm}>
-                  <button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button>
-                </form>
+                <form action={restore}><button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button></form>
+                <form action={deletePerm}><button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button></form>
               </div>
             </li>
           );
         })}
-      </Section>
+      </ArchiveSection>
 
-      <Section title="Brands" empty={brands.length === 0}>
+      <ArchiveSection title="Brands" count={brands.length}>
         {brands.map((b) => {
-          async function restore() {
-            "use server";
-            await restoreBrand(b.id);
-          }
-          async function deletePerm() {
-            "use server";
-            await deleteBrandPermanently(b.id);
-          }
+          async function restore() { "use server"; await restoreBrand(b.id); }
+          async function deletePerm() { "use server"; await deleteBrandPermanently(b.id); }
           return (
             <li key={b.id} className="flex items-center justify-between gap-3 p-3">
               <div className="min-w-0">
@@ -114,28 +80,18 @@ export default async function ArchivePage() {
                 {b.category && <div className="text-xs text-[var(--muted)]">{b.category}</div>}
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <form action={restore}>
-                  <button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button>
-                </form>
-                <form action={deletePerm}>
-                  <button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button>
-                </form>
+                <form action={restore}><button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button></form>
+                <form action={deletePerm}><button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button></form>
               </div>
             </li>
           );
         })}
-      </Section>
+      </ArchiveSection>
 
-      <Section title="Products" empty={products.length === 0}>
+      <ArchiveSection title="Products" count={products.length}>
         {products.map((p) => {
-          async function restore() {
-            "use server";
-            await restoreProduct(p.id);
-          }
-          async function deletePerm() {
-            "use server";
-            await deleteProductPermanently(p.id);
-          }
+          async function restore() { "use server"; await restoreProduct(p.id); }
+          async function deletePerm() { "use server"; await deleteProductPermanently(p.id); }
           return (
             <li key={p.id} className="flex items-center justify-between gap-3 p-3">
               <div className="min-w-0">
@@ -143,28 +99,18 @@ export default async function ArchivePage() {
                 {p.asin && <div className="text-xs text-[var(--muted)]">{p.asin}</div>}
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <form action={restore}>
-                  <button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button>
-                </form>
-                <form action={deletePerm}>
-                  <button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button>
-                </form>
+                <form action={restore}><button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button></form>
+                <form action={deletePerm}><button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button></form>
               </div>
             </li>
           );
         })}
-      </Section>
+      </ArchiveSection>
 
-      <Section title="Calculator history" empty={calculatorRuns.length === 0}>
+      <ArchiveSection title="Calculator history" count={calculatorRuns.length}>
         {calculatorRuns.map((run) => {
-          async function restore() {
-            "use server";
-            await restoreCalculatorRun(run.id);
-          }
-          async function deletePerm() {
-            "use server";
-            await deleteCalculatorRunPermanently(run.id);
-          }
+          async function restore() { "use server"; await restoreCalculatorRun(run.id); }
+          async function deletePerm() { "use server"; await deleteCalculatorRunPermanently(run.id); }
           return (
             <li key={run.id} className="flex items-center justify-between gap-3 p-3">
               <div className="min-w-0">
@@ -172,17 +118,13 @@ export default async function ArchivePage() {
                 <div className="text-xs text-[var(--muted)]">{run.type.replaceAll("_", " ")}</div>
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <form action={restore}>
-                  <button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button>
-                </form>
-                <form action={deletePerm}>
-                  <button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button>
-                </form>
+                <form action={restore}><button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button></form>
+                <form action={deletePerm}><button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button></form>
               </div>
             </li>
           );
         })}
-      </Section>
+      </ArchiveSection>
     </main>
   );
 }

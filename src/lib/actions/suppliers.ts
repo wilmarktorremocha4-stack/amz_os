@@ -114,7 +114,31 @@ export async function emailFollowUpDigest() {
 export async function bulkDeleteSuppliers(ids: string[]) {
   if (!ids.length) return;
   const user = await getCurrentUser();
-  await prisma.supplier.deleteMany({ where: { id: { in: ids }, userId: user.id } });
+  // Archive instead of permanent delete — user can restore from /archive
+  await prisma.supplier.updateMany({
+    where: { id: { in: ids }, userId: user.id },
+    data: { archived: true },
+  });
+  revalidatePath("/crm");
+  revalidatePath("/archive");
+}
+
+export async function updateContactDetails(
+  supplierId: string,
+  data: { companyName?: string; contactName?: string; email?: string; phone?: string; website?: string }
+) {
+  const user = await getCurrentUser();
+  await prisma.supplier.update({
+    where: { id: supplierId, userId: user.id },
+    data: {
+      companyName: data.companyName || undefined,
+      contactName: data.contactName || null,
+      email: data.email || null,
+      phone: data.phone || null,
+      website: data.website || null,
+    },
+  });
+  revalidatePath(`/crm/${supplierId}`);
   revalidatePath("/crm");
 }
 

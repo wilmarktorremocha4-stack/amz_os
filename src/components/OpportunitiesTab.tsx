@@ -135,12 +135,6 @@ function AddOppModal({
         </h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input type="hidden" name="pipelineId" value={pipeline.id} />
-          <input
-            name="name"
-            placeholder="Opportunity name *"
-            required
-            className="input w-full"
-          />
           <select name="stageId" required className="input w-full">
             {pipeline.stages.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>

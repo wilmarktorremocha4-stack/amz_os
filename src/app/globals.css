@@ -11,6 +11,16 @@
   --muted: #7a93b8;
 }
 
+/* Main content area: lighter theme so sidebar stays dark but content is clean white */
+[data-area="main"] {
+  --background: #f0f4fa;
+  --surface: #ffffff;
+  --border: #dde5f0;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --accent-soft: #e8f0fe;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
