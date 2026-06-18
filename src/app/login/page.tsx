@@ -5,6 +5,7 @@ import { signIn } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
+import { GlobeDecoration } from "@/components/GlobeDecoration";
 
 async function login(formData: FormData) {
   "use server";
@@ -47,6 +48,7 @@ export default async function LoginPage({
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center p-6">
       <AnimatedBackground />
+      <GlobeDecoration />
 
       <div className="relative z-10 w-full max-w-sm">
         {/* Logo */}

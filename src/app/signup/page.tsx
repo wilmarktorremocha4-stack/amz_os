@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { signUp } from "@/lib/actions/auth";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
+import { GlobeDecoration } from "@/components/GlobeDecoration";
 
 export default async function SignupPage({
   searchParams,
@@ -13,6 +14,7 @@ export default async function SignupPage({
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center p-6">
       <AnimatedBackground />
+      <GlobeDecoration />
 
       <div className="relative z-10 w-full max-w-sm">
         {/* Logo */}
