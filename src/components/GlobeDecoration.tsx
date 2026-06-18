@@ -1,83 +1,74 @@
 export function GlobeDecoration() {
   return (
-    // Fixed to bottom center — translateY pushes it down so only the top arc is visible
     <div
       className="pointer-events-none fixed bottom-0 left-1/2"
-      style={{ transform: "translateX(-50%) translateY(calc(100% - 110px))" }}
+      style={{
+        // Push down so only the top arc (~90px) peeks above the bottom of the screen
+        transform: "translateX(-50%) translateY(calc(100% - 90px))",
+        // Wider than the viewport so the arc stretches edge to edge
+        width: "120vw",
+        height: "120vw",
+      }}
     >
-      {/* Atmospheric glow — wider than the sphere */}
+      {/* The sphere — dark interior, glow only at the very top rim */}
       <div
         style={{
-          position: "absolute",
-          inset: "-60px",
+          width: "100%",
+          height: "100%",
           borderRadius: "50%",
+          // Almost entirely dark — only a tiny highlight strip at the top for the horizon
           background:
-            "radial-gradient(ellipse at 50% 18%, rgba(0,150,255,0.28) 0%, rgba(0,80,200,0.10) 45%, transparent 70%)",
-          filter: "blur(22px)",
-        }}
-      />
-
-      {/* The sphere itself */}
-      <div
-        style={{
-          width: "1000px",
-          height: "1000px",
-          borderRadius: "50%",
-          background: [
-            "radial-gradient(circle at 48% 22%,",
-            "  rgba(0,130,255,0.22) 0%,",
-            "  rgba(0,70,180,0.12) 28%,",
-            "  rgba(2,8,28,0.97) 55%,",
-            "  rgb(2,8,28) 100%)",
-          ].join(""),
-          boxShadow: [
-            "0 0 0 1px rgba(0,130,255,0.20)",
-            "0 -6px 70px 16px rgba(0,140,255,0.32)",
-            "0 -2px 130px 40px rgba(0,100,220,0.16)",
-          ].join(", "),
+            "radial-gradient(ellipse 80% 12% at 50% 1%, rgba(0,160,255,0.18) 0%, rgba(0,80,180,0.06) 60%, transparent 100%), " +
+            "radial-gradient(circle at 50% 50%, #02060e 55%, #010407 100%)",
+          // Glowing top rim only
+          boxShadow:
+            "0 -3px 40px 8px rgba(0,140,255,0.28), " +
+            "0 -1px 80px 20px rgba(0,90,200,0.14)",
+          // Hard border at top only via outline trick — use border with transparent bottom
+          border: "1px solid rgba(0,150,255,0.22)",
         }}
       >
-        {/* Bright horizon arc */}
+        {/* Bright horizon arc line */}
         <div
           style={{
             position: "absolute",
-            top: "12px",
+            top: "3px",
             left: "50%",
             transform: "translateX(-50%)",
-            width: "86%",
-            height: "3px",
+            width: "92%",
+            height: "2px",
             borderRadius: "50%",
             background:
-              "radial-gradient(ellipse at center, rgba(100,210,255,0.95) 0%, rgba(0,160,255,0.55) 40%, transparent 72%)",
-            filter: "blur(2px)",
+              "radial-gradient(ellipse at center, rgba(120,210,255,0.90) 0%, rgba(0,160,255,0.50) 45%, transparent 75%)",
+            filter: "blur(1.5px)",
           }}
         />
-        {/* Soft glow just above horizon */}
+        {/* Very soft glow just above horizon, fades quickly */}
         <div
           style={{
             position: "absolute",
-            top: "4px",
+            top: 0,
             left: "50%",
             transform: "translateX(-50%)",
-            width: "96%",
-            height: "22px",
+            width: "98%",
+            height: "18px",
             borderRadius: "50%",
             background:
-              "radial-gradient(ellipse at center, rgba(0,180,255,0.28) 0%, rgba(0,110,220,0.10) 55%, transparent 80%)",
-            filter: "blur(8px)",
+              "radial-gradient(ellipse at center, rgba(0,170,255,0.22) 0%, rgba(0,100,220,0.08) 50%, transparent 80%)",
+            filter: "blur(6px)",
           }}
         />
       </div>
 
-      {/* Solid fill below — blocks any canvas bleed */}
+      {/* Solid black fill covering the lower half — kills any canvas bleed */}
       <div
         style={{
           position: "absolute",
-          left: 0,
-          right: 0,
+          left: "-10%",
+          right: "-10%",
           bottom: 0,
           height: "52%",
-          background: "rgb(2,8,28)",
+          background: "#02060e",
         }}
       />
     </div>
