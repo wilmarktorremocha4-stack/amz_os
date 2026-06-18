@@ -13,6 +13,8 @@
 
 /* Main content area: lighter theme so sidebar stays dark but content is clean white */
 [data-area="main"] {
+  background-color: #f0f4fa;
+  color: #0f172a;
   --background: #f0f4fa;
   --surface: #ffffff;
   --border: #dde5f0;
