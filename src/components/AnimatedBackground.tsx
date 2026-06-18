@@ -27,11 +27,11 @@ export function AnimatedBackground() {
 
     // Blues only — no purple, no magenta
     const orbs = [
-      { cx: 0.15, cy: 0.20, r: 0.55, color: [0, 90, 220],  spd: 0.000045, phase: 0   },
-      { cx: 0.80, cy: 0.15, r: 0.50, color: [0, 180, 255], spd: 0.000055, phase: 1.8 },
-      { cx: 0.50, cy: 0.80, r: 0.52, color: [0, 60, 180],  spd: 0.000038, phase: 3.1 },
-      { cx: 0.88, cy: 0.60, r: 0.44, color: [0, 150, 230], spd: 0.000062, phase: 0.9 },
-      { cx: 0.20, cy: 0.70, r: 0.42, color: [20, 120, 255],spd: 0.000050, phase: 4.2 },
+      { cx: 0.15, cy: 0.20, r: 0.55, color: [0, 90, 220],  spd: 0.000012, phase: 0   },
+      { cx: 0.80, cy: 0.15, r: 0.50, color: [0, 180, 255], spd: 0.000015, phase: 1.8 },
+      { cx: 0.50, cy: 0.80, r: 0.52, color: [0, 60, 180],  spd: 0.000010, phase: 3.1 },
+      { cx: 0.88, cy: 0.60, r: 0.44, color: [0, 150, 230], spd: 0.000017, phase: 0.9 },
+      { cx: 0.20, cy: 0.70, r: 0.42, color: [20, 120, 255],spd: 0.000013, phase: 4.2 },
     ];
 
     // Floating particles — blue shades only
