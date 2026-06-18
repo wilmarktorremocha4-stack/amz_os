@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
-import { searchAmazonProducts, getOffersSummary } from "@/lib/rainforest";
+import { searchAmazonProducts, getOffersSummary } from "@/lib/amazon";
 import { draftBrandOutreachEmail } from "@/lib/openai";
 import { sendEmail } from "@/lib/email";
 
@@ -50,7 +50,7 @@ export async function lookupBrandOnAmazon(formData: FormData) {
         avgPrice,
         reviewCount: avgReviews,
         sellerCount,
-        notes: `Avg. price and review count pulled from a live Amazon search (${products.length} listings)${sellerCount !== null ? `, seller count from the top result's live offers` : ""}, via Rainforest API on ${new Date().toLocaleDateString()}. Est. monthly sales aren't available from this data source — enter manually if known.`,
+        notes: `Avg. price and review count pulled from a live Amazon search (${products.length} listings)${sellerCount !== null ? `, seller count from the top result's live offers` : ""}, via Apify on ${new Date().toLocaleDateString()}. Est. monthly sales aren't available from this data source — enter manually if known.`,
       },
     });
   } catch (err) {

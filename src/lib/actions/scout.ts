@@ -8,7 +8,7 @@ import {
   searchAmazonProducts,
   getProductDetails,
   getOffersSummary,
-} from "@/lib/rainforest";
+} from "@/lib/amazon";
 
 export type ScoutProductResult = {
   asin: string;

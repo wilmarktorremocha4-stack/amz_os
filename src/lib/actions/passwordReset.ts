@@ -35,6 +35,10 @@ export async function requestPasswordReset(formData: FormData) {
     },
   });
 
+  if (!process.env.RESEND_API_KEY) {
+    redirect("/forgot-password?error=Email+service+not+configured.+Contact+your+administrator.");
+  }
+
   await sendEmail({
     to: email,
     subject: "AMZ OS — Password Reset Code",
@@ -48,7 +52,7 @@ export async function requestPasswordReset(formData: FormData) {
     `,
   });
 
-  redirect("/forgot-password?sent=1");
+  redirect(`/forgot-password?sent=1&email=${encodeURIComponent(email)}`);
 }
 
 export async function verifyOTPAndReset(formData: FormData) {
@@ -57,8 +61,9 @@ export async function verifyOTPAndReset(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirmPassword") ?? "");
 
-  if (password.length < 8) redirect("/reset-password?error=Password+must+be+at+least+8+characters");
-  if (password !== confirm) redirect("/reset-password?error=Passwords+do+not+match");
+  const emailParam = `&email=${encodeURIComponent(email)}`;
+  if (password.length < 8) redirect(`/reset-password?error=Password+must+be+at+least+8+characters${emailParam}`);
+  if (password !== confirm) redirect(`/reset-password?error=Passwords+do+not+match${emailParam}`);
 
   const tokens = await prisma.passwordResetToken.findMany({
     where: { email, used: false, expiresAt: { gt: new Date() } },
@@ -66,10 +71,10 @@ export async function verifyOTPAndReset(formData: FormData) {
     take: 1,
   });
 
-  if (tokens.length === 0) redirect("/reset-password?error=Code+expired+or+invalid.+Request+a+new+one.");
+  if (tokens.length === 0) redirect(`/reset-password?error=Code+expired+or+invalid.+Request+a+new+one.${emailParam}`);
 
   const valid = await bcrypt.compare(otp, tokens[0].otp);
-  if (!valid) redirect("/reset-password?error=Incorrect+code.+Try+again.");
+  if (!valid) redirect(`/reset-password?error=Incorrect+code.+Try+again.${emailParam}`);
 
   const hashed = await bcrypt.hash(password, 10);
   await prisma.$transaction([

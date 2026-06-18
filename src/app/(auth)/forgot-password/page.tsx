@@ -5,9 +5,9 @@ import { requestPasswordReset } from "@/lib/actions/passwordReset";
 export default async function ForgotPasswordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: Promise<{ error?: string; sent?: string; email?: string }>;
 }) {
-  const { error, sent } = await searchParams;
+  const { error, sent, email } = await searchParams;
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center p-6">
@@ -24,7 +24,7 @@ export default async function ForgotPasswordPage({
               <div className="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-300">
                 If that email is registered, a reset code was sent. Check your inbox.
               </div>
-              <Link href="/reset-password"
+              <Link href={`/reset-password${email ? `?email=${encodeURIComponent(email)}` : ""}`}
                 className="block w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-center text-sm font-semibold text-white hover:from-blue-500">
                 Enter my code →
               </Link>
