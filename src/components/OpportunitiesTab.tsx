@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Plus, DollarSign, Trash2, ChevronDown, LayoutGrid, List } from "lucide-react";
+import { useState, useTransition, useRef, useEffect } from "react";
+import { Plus, DollarSign, Trash2, ChevronDown, LayoutGrid, List, Search, X } from "lucide-react";
 import {
   createOpportunity,
   moveOpportunityStage,
@@ -108,6 +108,89 @@ function OppCard({ opp, stages }: { opp: Opp; stages: Stage[] }) {
   );
 }
 
+function ContactSearch({
+  suppliers,
+  value,
+  onChange,
+}: {
+  suppliers: Supplier[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = suppliers.find((s) => s.id === value);
+  const filtered = query
+    ? suppliers.filter((s) => s.companyName.toLowerCase().includes(query.toLowerCase()))
+    : suppliers;
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <div
+        className="input flex w-full cursor-pointer items-center gap-2"
+        onClick={() => { setOpen((v) => !v); setQuery(""); }}
+      >
+        {selected ? (
+          <>
+            <span className="flex-1 truncate text-sm text-[var(--foreground)]">{selected.companyName}</span>
+            <button type="button" onClick={(e) => { e.stopPropagation(); onChange(""); setOpen(false); }}
+              className="shrink-0 text-[var(--muted)] hover:text-red-500">
+              <X size={13} />
+            </button>
+          </>
+        ) : (
+          <>
+            <Search size={13} className="shrink-0 text-[var(--muted)]" />
+            <span className="text-sm text-[var(--muted)]">Search contact…</span>
+          </>
+        )}
+      </div>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-xl">
+          <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2">
+            <Search size={13} className="shrink-0 text-[var(--muted)]" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Type to filter…"
+              className="flex-1 bg-transparent text-sm text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto py-1">
+            <button type="button"
+              onClick={() => { onChange(""); setOpen(false); }}
+              className="w-full px-3 py-2 text-left text-sm text-[var(--muted)] hover:bg-[var(--accent-soft)]">
+              — No contact linked
+            </button>
+            {filtered.length === 0 && (
+              <p className="px-3 py-2 text-xs text-[var(--muted)]">No contacts match "{query}"</p>
+            )}
+            {filtered.map((s) => (
+              <button type="button" key={s.id}
+                onClick={() => { onChange(s.id); setOpen(false); setQuery(""); }}
+                className={`w-full truncate px-3 py-2 text-left text-sm transition hover:bg-[var(--accent-soft)] ${value === s.id ? "bg-blue-50 font-medium text-blue-600" : "text-[var(--foreground)]"}`}>
+                {s.companyName}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AddOppModal({
   pipeline,
   suppliers,
@@ -118,10 +201,22 @@ function AddOppModal({
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const [supplierId, setSupplierId] = useState("");
+  const [name, setName] = useState("");
+
+  // Auto-fill opportunity name from selected contact
+  function handleContactChange(id: string) {
+    setSupplierId(id);
+    if (id && !name) {
+      const contact = suppliers.find((s) => s.id === id);
+      if (contact) setName(contact.companyName);
+    }
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    fd.set("supplierId", supplierId);
     startTransition(async () => {
       await createOpportunity(fd);
       onClose();
@@ -131,42 +226,46 @@ function AddOppModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl">
-        <h2 className="mb-4 text-base font-semibold text-[var(--foreground)]">
-          Add opportunity
-        </h2>
+        <h2 className="mb-4 text-base font-semibold text-[var(--foreground)]">Add opportunity</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input type="hidden" name="pipelineId" value={pipeline.id} />
-          <select name="stageId" required className="input w-full">
-            {pipeline.stages.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-          <select name="supplierId" className="input w-full">
-            <option value="">No contact linked</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>{s.companyName}</option>
-            ))}
-          </select>
-          <input
-            name="value"
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="Value ($)"
-            className="input w-full"
-          />
-          <textarea
-            name="notes"
-            placeholder="Notes (optional)"
-            rows={2}
-            className="input w-full resize-none"
-          />
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Contact</label>
+            <ContactSearch suppliers={suppliers} value={supplierId} onChange={handleContactChange} />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Opportunity name</label>
+            <input name="name" required placeholder="e.g. WBC Deal Q3"
+              value={name} onChange={(e) => setName(e.target.value)}
+              className="input w-full" />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Stage</label>
+            <select name="stageId" required className="input w-full">
+              {pipeline.stages.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Value ($)</label>
+            <input name="value" type="number" step="0.01" min="0" placeholder="0"
+              className="input w-full" />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Notes</label>
+            <textarea name="notes" placeholder="Optional notes…" rows={2}
+              className="input w-full resize-none" />
+          </div>
+
           <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-xl border border-[var(--border)] py-2 text-sm text-[var(--muted)] hover:bg-[var(--accent-soft)]"
-            >
+            <button type="button" onClick={onClose}
+              className="flex-1 rounded-xl border border-[var(--border)] py-2 text-sm text-[var(--muted)] hover:bg-[var(--accent-soft)]">
               Cancel
             </button>
             <button type="submit" disabled={pending} className="flex-1 btn-primary disabled:opacity-50">

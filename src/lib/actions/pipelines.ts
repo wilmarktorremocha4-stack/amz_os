@@ -82,13 +82,15 @@ export async function createOpportunity(formData: FormData) {
 
   if (!pipelineId || !stageId) return;
 
+  const formName = String(formData.get("name") ?? "").trim();
   const pipeline = await prisma.pipeline.findUnique({ where: { id: pipelineId } });
-  const name = pipeline?.name ?? "Opportunity";
+  const name = formName || pipeline?.name || "Opportunity";
 
   await prisma.opportunity.create({
     data: { userId: user.id, name, pipelineId, stageId, supplierId, value, notes },
   });
   revalidatePath("/crm");
+  revalidatePath("/opportunities");
 }
 
 export async function moveOpportunityStage(opportunityId: string, stageId: string) {
