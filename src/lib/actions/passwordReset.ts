@@ -39,18 +39,23 @@ export async function requestPasswordReset(formData: FormData) {
     redirect("/forgot-password?error=Email+service+not+configured.+Contact+your+administrator.");
   }
 
-  await sendEmail({
-    to: email,
-    subject: "AMZ OS — Password Reset Code",
-    html: `
-      <div style="font-family:sans-serif;max-width:400px;margin:auto;padding:24px">
-        <h2 style="margin-bottom:8px">Password Reset</h2>
-        <p>Your one-time code is:</p>
-        <div style="font-size:36px;font-weight:bold;letter-spacing:8px;padding:16px;background:#f4f7fc;border-radius:8px;text-align:center">${otp}</div>
-        <p style="color:#64748b;font-size:14px;margin-top:16px">This code expires in 15 minutes. If you didn't request this, ignore this email.</p>
-      </div>
-    `,
-  });
+  try {
+    await sendEmail({
+      to: email,
+      subject: "AMZ OS — Password Reset Code",
+      html: `
+        <div style="font-family:sans-serif;max-width:400px;margin:auto;padding:24px">
+          <h2 style="margin-bottom:8px">Password Reset</h2>
+          <p>Your one-time code is:</p>
+          <div style="font-size:36px;font-weight:bold;letter-spacing:8px;padding:16px;background:#f4f7fc;border-radius:8px;text-align:center">${otp}</div>
+          <p style="color:#64748b;font-size:14px;margin-top:16px">This code expires in 15 minutes. If you didn't request this, ignore this email.</p>
+        </div>
+      `,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to send email";
+    redirect(`/forgot-password?error=${encodeURIComponent(msg)}`);
+  }
 
   redirect(`/forgot-password?sent=1&email=${encodeURIComponent(email)}`);
 }

@@ -35,7 +35,7 @@ const links = [
   { href: "/calculators", label: "Calculators", icon: Calculator },
   { label: "─── CRM", icon: Users, href: "", divider: true },
   { href: "/crm", label: "Contacts", icon: Users },
-  { href: "/crm?tab=opportunities", label: "Opportunities", icon: TrendingUp },
+  { href: "/opportunities", label: "Opportunities", icon: TrendingUp },
   { href: "/contacts/enrich", label: "Enrich Contacts", icon: SearchCheck },
   { label: "─── Sourcing", icon: Store, href: "", divider: true },
   { href: "/brands/finder", label: "Brand Finder", icon: Store },
@@ -45,6 +45,7 @@ const links = [
   { label: "─── Email", icon: Mail, href: "", divider: true },
   { href: "/email/campaigns", label: "Campaigns", icon: Send },
   { href: "/email/sequences", label: "Sequences", icon: Zap },
+  { href: "/email/templates", label: "Templates", icon: Mail },
   { href: "/email/analytics", label: "Email Analytics", icon: LineChart },
   { label: "─── Reports", icon: BarChart3, href: "", divider: true },
   { href: "/progress", label: "Progress Tracker", icon: BarChart3 },
@@ -94,10 +95,10 @@ function SidebarInner({ userEmail }: { userEmail?: string }) {
     }
     // Plain path: active only when no conflicting query-param link would match
     if (!pathname.startsWith(href)) return false;
-    // For /crm, only active when no tab param is set (or tab=contacts)
+    // For /crm, only active when no tab param or tab=contacts (not tab=tags etc going to separate pages)
     if (href === "/crm") {
       const tab = searchParams.get("tab");
-      return !tab || tab === "contacts";
+      return !tab || tab === "contacts" || tab === "tags";
     }
     return true;
   };

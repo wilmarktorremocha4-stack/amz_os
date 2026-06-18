@@ -3,25 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { createSupplier, emailFollowUpDigest } from "@/lib/actions/suppliers";
 import { CrmAddPanel } from "@/components/CrmAddPanel";
-import { OpportunitiesTab } from "@/components/OpportunitiesTab";
-import { PipelinesTab } from "@/components/PipelinesTab";
 import { TagsManager } from "@/components/TagsManager";
 import { ContactsTable } from "@/components/ContactsTable";
-import { EmailTemplatesTab } from "@/components/EmailTemplatesTab";
 
 export const dynamic = "force-dynamic";
 
-const STAGE_ORDER = [
-  "RESEARCHING",
-  "CONTACTED",
-  "FOLLOWED_UP",
-  "NEGOTIATING",
-  "APPROVED",
-  "ONBOARDED",
-  "REJECTED",
-] as const;
-
-const TABS = ["contacts", "opportunities", "pipelines", "tags", "email-templates"] as const;
+const TABS = ["contacts", "tags"] as const;
 type Tab = (typeof TABS)[number];
 
 export default async function CrmPage({
@@ -38,23 +25,10 @@ export default async function CrmPage({
   const { error, digestSent, add, tab: tabParam } = await searchParams;
   const tab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : "contacts";
 
-  const [suppliers, pipelines, opportunities, allTags] = await Promise.all([
+  const [suppliers, allTags] = await Promise.all([
     prisma.supplier.findMany({
       where: { userId: user.id, archived: false },
       include: { tags: { include: { tag: true } } },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.pipeline.findMany({
-      where: { userId: user.id },
-      include: {
-        stages: { orderBy: { order: "asc" } },
-        _count: { select: { opportunities: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.opportunity.findMany({
-      where: { userId: user.id },
-      include: { supplier: { select: { id: true, companyName: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.tag.findMany({
@@ -62,16 +36,6 @@ export default async function CrmPage({
       orderBy: { name: "asc" },
     }),
   ]);
-
-  let emailTemplates: Array<{ id: string; name: string; subject: string; body: string }> = [];
-  try {
-    emailTemplates = await prisma.emailTemplate.findMany({ where: { userId: user.id }, orderBy: { name: "asc" } });
-  } catch { /* table not yet migrated */ }
-
-  const byStage = STAGE_ORDER.map((stage) => ({
-    stage,
-    list: suppliers.filter((s) => s.stage === stage),
-  })).filter(({ list }) => list.length > 0);
 
   return (
     <>
@@ -87,9 +51,7 @@ export default async function CrmPage({
               Contacts
             </h1>
             <p className="mt-0.5 text-sm text-[var(--muted)]">
-              {suppliers.length} contact{suppliers.length !== 1 ? "s" : ""} ·{" "}
-              {pipelines.length} pipeline{pipelines.length !== 1 ? "s" : ""} ·{" "}
-              {opportunities.length} opportunit{opportunities.length !== 1 ? "ies" : "y"}
+              {suppliers.length} contact{suppliers.length !== 1 ? "s" : ""}
             </p>
           </div>
           {tab === "contacts" && (
@@ -109,7 +71,7 @@ export default async function CrmPage({
         </div>
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
         )}
@@ -119,7 +81,7 @@ export default async function CrmPage({
           </div>
         )}
         {digestSent && digestSent !== "empty" && digestSent !== "0" && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
             Follow-up digest emailed for {digestSent} supplier(s).
           </div>
         )}
@@ -136,7 +98,7 @@ export default async function CrmPage({
                   : "text-[var(--muted)] hover:text-[var(--foreground)]"
               }`}
             >
-              {t === "email-templates" ? "Email Templates" : t.charAt(0).toUpperCase() + t.slice(1)}
+              {t.charAt(0).toUpperCase() + t.slice(1)}
             </a>
           ))}
         </div>
@@ -175,51 +137,9 @@ export default async function CrmPage({
           </>
         )}
 
-        {/* Opportunities Tab */}
-        {tab === "opportunities" && (
-          <OpportunitiesTab
-            pipelines={pipelines.map((p) => ({
-              id: p.id,
-              name: p.name,
-              stages: p.stages,
-            }))}
-            opportunities={opportunities.map((o) => ({
-              id: o.id,
-              name: o.name,
-              value: o.value ? o.value.toString() : null,
-              status: o.status,
-              notes: o.notes,
-              stageId: o.stageId,
-              supplierId: o.supplierId,
-              supplier: o.supplier,
-            }))}
-            suppliers={suppliers.map((s) => ({
-              id: s.id,
-              companyName: s.companyName,
-            }))}
-          />
-        )}
-
-        {/* Pipelines Tab */}
-        {tab === "pipelines" && (
-          <PipelinesTab
-            pipelines={pipelines.map((p) => ({
-              id: p.id,
-              name: p.name,
-              stages: p.stages,
-              _count: p._count,
-            }))}
-          />
-        )}
-
         {/* Tags Tab */}
         {tab === "tags" && (
           <TagsManager tags={allTags} />
-        )}
-
-        {/* Email Templates Tab */}
-        {tab === "email-templates" && (
-          <EmailTemplatesTab templates={emailTemplates} />
         )}
       </main>
     </>
