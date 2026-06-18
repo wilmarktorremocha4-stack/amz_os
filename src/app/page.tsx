@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { MrrChart, MrrChartPoint } from "@/components/MrrChart";
 import { Users, Sparkles, PackageSearch, Rocket, ArrowRight } from "lucide-react";
-import { ContactSearch } from "@/components/ContactSearch";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +17,6 @@ export default async function Home() {
     productsAnalyzed,
     productsLaunched,
     revenueEntries,
-    allContacts,
   ] = await Promise.all([
     prisma.supplier.count({
       where: { userId: user.id, stage: { not: "RESEARCHING" } },
@@ -33,7 +31,6 @@ export default async function Home() {
     prisma.supplier.findMany({
       where: { userId: user.id, archived: false },
       select: { id: true, companyName: true, contactName: true, email: true },
-      orderBy: { companyName: "asc" },
     }),
   ]);
 
@@ -69,16 +66,13 @@ export default async function Home() {
 
   return (
     <main className="flex flex-1 flex-col gap-8 p-10">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Business progress, not video consumption.
-          </p>
-        </div>
-        <ContactSearch contacts={allContacts} />
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
+          Dashboard
+        </h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Business progress, not video consumption.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

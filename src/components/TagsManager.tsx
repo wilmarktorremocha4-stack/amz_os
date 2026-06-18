@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { createTag, deleteTag } from "@/lib/actions/tags";
 
@@ -93,19 +93,41 @@ export function TagsManager({ tags }: { tags: Tag[] }) {
 
 function TagChip({ tag }: { tag: Tag }) {
   const [, startTransition] = useTransition();
+  const [confirm, setConfirm] = useState(false);
+  const [value, setValue] = useState("");
+
   return (
-    <div
-      className="group flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium"
-      style={{ borderColor: tag.color + "40", backgroundColor: tag.color + "15", color: tag.color }}
-    >
-      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />
-      {tag.name}
-      <button
-        onClick={() => startTransition(() => deleteTag(tag.id))}
-        className="ml-1 opacity-0 transition group-hover:opacity-100 hover:text-red-500"
+    <>
+      {confirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl">
+            <h2 className="mb-1 text-base font-semibold text-[var(--foreground)]">Delete tag &quot;{tag.name}&quot;?</h2>
+            <p className="text-sm text-[var(--muted)]">
+              Type <span className="font-mono font-bold text-red-500">DELETE</span> to confirm.
+            </p>
+            <input autoFocus value={value} onChange={(e) => setValue(e.target.value)}
+              placeholder="DELETE" className="input mt-3 w-full font-mono" />
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => { setConfirm(false); setValue(""); }}
+                className="flex-1 rounded-xl border border-[var(--border)] py-2 text-sm text-[var(--muted)]">Cancel</button>
+              <button disabled={value !== "DELETE"}
+                onClick={() => startTransition(() => deleteTag(tag.id))}
+                className="flex-1 rounded-xl bg-red-600 py-2 text-sm font-semibold text-white disabled:opacity-40">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div
+        className="group flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium"
+        style={{ borderColor: tag.color + "40", backgroundColor: tag.color + "15", color: tag.color }}
       >
-        <Trash2 size={12} />
-      </button>
-    </div>
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />
+        {tag.name}
+        <button onClick={() => setConfirm(true)}
+          className="ml-1 opacity-0 transition group-hover:opacity-100 hover:text-red-500">
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </>
   );
 }

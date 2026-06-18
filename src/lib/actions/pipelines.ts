@@ -112,3 +112,23 @@ export async function deleteOpportunity(opportunityId: string) {
   await prisma.opportunity.delete({ where: { id: opportunityId, userId: user.id } });
   revalidatePath("/crm");
 }
+
+export async function reorderPipelineStage(stageId: string, direction: "up" | "down") {
+  const user = await getCurrentUser();
+  const stage = await prisma.pipelineStage.findUnique({
+    where: { id: stageId },
+    include: { pipeline: { include: { stages: { orderBy: { order: "asc" } } } } },
+  });
+  if (!stage || stage.pipeline.userId !== user.id) return;
+
+  const stages = stage.pipeline.stages;
+  const idx = stages.findIndex((s) => s.id === stageId);
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= stages.length) return;
+
+  await prisma.$transaction([
+    prisma.pipelineStage.update({ where: { id: stages[idx].id }, data: { order: stages[swapIdx].order } }),
+    prisma.pipelineStage.update({ where: { id: stages[swapIdx].id }, data: { order: stages[idx].order } }),
+  ]);
+  revalidatePath("/crm");
+}

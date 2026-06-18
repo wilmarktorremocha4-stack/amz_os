@@ -1,26 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { X, User } from "lucide-react";
-import { useTransition, useRef } from "react";
+import { X, User, Plus } from "lucide-react";
+import { useTransition, useRef, useState } from "react";
+import { TIMEZONES } from "@/lib/timezones";
 
-const CONTACT_TYPES = [
+const DEFAULT_CONTACT_TYPES = [
   "Lead", "Customer", "Prospect", "Partner", "Vendor", "Other",
-];
-
-const TIMEZONES = [
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Phoenix",
-  "America/Anchorage",
-  "Pacific/Honolulu",
-  "Europe/London",
-  "Europe/Paris",
-  "Asia/Tokyo",
-  "Asia/Manila",
-  "Australia/Sydney",
 ];
 
 export function CrmAddPanel({
@@ -31,6 +17,9 @@ export function CrmAddPanel({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
+  const [contactTypes, setContactTypes] = useState(DEFAULT_CONTACT_TYPES);
+  const [addingType, setAddingType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState("");
 
   function close() {
     router.push("/crm");
@@ -124,10 +113,29 @@ export function CrmAddPanel({
               <label className="mb-1 block text-xs font-medium text-[var(--foreground)]">Contact type</label>
               <select name="contactType" className="input w-full bg-[var(--surface)]">
                 <option value="">Select an option</option>
-                {CONTACT_TYPES.map((t) => (
+                {contactTypes.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
+              {!addingType ? (
+                <button type="button" onClick={() => setAddingType(true)}
+                  className="mt-1.5 flex items-center gap-1 text-xs text-blue-500 hover:text-blue-400">
+                  <Plus size={11} /> Add custom type
+                </button>
+              ) : (
+                <div className="mt-1.5 flex gap-1.5">
+                  <input value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)}
+                    placeholder="Custom type name" className="input flex-1 text-xs py-1" autoFocus />
+                  <button type="button"
+                    onClick={() => {
+                      if (newTypeName.trim()) setContactTypes((prev) => [...prev, newTypeName.trim()]);
+                      setNewTypeName(""); setAddingType(false);
+                    }}
+                    className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white">Add</button>
+                  <button type="button" onClick={() => { setAddingType(false); setNewTypeName(""); }}
+                    className="rounded-lg border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)]">✕</button>
+                </div>
+              )}
             </div>
 
             {/* Timezone */}
@@ -136,7 +144,7 @@ export function CrmAddPanel({
               <select name="timezone" className="input w-full bg-[var(--surface)]">
                 <option value="">Select an option</option>
                 {TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
                 ))}
               </select>
             </div>
