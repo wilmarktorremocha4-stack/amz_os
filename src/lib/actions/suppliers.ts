@@ -111,6 +111,36 @@ export async function emailFollowUpDigest() {
   redirect(`/crm?digestSent=${openSuppliers.length}`);
 }
 
+export async function bulkDeleteSuppliers(ids: string[]) {
+  if (!ids.length) return;
+  const user = await getCurrentUser();
+  await prisma.supplier.deleteMany({ where: { id: { in: ids }, userId: user.id } });
+  revalidatePath("/crm");
+}
+
+export async function bulkAddTag(supplierIds: string[], tagId: string) {
+  if (!supplierIds.length) return;
+  const user = await getCurrentUser();
+  const data = supplierIds.map((supplierId) => ({ supplierId, tagId }));
+  await prisma.$transaction(
+    data.map((d) =>
+      prisma.contactTag.upsert({
+        where: { supplierId_tagId: d },
+        create: d,
+        update: {},
+      }),
+    ),
+  );
+  revalidatePath("/crm");
+}
+
+export async function bulkRemoveTag(supplierIds: string[], tagId: string) {
+  if (!supplierIds.length) return;
+  const user = await getCurrentUser();
+  await prisma.contactTag.deleteMany({ where: { supplierId: { in: supplierIds }, tagId } });
+  revalidatePath("/crm");
+}
+
 function emptyToNull(value: FormDataEntryValue | null) {
   const str = String(value ?? "").trim();
   return str === "" ? null : str;

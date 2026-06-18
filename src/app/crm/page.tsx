@@ -2,11 +2,11 @@ import { Mail, Plus } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { createSupplier, emailFollowUpDigest } from "@/lib/actions/suppliers";
-import { SupplierCard } from "@/components/SupplierCardClient";
 import { CrmAddPanel } from "@/components/CrmAddPanel";
 import { OpportunitiesTab } from "@/components/OpportunitiesTab";
 import { PipelinesTab } from "@/components/PipelinesTab";
 import { TagsManager } from "@/components/TagsManager";
+import { ContactsTable } from "@/components/ContactsTable";
 
 export const dynamic = "force-dynamic";
 
@@ -153,61 +153,18 @@ export default async function CrmPage({
                 </a>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-[var(--border)]">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--border)] bg-[var(--accent-soft)] text-left text-xs font-medium text-[var(--muted)]">
-                      <th className="px-4 py-3">Contact name</th>
-                      <th className="hidden px-4 py-3 sm:table-cell">Phone</th>
-                      <th className="hidden px-4 py-3 md:table-cell">Email</th>
-                      <th className="hidden px-4 py-3 lg:table-cell">Business name</th>
-                      <th className="hidden px-4 py-3 xl:table-cell">Created</th>
-                      <th className="px-4 py-3">Tags</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {suppliers.map((s) => {
-                      const initials = s.companyName.split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join("");
-                      return (
-                        <tr key={s.id} className="hover:bg-[var(--accent-soft)] transition-colors">
-                          <td className="px-4 py-3">
-                            <a href={`/crm/${s.id}`} className="flex items-center gap-2.5 hover:text-blue-500">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
-                                {initials}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="font-medium text-[var(--foreground)] truncate">{s.contactName ?? s.companyName}</div>
-                              </div>
-                            </a>
-                          </td>
-                          <td className="hidden px-4 py-3 text-[var(--muted)] sm:table-cell">{s.phone ?? "—"}</td>
-                          <td className="hidden px-4 py-3 text-[var(--muted)] md:table-cell truncate max-w-[180px]">{s.email ?? "—"}</td>
-                          <td className="hidden px-4 py-3 text-[var(--muted)] lg:table-cell">{s.companyName}</td>
-                          <td className="hidden px-4 py-3 text-[var(--muted)] xl:table-cell">
-                            {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1">
-                              {s.tags.slice(0, 2).map((ct) => (
-                                <span key={ct.tag.id}
-                                  className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                                  style={{ backgroundColor: ct.tag.color + "20", color: ct.tag.color, border: `1px solid ${ct.tag.color}40` }}>
-                                  {ct.tag.name}
-                                </span>
-                              ))}
-                              {s.tags.length > 2 && (
-                                <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] text-[var(--muted)]">
-                                  +{s.tags.length - 2}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <ContactsTable
+                contacts={suppliers.map((s) => ({
+                  id: s.id,
+                  companyName: s.companyName,
+                  contactName: s.contactName,
+                  email: s.email,
+                  phone: s.phone,
+                  createdAt: s.createdAt.toISOString(),
+                  tags: s.tags.map((ct) => ct.tag),
+                }))}
+                allTags={allTags}
+              />
             )}
           </>
         )}

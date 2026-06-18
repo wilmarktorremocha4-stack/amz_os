@@ -82,6 +82,7 @@ type ProfileUser = {
 };
 
 function ProfileForm({ user }: { user: ProfileUser }) {
+  const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -90,14 +91,35 @@ function ProfileForm({ user }: { user: ProfileUser }) {
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       await updateProfile(fd);
+      setEditing(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     });
   }
 
+  function handleCancel() {
+    setEditing(false);
+    setSaved(false);
+  }
+
   return (
     <form onSubmit={handleSubmit}
       className="flex max-w-lg flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-[var(--foreground)]">Profile</h2>
+        {!editing && (
+          <button type="button" onClick={() => setEditing(true)}
+            className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]">
+            Edit
+          </button>
+        )}
+        {saved && !editing && (
+          <span className="flex items-center gap-1.5 text-xs text-green-600">
+            <Check size={13} /> Saved!
+          </span>
+        )}
+      </div>
+
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-[var(--muted)]">Email</label>
         <input value={user.email} disabled className="input opacity-60" readOnly />
@@ -107,50 +129,49 @@ function ProfileForm({ user }: { user: ProfileUser }) {
       <div className="flex gap-3">
         <div className="flex flex-1 flex-col gap-1">
           <label className="text-sm font-medium text-[var(--muted)]">First name</label>
-          <input name="firstName" defaultValue={user.firstName} className="input" />
+          <input name="firstName" defaultValue={user.firstName} disabled={!editing} className="input disabled:opacity-60" />
         </div>
         <div className="flex flex-1 flex-col gap-1">
           <label className="text-sm font-medium text-[var(--muted)]">Last name</label>
-          <input name="lastName" defaultValue={user.lastName} className="input" />
+          <input name="lastName" defaultValue={user.lastName} disabled={!editing} className="input disabled:opacity-60" />
         </div>
       </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-[var(--muted)]">Nickname</label>
-        <input name="nickname" defaultValue={user.nickname} className="input"
+        <input name="nickname" defaultValue={user.nickname} disabled={!editing} className="input disabled:opacity-60"
           placeholder="What should the AI Agent call you?" />
       </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-[var(--muted)]">Company website</label>
-        <input name="companyWebsite" defaultValue={user.companyWebsite} className="input"
+        <input name="companyWebsite" defaultValue={user.companyWebsite} disabled={!editing} className="input disabled:opacity-60"
           placeholder="https://yourcompany.com" />
       </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-[var(--muted)]">Skool ID</label>
-        <input name="skoolId" defaultValue={user.skoolId} className="input" placeholder="Optional" />
+        <input name="skoolId" defaultValue={user.skoolId} disabled={!editing} className="input disabled:opacity-60" placeholder="Optional" />
       </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-[var(--muted)]">Monthly revenue goal ($)</label>
         <input name="monthlyRevenueGoal" type="number" step="0.01"
-          defaultValue={user.monthlyRevenueGoal ?? ""} className="input" placeholder="e.g. 5000" />
+          defaultValue={user.monthlyRevenueGoal ?? ""} disabled={!editing} className="input disabled:opacity-60" placeholder="e.g. 5000" />
         <span className="text-xs text-[var(--muted)]">Used by the MRR growth chart on the dashboard.</span>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button type="submit" disabled={pending}
-          className="btn-primary disabled:opacity-50">
-          {pending ? "Saving…" : "Save settings"}
-        </button>
-        {saved && (
-          <span className="flex items-center gap-1.5 text-sm text-green-600">
-            <Check size={15} />
-            Settings saved!
-          </span>
-        )}
-      </div>
+      {editing && (
+        <div className="flex items-center gap-2">
+          <button type="submit" disabled={pending} className="btn-primary disabled:opacity-50">
+            {pending ? "Saving…" : "Save"}
+          </button>
+          <button type="button" onClick={handleCancel}
+            className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm text-[var(--muted)] hover:bg-[var(--accent-soft)]">
+            Cancel
+          </button>
+        </div>
+      )}
     </form>
   );
 }
