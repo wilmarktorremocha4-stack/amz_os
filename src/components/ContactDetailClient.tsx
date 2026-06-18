@@ -276,6 +276,31 @@ export function ContactDetailClient({
             </div>
           )}
 
+          {/* Opportunities */}
+          <div className="border-t border-[var(--border)] px-5 py-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Opportunities</p>
+              <a href="/opportunities" className="text-[10px] text-blue-400 hover:underline">Manage →</a>
+            </div>
+            {opportunities.length === 0 ? (
+              <p className="text-xs text-[var(--muted)] italic">No opportunities yet.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {opportunities.map((opp) => (
+                  <div key={opp.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                    <div className="text-xs font-medium text-[var(--foreground)] truncate">{opp.name}</div>
+                    <div className="mt-0.5 flex items-center gap-2 text-[10px] text-[var(--muted)]">
+                      <span>{opp.pipeline.name}</span>
+                      <span>·</span>
+                      <span>{opp.stage.name}</span>
+                      {opp.value && <><span>·</span><span className="text-emerald-600 font-medium">${parseFloat(opp.value).toLocaleString()}</span></>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
 
         {/* ── CENTER PANE: Conversation / email ── */}
