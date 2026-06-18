@@ -49,6 +49,7 @@ model User {
   revenueEntries RevenueEntry[]
   pipelines      Pipeline[]
   opportunities  Opportunity[]
+  tags           Tag[]
 }
 
 // --- CRM: Wholesale supplier/brand pipeline ---
@@ -72,6 +73,7 @@ model Supplier {
   brands        Brand[]
   followUps     FollowUp[]
   opportunities Opportunity[]
+  tags          ContactTag[]
 }
 
 model Brand {
@@ -199,6 +201,28 @@ model RevenueEntry {
   note      String?
   earnedAt  DateTime @default(now())
   createdAt DateTime @default(now())
+}
+
+// --- Contact tags ---
+
+model Tag {
+  id        String       @id @default(cuid())
+  user      User         @relation(fields: [userId], references: [id])
+  userId    String
+  name      String
+  color     String       @default("#3b82f6")
+  createdAt DateTime     @default(now())
+
+  contacts  ContactTag[]
+}
+
+model ContactTag {
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplierId String
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId      String
+
+  @@id([supplierId, tagId])
 }
 
 // --- Sales pipelines & opportunities ---

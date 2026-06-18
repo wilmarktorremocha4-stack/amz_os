@@ -16,28 +16,28 @@ export default async function SignupPage({
 
       <div className="relative z-10 w-full max-w-sm">
         {/* Logo */}
-        <div className="mb-8 flex flex-col items-center gap-3">
+        <div className="mb-8 flex flex-col items-center">
           <Image
-            src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/68de916c065f281e19a858a2.png"
+            src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/68de919caf128ea07f29c095.png"
             alt="AMZ OS"
-            width={120}
-            height={48}
-            className="h-12 w-auto object-contain drop-shadow-lg"
+            width={160}
+            height={64}
+            className="h-16 w-auto object-contain drop-shadow-[0_0_20px_rgba(96,165,250,0.4)]"
             unoptimized
           />
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-8 shadow-2xl backdrop-blur-2xl">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-8 shadow-2xl backdrop-blur-2xl">
           <h1 className="mb-1 text-xl font-semibold text-white">
             Create your account
           </h1>
-          <p className="mb-6 text-sm text-blue-100/50">
-            Track suppliers, brands, and revenue in one place.
+          <p className="mb-6 text-sm text-blue-100/40">
+            Your email must be pre-approved by the admin.
           </p>
 
           {error && (
-            <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
+            <div className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
               {error}
             </div>
           )}
@@ -76,18 +76,16 @@ export default async function SignupPage({
             />
             <button
               type="submit"
-              className="mt-2 w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/40 transition hover:bg-blue-500 active:scale-[0.98]"
+              className="group relative mt-2 w-full overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/50 transition-all duration-200 hover:from-blue-500 hover:to-blue-400 hover:shadow-blue-700/60 hover:shadow-xl active:scale-[0.97] active:shadow-none"
             >
-              Create account →
+              <span className="relative z-10">Create account →</span>
+              <span className="absolute inset-0 -translate-x-full bg-white/10 transition-transform duration-300 group-hover:translate-x-0" />
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-white/30">
             Already have an account?{" "}
-            <Link
-              href="/login"
-              className="text-blue-300 transition hover:text-white"
-            >
+            <Link href="/login" className="text-blue-400 transition hover:text-white">
               Log in
             </Link>
           </p>

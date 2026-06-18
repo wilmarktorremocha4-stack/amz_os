@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Mail, Phone, Globe, Trash2, RotateCcw } from "lucide-react";
+import { Mail, Phone, Globe, Trash2, RotateCcw, Tag as TagIcon, Plus, X } from "lucide-react";
 import { updateSupplierStage, archiveSupplier } from "@/lib/actions/suppliers";
+import { addTagToContact, removeTagFromContact } from "@/lib/actions/tags";
 
 const STAGES = [
   "RESEARCHING",
@@ -59,6 +60,8 @@ type Supplier = {
   stage: string;
   notes: string | null;
 };
+
+type Tag = { id: string; name: string; color: string };
 
 function DeleteDialog({
   supplierName,
@@ -119,10 +122,20 @@ function DeleteDialog({
   );
 }
 
-export function SupplierCard({ supplier }: { supplier: Supplier }) {
+export function SupplierCard({
+  supplier,
+  allTags = [],
+  contactTags = [],
+}: {
+  supplier: Supplier;
+  allTags?: Tag[];
+  contactTags?: Tag[];
+}) {
   const [stage, setStage] = useState(supplier.stage);
   const [stagePending, startStageTransition] = useTransition();
   const [showDelete, setShowDelete] = useState(false);
+  const [showTagPicker, setShowTagPicker] = useState(false);
+  const [, startTagTransition] = useTransition();
 
   const initials = getInitials(supplier.companyName);
   const avatarBg = getAvatarColor(supplier.companyName);
@@ -230,6 +243,57 @@ export function SupplierCard({ supplier }: { supplier: Supplier }) {
             ))}
           </select>
         </div>
+
+        {/* Tags */}
+        {(contactTags.length > 0 || allTags.length > 0) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {contactTags.map((tag) => (
+              <span
+                key={tag.id}
+                className="group/tag flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                style={{ backgroundColor: tag.color + "20", color: tag.color, border: `1px solid ${tag.color}40` }}
+              >
+                {tag.name}
+                <button
+                  onClick={() => startTagTransition(() => removeTagFromContact(supplier.id, tag.id))}
+                  className="opacity-0 group-hover/tag:opacity-100 transition-opacity"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+            {allTags.length > contactTags.length && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowTagPicker((v) => !v)}
+                  className="flex items-center gap-1 rounded-full border border-dashed border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--muted)] hover:border-blue-400 hover:text-blue-400 transition-colors"
+                >
+                  <Plus size={10} />
+                  Tag
+                </button>
+                {showTagPicker && (
+                  <div className="absolute bottom-full left-0 mb-1 z-20 min-w-[140px] rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2 shadow-xl">
+                    {allTags
+                      .filter((t) => !contactTags.find((ct) => ct.id === t.id))
+                      .map((tag) => (
+                        <button
+                          key={tag.id}
+                          onClick={() => {
+                            setShowTagPicker(false);
+                            startTagTransition(() => addTagToContact(supplier.id, tag.id));
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-[var(--accent-soft)]"
+                        >
+                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                          {tag.name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

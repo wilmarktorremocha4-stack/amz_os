@@ -6,6 +6,7 @@ import { SupplierCard } from "@/components/SupplierCardClient";
 import { CrmAddPanel } from "@/components/CrmAddPanel";
 import { OpportunitiesTab } from "@/components/OpportunitiesTab";
 import { PipelinesTab } from "@/components/PipelinesTab";
+import { TagsManager } from "@/components/TagsManager";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ const STAGE_ORDER = [
   "REJECTED",
 ] as const;
 
-const TABS = ["contacts", "opportunities", "pipelines"] as const;
+const TABS = ["contacts", "opportunities", "pipelines", "tags"] as const;
 type Tab = (typeof TABS)[number];
 
 export default async function CrmPage({
@@ -36,9 +37,10 @@ export default async function CrmPage({
   const { error, digestSent, add, tab: tabParam } = await searchParams;
   const tab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : "contacts";
 
-  const [suppliers, pipelines, opportunities] = await Promise.all([
+  const [suppliers, pipelines, opportunities, allTags] = await Promise.all([
     prisma.supplier.findMany({
       where: { userId: user.id, archived: false },
+      include: { tags: { include: { tag: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.pipeline.findMany({
@@ -53,6 +55,10 @@ export default async function CrmPage({
       where: { userId: user.id },
       include: { supplier: { select: { id: true, companyName: true } } },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.tag.findMany({
+      where: { userId: user.id },
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -72,7 +78,7 @@ export default async function CrmPage({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
-              Supplier CRM
+              Contacts
             </h1>
             <p className="mt-0.5 text-sm text-[var(--muted)]">
               {suppliers.length} contact{suppliers.length !== 1 ? "s" : ""} ·{" "}
@@ -160,7 +166,12 @@ export default async function CrmPage({
                     </div>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {list.map((s) => (
-                        <SupplierCard key={s.id} supplier={s} />
+                        <SupplierCard
+                          key={s.id}
+                          supplier={s}
+                          allTags={allTags}
+                          contactTags={s.tags.map((ct) => ct.tag)}
+                        />
                       ))}
                     </div>
                   </section>
@@ -205,6 +216,11 @@ export default async function CrmPage({
               _count: p._count,
             }))}
           />
+        )}
+
+        {/* Tags Tab */}
+        {tab === "tags" && (
+          <TagsManager tags={allTags} />
         )}
       </main>
     </>

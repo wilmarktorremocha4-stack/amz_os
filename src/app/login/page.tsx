@@ -3,20 +3,29 @@ import Image from "next/image";
 import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 
 async function login(formData: FormData) {
   "use server";
-  const email = String(formData.get("email") ?? "");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const callbackUrl = String(formData.get("callbackUrl") || "/");
+
+  // Check if email exists at all
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    redirect(
+      `/login?error=${encodeURIComponent("This email is not registered. Please contact the admin to get access.")}`,
+    );
+  }
 
   try {
     await signIn("credentials", { email, password, redirectTo: callbackUrl });
   } catch (err) {
     if (err instanceof AuthError) {
       redirect(
-        `/login?error=${encodeURIComponent("Invalid email or password.")}`,
+        `/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`,
       );
     }
     throw err;
@@ -40,43 +49,37 @@ export default async function LoginPage({
 
       <div className="relative z-10 w-full max-w-sm">
         {/* Logo */}
-        <div className="mb-8 flex flex-col items-center gap-3">
+        <div className="mb-8 flex flex-col items-center">
           <Image
-            src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/68de916c065f281e19a858a2.png"
+            src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/68de919caf128ea07f29c095.png"
             alt="AMZ OS"
-            width={120}
-            height={48}
-            className="h-12 w-auto object-contain drop-shadow-lg"
+            width={160}
+            height={64}
+            className="h-16 w-auto object-contain drop-shadow-[0_0_20px_rgba(96,165,250,0.4)]"
             unoptimized
           />
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-8 shadow-2xl backdrop-blur-2xl">
-          <h1 className="mb-1 text-xl font-semibold text-white">
-            Welcome back
-          </h1>
-          <p className="mb-6 text-sm text-blue-100/50">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-8 shadow-2xl backdrop-blur-2xl">
+          <h1 className="mb-1 text-xl font-semibold text-white">Welcome back</h1>
+          <p className="mb-6 text-sm text-blue-100/40">
             Log in to your AMZ OS account.
           </p>
 
           {success && (
-            <div className="mb-4 rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-300">
+            <div className="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-300">
               {success}
             </div>
           )}
           {error && (
-            <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
+            <div className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
               {error}
             </div>
           )}
 
           <form action={login} className="flex flex-col gap-3">
-            <input
-              type="hidden"
-              name="callbackUrl"
-              value={callbackUrl ?? "/"}
-            />
+            <input type="hidden" name="callbackUrl" value={callbackUrl ?? "/"} />
             <input
               name="email"
               type="email"
@@ -95,18 +98,16 @@ export default async function LoginPage({
             />
             <button
               type="submit"
-              className="mt-2 w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/40 transition hover:bg-blue-500 active:scale-[0.98]"
+              className="group relative mt-2 w-full overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/50 transition-all duration-200 hover:from-blue-500 hover:to-blue-400 hover:shadow-blue-700/60 hover:shadow-xl active:scale-[0.97] active:shadow-none"
             >
-              Log in →
+              <span className="relative z-10">Log in →</span>
+              <span className="absolute inset-0 -translate-x-full bg-white/10 transition-transform duration-300 group-hover:translate-x-0" />
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-white/30">
             No account yet?{" "}
-            <Link
-              href="/signup"
-              className="text-blue-300 transition hover:text-white"
-            >
+            <Link href="/signup" className="text-blue-400 transition hover:text-white">
               Sign up
             </Link>
           </p>
