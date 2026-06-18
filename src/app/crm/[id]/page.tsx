@@ -14,7 +14,7 @@ export default async function ContactDetailPage({
   const user = await getCurrentUser();
   const { id } = await params;
 
-  const [supplier, allTags, opportunities, pipelines, notes, emailTemplates, customFieldFolders] = await Promise.all([
+  const [supplier, allTags, opportunities, pipelines, customFieldFolders] = await Promise.all([
     prisma.supplier.findUnique({
       where: { id, userId: user.id },
       include: { tags: { include: { tag: true } }, fieldValues: { include: { field: true } } },
@@ -33,20 +33,22 @@ export default async function ContactDetailPage({
       include: { stages: { orderBy: { order: "asc" } } },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.contactNote.findMany({
-      where: { supplierId: id },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.emailTemplate.findMany({
-      where: { userId: user.id },
-      orderBy: { name: "asc" },
-    }),
     prisma.customFieldFolder.findMany({
       where: { userId: user.id },
       include: { fields: { orderBy: { order: "asc" } } },
       orderBy: { order: "asc" },
     }),
   ]);
+
+  // Graceful fallback if tables don't exist yet in DB
+  let notes: Array<{ id: string; type: string; content: string; subject: string | null; createdAt: Date }> = [];
+  let emailTemplates: Array<{ id: string; name: string; subject: string; body: string }> = [];
+  try {
+    notes = await prisma.contactNote.findMany({ where: { supplierId: id }, orderBy: { createdAt: "desc" } });
+  } catch { /* table not yet migrated */ }
+  try {
+    emailTemplates = await prisma.emailTemplate.findMany({ where: { userId: user.id }, orderBy: { name: "asc" } });
+  } catch { /* table not yet migrated */ }
 
   if (!supplier) notFound();
 

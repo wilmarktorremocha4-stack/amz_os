@@ -38,7 +38,7 @@ export default async function CrmPage({
   const { error, digestSent, add, tab: tabParam } = await searchParams;
   const tab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : "contacts";
 
-  const [suppliers, pipelines, opportunities, allTags, emailTemplates] = await Promise.all([
+  const [suppliers, pipelines, opportunities, allTags] = await Promise.all([
     prisma.supplier.findMany({
       where: { userId: user.id, archived: false },
       include: { tags: { include: { tag: true } } },
@@ -61,11 +61,12 @@ export default async function CrmPage({
       where: { userId: user.id },
       orderBy: { name: "asc" },
     }),
-    prisma.emailTemplate.findMany({
-      where: { userId: user.id },
-      orderBy: { name: "asc" },
-    }),
   ]);
+
+  let emailTemplates: Array<{ id: string; name: string; subject: string; body: string }> = [];
+  try {
+    emailTemplates = await prisma.emailTemplate.findMany({ where: { userId: user.id }, orderBy: { name: "asc" } });
+  } catch { /* table not yet migrated */ }
 
   const byStage = STAGE_ORDER.map((stage) => ({
     stage,

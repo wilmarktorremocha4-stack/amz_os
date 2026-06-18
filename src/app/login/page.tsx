@@ -14,7 +14,9 @@ async function login(formData: FormData) {
   const callbackUrl = String(formData.get("callbackUrl") || "/");
 
   // Check if email exists at all
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+  });
   if (!user) {
     redirect(
       `/login?error=${encodeURIComponent("This email is not registered. Please contact the admin to get access.")}`,
