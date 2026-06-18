@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-// Instantly.ai-style: neon blue, turquoise, deep blue liquid gradient that follows mouse
+// Dark background with slow drifting color pools + a soft spotlight that follows the cursor
 export function AnimatedBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -17,18 +17,15 @@ export function AnimatedBackground() {
     canvas.width = W;
     canvas.height = H;
 
-    // Mouse position (smoothly interpolated)
-    let mx = W * 0.5, my = H * 0.5;
-    let smx = mx, smy = my; // smoothed
+    // Mouse — smoothed so the spotlight glides, not snaps
+    let mx = W * 0.5, my = H * 0.4;
+    let smx = mx, smy = my;
 
-    // Blobs: neon blue, turquoise, electric blue, deep indigo, cyan
-    const blobs = [
-      { bx: 0.2, by: 0.3, r: 0.65, color: [0, 120, 255],   speed: 0.00018, px: 0.12, py: 0.08 },
-      { bx: 0.75, by: 0.2, r: 0.55, color: [0, 220, 240],  speed: 0.00022, px: -0.08, py: 0.14 },
-      { bx: 0.5, by: 0.75, r: 0.60, color: [30, 60, 220],  speed: 0.00015, px: 0.10, py: -0.10 },
-      { bx: 0.85, by: 0.6, r: 0.50, color: [0, 180, 255],  speed: 0.00028, px: -0.15, py: 0.06 },
-      { bx: 0.15, by: 0.75, r: 0.45, color: [80, 0, 220],  speed: 0.00020, px: 0.06, py: -0.12 },
-      { bx: 0.6, by: 0.1,  r: 0.40, color: [0, 255, 220],  speed: 0.00025, px: -0.10, py: 0.10 },
+    // Three slow ambient pools — they drift on very long sine cycles
+    const pools = [
+      { cx: 0.15, cy: 0.25, r: 0.55, color: [20, 80, 255],  t0: 0    },
+      { cx: 0.80, cy: 0.65, r: 0.50, color: [0,  180, 230],  t0: 2000 },
+      { cx: 0.50, cy: 0.85, r: 0.45, color: [60, 20,  200],  t0: 4000 },
     ];
 
     let t = 0;
@@ -37,55 +34,52 @@ export function AnimatedBackground() {
     function draw() {
       t += 1;
 
-      // Smooth mouse lerp
-      smx += (mx - smx) * 0.05;
-      smy += (my - smy) * 0.05;
+      // Very smooth cursor follow — lerp factor 0.03 = slow glide
+      smx += (mx - smx) * 0.03;
+      smy += (my - smy) * 0.03;
 
-      // Deep dark base
-      ctx!.fillStyle = "#03060f";
+      // Deep dark navy base
+      ctx!.fillStyle = "#04060f";
       ctx!.fillRect(0, 0, W, H);
 
-      ctx!.globalCompositeOperation = "screen";
+      // Ambient pools — slow, large, very transparent
+      for (const p of pools) {
+        // Each pool drifts ~6% of screen over a ~40-second cycle
+        const ox = Math.sin((t + p.t0) * 0.0004) * W * 0.06;
+        const oy = Math.cos((t + p.t0) * 0.0003) * H * 0.06;
+        const px = p.cx * W + ox;
+        const py = p.cy * H + oy;
+        const r  = p.r * Math.max(W, H);
 
-      for (const blob of blobs) {
-        // Organic drift: two sine waves at different frequencies
-        const ox = Math.sin(t * blob.speed * 1000 + blob.px * 10) * W * 0.13
-                 + Math.cos(t * blob.speed * 700 + blob.py * 7) * W * 0.06;
-        const oy = Math.cos(t * blob.speed * 900 + blob.py * 10) * H * 0.11
-                 + Math.sin(t * blob.speed * 600 + blob.px * 5) * H * 0.07;
-
-        // Cursor attraction (each blob has different sensitivity)
-        const cx = (smx - W * 0.5) * blob.px;
-        const cy = (smy - H * 0.5) * blob.py;
-
-        const bx = blob.bx * W + ox + cx;
-        const by = blob.by * H + oy + cy;
-        const r = blob.r * Math.min(W, H);
-
-        const g = ctx!.createRadialGradient(bx, by, 0, bx, by, r);
-        const [R, G, B] = blob.color;
-        g.addColorStop(0,   `rgba(${R},${G},${B},0.50)`);
-        g.addColorStop(0.35,`rgba(${R},${G},${B},0.22)`);
-        g.addColorStop(0.7, `rgba(${R},${G},${B},0.07)`);
+        const g = ctx!.createRadialGradient(px, py, 0, px, py, r);
+        const [R, G, B] = p.color;
+        g.addColorStop(0,   `rgba(${R},${G},${B},0.18)`);
+        g.addColorStop(0.5, `rgba(${R},${G},${B},0.07)`);
         g.addColorStop(1,   `rgba(${R},${G},${B},0)`);
         ctx!.fillStyle = g;
         ctx!.fillRect(0, 0, W, H);
       }
 
-      ctx!.globalCompositeOperation = "source-over";
+      // Cursor spotlight — soft white-blue cone, like a torch on the wall
+      const sr = Math.min(W, H) * 0.45;
+      const sg = ctx!.createRadialGradient(smx, smy, 0, smx, smy, sr);
+      sg.addColorStop(0,    "rgba(160,200,255,0.13)");
+      sg.addColorStop(0.35, "rgba(80,140,255,0.07)");
+      sg.addColorStop(1,    "rgba(0,0,0,0)");
+      ctx!.fillStyle = sg;
+      ctx!.fillRect(0, 0, W, H);
 
-      // Cursor glow — neon cyan ring
-      const cg = ctx!.createRadialGradient(smx, smy, 0, smx, smy, 160);
-      cg.addColorStop(0,    "rgba(0,220,255,0.22)");
-      cg.addColorStop(0.4,  "rgba(0,140,255,0.10)");
-      cg.addColorStop(1,    "rgba(0,0,0,0)");
+      // Small tight glow at cursor centre
+      const cg = ctx!.createRadialGradient(smx, smy, 0, smx, smy, 80);
+      cg.addColorStop(0,   "rgba(120,180,255,0.18)");
+      cg.addColorStop(1,   "rgba(0,0,0,0)");
       ctx!.fillStyle = cg;
       ctx!.fillRect(0, 0, W, H);
 
-      // Edge vignette
-      const vg = ctx!.createRadialGradient(W/2, H/2, H * 0.25, W/2, H/2, H * 0.9);
+      // Edge vignette — pulls focus to centre
+      const vg = ctx!.createRadialGradient(W/2, H/2, H * 0.2, W/2, H/2, H * 1.0);
       vg.addColorStop(0, "rgba(0,0,0,0)");
-      vg.addColorStop(1, "rgba(0,0,0,0.65)");
+      vg.addColorStop(1, "rgba(0,0,8,0.75)");
       ctx!.fillStyle = vg;
       ctx!.fillRect(0, 0, W, H);
 
