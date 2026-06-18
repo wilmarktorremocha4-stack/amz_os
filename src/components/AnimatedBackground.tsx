@@ -163,13 +163,13 @@ export function AnimatedBackground() {
       ctx!.fillStyle = "rgba(0,0,0,0.055)";
       for (let y = 0; y < H; y += 3) ctx!.fillRect(0, y, W, 1);
 
-      // ── Bottom blackout (below 62% — hides orbs behind globe) ──
-      const bo = ctx!.createLinearGradient(0, H * 0.52, 0, H);
+      // ── Bottom blackout — hides orbs in globe zone ──────
+      const bo = ctx!.createLinearGradient(0, H * 0.72, 0, H);
       bo.addColorStop(0, "rgba(2,8,28,0)");
-      bo.addColorStop(0.45, "rgba(2,8,28,0.92)");
+      bo.addColorStop(0.5, "rgba(2,8,28,0.95)");
       bo.addColorStop(1, "rgb(2,8,28)");
       ctx!.fillStyle = bo;
-      ctx!.fillRect(0, H * 0.52, W, H * 0.48);
+      ctx!.fillRect(0, H * 0.72, W, H * 0.28);
 
       // ── Vignette ─────────────────────────────────────────
       const vg = ctx!.createRadialGradient(W/2, H/2, H * 0.12, W/2, H/2, H * 0.92);
