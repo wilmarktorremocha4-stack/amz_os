@@ -23,12 +23,13 @@ async function login(formData: FormData) {
   try {
     await signIn("credentials", { email, password, redirectTo: callbackUrl });
   } catch (err) {
-    if (err instanceof AuthError) {
-      redirect(
-        `/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`,
-      );
-    }
-    throw err;
+    // NEXT_REDIRECT means successful login redirect — re-throw it
+    const e = err as { digest?: string };
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
+    // Anything else = wrong password / auth failure
+    redirect(
+      `/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`,
+    );
   }
 }
 
@@ -105,12 +106,15 @@ export default async function LoginPage({
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-white/30">
-            No account yet?{" "}
-            <Link href="/signup" className="text-blue-400 transition hover:text-white">
-              Sign up
+          <div className="mt-5 flex items-center justify-between">
+            <p className="text-sm text-white/30">
+              No account?{" "}
+              <Link href="/signup" className="text-blue-400 hover:text-white">Sign up</Link>
+            </p>
+            <Link href="/forgot-password" className="text-sm text-blue-400 hover:text-white">
+              Forgot password?
             </Link>
-          </p>
+          </div>
         </div>
       </div>
     </div>

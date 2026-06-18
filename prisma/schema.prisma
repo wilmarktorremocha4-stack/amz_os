@@ -52,6 +52,7 @@ model User {
   tags               Tag[]
   customFieldFolders CustomFieldFolder[]
   customFields       CustomField[]
+  emailTemplates     EmailTemplate[]
 }
 
 // --- CRM: Wholesale supplier/brand pipeline ---
@@ -77,6 +78,7 @@ model Supplier {
   opportunities Opportunity[]
   tags          ContactTag[]
   fieldValues   ContactFieldValue[]
+  contactNotes  ContactNote[]
 }
 
 model Brand {
@@ -269,6 +271,42 @@ model Opportunity {
   notes      String?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
+}
+
+// --- Password reset OTP ---
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  otp       String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// --- Contact notes / activity log ---
+
+model ContactNote {
+  id         String   @id @default(cuid())
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplierId String
+  type       String   @default("note")
+  content    String
+  subject    String?
+  createdAt  DateTime @default(now())
+}
+
+// --- Email templates ---
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  name      String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // --- Custom fields ---

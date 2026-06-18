@@ -14,10 +14,10 @@ export default async function ContactDetailPage({
   const user = await getCurrentUser();
   const { id } = await params;
 
-  const [supplier, allTags, opportunities, pipelines] = await Promise.all([
+  const [supplier, allTags, opportunities, pipelines, notes, emailTemplates, customFieldFolders] = await Promise.all([
     prisma.supplier.findUnique({
       where: { id, userId: user.id },
-      include: { tags: { include: { tag: true } } },
+      include: { tags: { include: { tag: true } }, fieldValues: { include: { field: true } } },
     }),
     prisma.tag.findMany({ where: { userId: user.id }, orderBy: { name: "asc" } }),
     prisma.opportunity.findMany({
@@ -33,9 +33,28 @@ export default async function ContactDetailPage({
       include: { stages: { orderBy: { order: "asc" } } },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.contactNote.findMany({
+      where: { supplierId: id },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.emailTemplate.findMany({
+      where: { userId: user.id },
+      orderBy: { name: "asc" },
+    }),
+    prisma.customFieldFolder.findMany({
+      where: { userId: user.id },
+      include: { fields: { orderBy: { order: "asc" } } },
+      orderBy: { order: "asc" },
+    }),
   ]);
 
   if (!supplier) notFound();
+
+  // Map field values
+  const fieldValueMap: Record<string, string> = {};
+  for (const fv of supplier.fieldValues) {
+    fieldValueMap[fv.fieldId] = fv.value;
+  }
 
   return (
     <ContactDetailClient
@@ -67,6 +86,24 @@ export default async function ContactDetailPage({
         id: p.id,
         name: p.name,
         stages: p.stages,
+      }))}
+      contactNotes={notes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        content: n.content,
+        subject: n.subject,
+        createdAt: n.createdAt.toISOString(),
+      }))}
+      emailTemplates={emailTemplates}
+      customFieldFolders={customFieldFolders.map((f) => ({
+        id: f.id,
+        name: f.name,
+        fields: f.fields.map((field) => ({
+          id: field.id,
+          name: field.name,
+          type: field.type,
+          value: fieldValueMap[field.id] ?? "",
+        })),
       }))}
     />
   );
