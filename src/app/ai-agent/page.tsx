@@ -6,7 +6,7 @@ import { Bot, Send, User, Loader2, Sparkles, Zap, RotateCcw } from "lucide-react
 const UDIFY_API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.NEXT_PUBLIC_UDIFY_API_URL ??
-  "https://udify.app/api";
+  "https://api.dify.ai/v1";
 
 const APP_KEY =
   process.env.NEXT_PUBLIC_UDIFY_APP_KEY ??
