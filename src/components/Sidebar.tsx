@@ -107,7 +107,7 @@ function SidebarInner({ userEmail }: { userEmail?: string }) {
   };
 
   const NavLinks = () => (
-    <nav className="flex flex-col gap-0.5 overflow-y-auto">
+    <nav className="flex flex-col gap-0.5 overflow-y-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
       {links.map((link) => {
         if ((link as { divider?: boolean }).divider) {
           if (collapsed) return null;
