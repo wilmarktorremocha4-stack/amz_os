@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
+import { fireTrigger } from "@/lib/workflow-engine";
+import { TRIGGER_TYPES } from "@/lib/workflow-types";
 
 // ---------- Pipelines ----------
 
@@ -89,16 +91,19 @@ export async function createOpportunity(formData: FormData) {
   await prisma.opportunity.create({
     data: { userId: user.id, name, pipelineId, stageId, supplierId, value, notes },
   });
+  try { await fireTrigger(user.id, TRIGGER_TYPES.OPPORTUNITY_CREATED, supplierId ?? "", { pipelineId, stageId }); } catch {}
   revalidatePath("/crm");
   revalidatePath("/opportunities");
 }
 
 export async function moveOpportunityStage(opportunityId: string, stageId: string) {
   const user = await getCurrentUser();
-  await prisma.opportunity.update({
+  const opp = await prisma.opportunity.update({
     where: { id: opportunityId, userId: user.id },
     data: { stageId },
+    include: { stage: true },
   });
+  try { await fireTrigger(user.id, TRIGGER_TYPES.OPPORTUNITY_STAGE_CHANGED, opp.supplierId ?? "", { pipelineId: opp.stage.pipelineId, stageId }); } catch {}
   revalidatePath("/crm");
 }
 

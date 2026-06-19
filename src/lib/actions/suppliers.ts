@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { sendEmail } from "@/lib/email";
+import { fireTrigger } from "@/lib/workflow-engine";
+import { TRIGGER_TYPES } from "@/lib/workflow-types";
 
 export async function createSupplier(formData: FormData) {
   const companyName = String(formData.get("companyName") ?? "").trim();
@@ -13,7 +15,7 @@ export async function createSupplier(formData: FormData) {
   try {
     const user = await getCurrentUser();
 
-    await prisma.supplier.create({
+    const created = await prisma.supplier.create({
       data: {
         userId: user.id,
         companyName,
@@ -23,6 +25,8 @@ export async function createSupplier(formData: FormData) {
         website: emptyToNull(formData.get("website")),
       },
     });
+
+    try { await fireTrigger(user.id, TRIGGER_TYPES.CONTACT_CREATED, created.id, { companyName: created.companyName }); } catch {}
 
     await prisma.activityLog.create({
       data: {
