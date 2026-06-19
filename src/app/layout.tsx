@@ -31,9 +31,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-row bg-[var(--background)] text-[var(--foreground)]">
+      <body className="h-full flex flex-row bg-[var(--background)] text-[var(--foreground)]">
         {session?.user && <Sidebar userEmail={session.user.email ?? undefined} />}
-        <div className="flex flex-1 flex-col bg-[var(--background)]" data-area="main">
+        <div className="flex flex-1 flex-col bg-[var(--background)] overflow-hidden" data-area="main">
           {session?.user && <TopBar contacts={contacts} />}
           {children}
         </div>
