@@ -10,6 +10,7 @@ import {
 import { updateSupplierStage, updateContactDetails } from "@/lib/actions/suppliers";
 import { addTagToContact, removeTagFromContact } from "@/lib/actions/tags";
 import { addContactNote, sendContactEmail } from "@/lib/actions/contactNotes";
+import { createOpportunity } from "@/lib/actions/pipelines";
 
 const STAGES = [
   "RESEARCHING","CONTACTED","FOLLOWED_UP","NEGOTIATING","APPROVED","REJECTED","ONBOARDED",
@@ -158,37 +159,55 @@ export function ContactDetailClient({
               </div>
             ) : (
               <div className="flex flex-col gap-3 text-sm">
-                {(editData.email || supplier.email) && (
-                  <div>
-                    <div className="mb-0.5 text-[10px] text-[var(--muted)]">Email</div>
+                {/* First name */}
+                <div>
+                  <div className="mb-0.5 text-[10px] text-[var(--muted)]">First Name</div>
+                  <div className="text-xs text-[var(--foreground)]">
+                    {supplier.contactName?.trim().split(/\s+/)[0] || <span className="italic text-[var(--muted)]">—</span>}
+                  </div>
+                </div>
+                {/* Last name */}
+                <div>
+                  <div className="mb-0.5 text-[10px] text-[var(--muted)]">Last Name</div>
+                  <div className="text-xs text-[var(--foreground)]">
+                    {supplier.contactName?.trim().split(/\s+/).slice(1).join(" ") || <span className="italic text-[var(--muted)]">—</span>}
+                  </div>
+                </div>
+                {/* Company */}
+                <div>
+                  <div className="mb-0.5 text-[10px] text-[var(--muted)]">Company Name</div>
+                  <div className="text-xs font-medium text-[var(--foreground)]">{supplier.companyName}</div>
+                </div>
+                {/* Email */}
+                <div>
+                  <div className="mb-0.5 text-[10px] text-[var(--muted)]">Email</div>
+                  {editData.email || supplier.email ? (
                     <a href={`mailto:${editData.email || supplier.email}`} className="flex items-center gap-1 text-blue-500 hover:underline break-all text-xs">
-                      <Mail size={11} />
-                      {editData.email || supplier.email}
+                      <Mail size={11} />{editData.email || supplier.email}
                     </a>
-                  </div>
-                )}
-                {(editData.phone || supplier.phone) && (
-                  <div>
-                    <div className="mb-0.5 text-[10px] text-[var(--muted)]">Phone</div>
+                  ) : <span className="text-xs italic text-[var(--muted)]">—</span>}
+                </div>
+                {/* Phone */}
+                <div>
+                  <div className="mb-0.5 text-[10px] text-[var(--muted)]">Phone</div>
+                  {editData.phone || supplier.phone ? (
                     <div className="flex items-center gap-1 text-xs text-[var(--foreground)]">
-                      <Phone size={11} className="text-[var(--muted)]" />
-                      {editData.phone || supplier.phone}
+                      <Phone size={11} className="text-[var(--muted)]" />{editData.phone || supplier.phone}
                     </div>
-                  </div>
-                )}
-                {(editData.website || supplier.website) && (
-                  <div>
-                    <div className="mb-0.5 text-[10px] text-[var(--muted)]">Website</div>
+                  ) : <span className="text-xs italic text-[var(--muted)]">—</span>}
+                </div>
+                {/* Website */}
+                <div>
+                  <div className="mb-0.5 text-[10px] text-[var(--muted)]">Website / Company Link</div>
+                  {editData.website || supplier.website ? (
                     <a
                       href={(editData.website || supplier.website || "").startsWith("http") ? (editData.website || supplier.website)! : `https://${editData.website || supplier.website}`}
                       target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1 text-xs text-blue-500 hover:underline truncate">
-                      <Globe size={11} />
-                      {editData.website || supplier.website}
-                      <ExternalLink size={9} />
+                      <Globe size={11} />{editData.website || supplier.website}<ExternalLink size={9} />
                     </a>
-                  </div>
-                )}
+                  ) : <span className="text-xs italic text-[var(--muted)]">—</span>}
+                </div>
               </div>
             )}
           </div>
@@ -277,29 +296,12 @@ export function ContactDetailClient({
           )}
 
           {/* Opportunities */}
-          <div className="border-t border-[var(--border)] px-5 py-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Opportunities</p>
-              <a href="/opportunities" className="flex items-center gap-1 rounded-lg bg-blue-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-blue-500">+ Add</a>
-            </div>
-            {opportunities.length === 0 ? (
-              <p className="text-xs text-[var(--muted)] italic">No opportunities yet.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {opportunities.map((opp) => (
-                  <div key={opp.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                    <div className="text-xs font-medium text-[var(--foreground)] truncate">{opp.name}</div>
-                    <div className="mt-0.5 flex items-center gap-2 text-[10px] text-[var(--muted)]">
-                      <span>{opp.pipeline.name}</span>
-                      <span>·</span>
-                      <span>{opp.stage.name}</span>
-                      {opp.value && <><span>·</span><span className="text-emerald-600 font-medium">${parseFloat(opp.value).toLocaleString()}</span></>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <OpportunitiesSection
+            supplierId={supplier.id}
+            contactName={supplier.companyName}
+            opportunities={opportunities}
+            pipelines={pipelines}
+          />
 
         </div>
 
@@ -318,6 +320,100 @@ export function ContactDetailClient({
           <ActivityPane notes={contactNotes} supplier={supplier} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── Inline Opportunities section ─────────────────────────── */
+function OpportunitiesSection({
+  supplierId, contactName, opportunities, pipelines,
+}: {
+  supplierId: string;
+  contactName: string;
+  opportunities: Opportunity[];
+  pipelines: Pipeline[];
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [selectedPipelineId, setSelectedPipelineId] = useState(pipelines[0]?.id ?? "");
+  const [pending, startTransition] = useTransition();
+
+  const pipeline = pipelines.find((p) => p.id === selectedPipelineId);
+  const stages = pipeline?.stages.slice().sort((a, b) => a.order - b.order) ?? [];
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    fd.set("supplierId", supplierId);
+    fd.set("pipelineId", selectedPipelineId);
+    startTransition(async () => {
+      await createOpportunity(fd);
+      setShowForm(false);
+    });
+  }
+
+  return (
+    <div className="border-t border-[var(--border)] px-5 py-4">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Opportunities</p>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-1 rounded-lg bg-blue-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-blue-500">
+          {showForm ? "Cancel" : "+ Add"}
+        </button>
+      </div>
+
+      {showForm && pipelines.length > 0 && (
+        <form onSubmit={handleSubmit} className="mb-3 flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+          <div>
+            <label className="mb-0.5 block text-[10px] text-[var(--muted)]">Opportunity name</label>
+            <input name="name" defaultValue={contactName} required className="input w-full text-xs" />
+          </div>
+          <div>
+            <label className="mb-0.5 block text-[10px] text-[var(--muted)]">Pipeline</label>
+            <select value={selectedPipelineId} onChange={(e) => setSelectedPipelineId(e.target.value)} className="input w-full text-xs">
+              {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-0.5 block text-[10px] text-[var(--muted)]">Stage</label>
+            <select name="stageId" required className="input w-full text-xs">
+              {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-0.5 block text-[10px] text-[var(--muted)]">Value ($)</label>
+            <input name="value" type="number" min="0" step="0.01" placeholder="0" className="input w-full text-xs" />
+          </div>
+          <button type="submit" disabled={pending}
+            className="w-full rounded-lg bg-blue-600 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+            {pending ? "Adding…" : "Add opportunity"}
+          </button>
+        </form>
+      )}
+
+      {pipelines.length === 0 && showForm && (
+        <p className="mb-3 text-xs text-[var(--muted)]">Create a pipeline first in <a href="/opportunities?tab=pipelines" className="text-blue-400 underline">Opportunities → Pipelines</a>.</p>
+      )}
+
+      {opportunities.length === 0 ? (
+        <p className="text-xs text-[var(--muted)] italic">No opportunities yet.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {opportunities.map((opp) => (
+            <div key={opp.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+              <div className="text-xs font-medium text-[var(--foreground)] truncate">{opp.name}</div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--muted)]">
+                <span>{opp.pipeline.name}</span>
+                <span>·</span>
+                <span>{opp.stage.name}</span>
+                {opp.value && (
+                  <><span>·</span><span className="font-medium text-emerald-600">${parseFloat(opp.value).toLocaleString()}</span></>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

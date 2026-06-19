@@ -9,6 +9,7 @@ type Opp = {
   id: string; name: string; value: string | null; status: string;
   stageId: string; notes: string | null;
   supplier: { id: string; companyName: string } | null;
+  pipelineName?: string;
 };
 
 function OppDetailModal({ opp, stages, onClose }: { opp: Opp; stages: Stage[]; onClose: () => void }) {
@@ -28,6 +29,14 @@ function OppDetailModal({ opp, stages, onClose }: { opp: Opp; stages: Stage[]; o
         </div>
 
         <div className="flex flex-col gap-3">
+          {/* Contact info */}
+          {opp.supplier && (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">Contact</p>
+              <p className="mt-1 text-sm font-medium text-[var(--foreground)]">{opp.supplier.companyName}</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
               <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">Value</p>
@@ -43,8 +52,15 @@ function OppDetailModal({ opp, stages, onClose }: { opp: Opp; stages: Stage[]; o
             </div>
           </div>
 
+          {opp.pipelineName && (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">Pipeline</p>
+              <p className="mt-1 text-sm text-[var(--foreground)]">{opp.pipelineName}</p>
+            </div>
+          )}
+
           <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">Move to Stage</p>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">Stage</p>
             <select
               defaultValue={opp.stageId}
               onChange={(e) => startTransition(() => moveOpportunityStage(opp.id, e.target.value))}

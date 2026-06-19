@@ -376,7 +376,7 @@ export function OpportunitiesTab({
       {viewMode === "kanban" && pipeline && (
         <OpportunityKanban
           stages={pipeline.stages}
-          opportunities={pipelineOpps.map((o) => ({ ...o, value: o.value }))}
+          opportunities={pipelineOpps.map((o) => ({ ...o, value: o.value, pipelineName: pipeline.name }))}
           pipelineName={pipeline.name}
         />
       )}
