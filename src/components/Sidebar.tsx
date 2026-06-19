@@ -48,6 +48,8 @@ const links = [
   { href: "/email/sequences", label: "Sequences", icon: Zap },
   { href: "/email/templates", label: "Templates", icon: Mail },
   { href: "/email/analytics", label: "Email Analytics", icon: LineChart },
+  { label: "─── Automations", icon: Zap, href: "", divider: true },
+  { href: "/automations", label: "Workflows", icon: Zap },
   { label: "─── Reports", icon: BarChart3, href: "", divider: true },
   { href: "/progress", label: "Progress Tracker", icon: BarChart3 },
   { href: "/reports", label: "Reports", icon: BarChart3 },

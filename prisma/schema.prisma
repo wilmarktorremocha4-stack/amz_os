@@ -56,6 +56,7 @@ model User {
   emailCampaigns     EmailCampaign[]
   emailSequences     EmailSequence[]
   brandScans         BrandScan[]
+  workflows          Workflow[]
 }
 
 // --- CRM: Wholesale supplier/brand pipeline ---
@@ -84,6 +85,7 @@ model Supplier {
   contactNotes        ContactNote[]
   emailRecipients     EmailRecipient[]
   sequenceEnrollments SequenceEnrollment[]
+  workflowEnrollments WorkflowEnrollment[]
   enrichment          ContactEnrichment?
   leadScore           LeadScore?
 }
@@ -489,4 +491,40 @@ model LeadScore {
   score      Int      @default(0)
   signals    Json?
   scoredAt   DateTime @default(now())
+}
+
+// ─── WORKFLOW ENGINE ──────────────────────────────────────────────────────────
+
+model Workflow {
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  name          String
+  description   String?
+  status        String   @default("draft")
+  triggerType   String
+  triggerConfig Json     @default("{}")
+  steps         Json     @default("[]")
+  nodes         Json     @default("[]")
+  edges         Json     @default("[]")
+  enrollCount   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  enrollments   WorkflowEnrollment[]
+}
+
+model WorkflowEnrollment {
+  id           String    @id @default(cuid())
+  workflow     Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId   String
+  supplier     Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplierId   String
+  status       String    @default("active")
+  currentStep  Int       @default(0)
+  nextRunAt    DateTime?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  errorMessage String?
+  history      Json      @default("[]")
+  @@unique([workflowId, supplierId])
 }
