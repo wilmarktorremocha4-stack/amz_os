@@ -12,11 +12,31 @@ export async function addContactNote(supplierId: string, content: string) {
   revalidatePath(`/crm/${supplierId}`);
 }
 
+function substituteVars(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? `{{${key}}}`);
+}
+
 export async function sendContactEmail(supplierId: string, to: string, subject: string, body: string) {
-  const user = await getCurrentUser();
-  await sendEmail({ to, subject, html: body.replace(/\n/g, "<br>") });
+  await getCurrentUser();
+  const supplier = await prisma.supplier.findUnique({
+    where: { id: supplierId },
+    select: { companyName: true, contactName: true, email: true, phone: true, website: true },
+  });
+  const nameParts = (supplier?.contactName ?? "").trim().split(/\s+/);
+  const vars: Record<string, string> = {
+    first_name: nameParts[0] ?? "",
+    last_name: nameParts.slice(1).join(" "),
+    full_name: supplier?.contactName ?? "",
+    company_name: supplier?.companyName ?? "",
+    email: supplier?.email ?? to,
+    phone: supplier?.phone ?? "",
+    website: supplier?.website ?? "",
+  };
+  const finalSubject = substituteVars(subject, vars);
+  const finalBody = substituteVars(body, vars);
+  await sendEmail({ to, subject: finalSubject, html: finalBody.replace(/\n/g, "<br>") });
   await prisma.contactNote.create({
-    data: { supplierId, type: "email_sent", content: body, subject },
+    data: { supplierId, type: "email_sent", content: finalBody, subject: finalSubject },
   });
   revalidatePath(`/crm/${supplierId}`);
 }

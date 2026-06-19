@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import {
@@ -211,14 +212,19 @@ function SidebarContent({
     <div className={`flex h-full flex-col p-3 ${collapsed ? "items-center" : ""}`}>
       {/* Logo */}
       <div className={`mb-5 flex items-center gap-2 px-1 ${collapsed ? "justify-center" : ""}`}>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/30">
-          <Boxes size={18} />
-        </div>
-        {!collapsed && (
-          <div>
-            <div className="text-sm font-semibold tracking-tight text-[var(--foreground)]">AMZ OS</div>
-            <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Wholesale OS</div>
+        {collapsed ? (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/30">
+            <Boxes size={18} />
           </div>
+        ) : (
+          <Image
+            src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a3427f3671890ccaac6cf63.png"
+            alt="AMZ OS"
+            width={140}
+            height={56}
+            className="h-12 w-auto object-contain"
+            unoptimized
+          />
         )}
       </div>
 

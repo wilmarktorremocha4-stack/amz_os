@@ -280,7 +280,7 @@ export function ContactDetailClient({
           <div className="border-t border-[var(--border)] px-5 py-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Opportunities</p>
-              <a href="/opportunities" className="text-[10px] text-blue-400 hover:underline">Manage →</a>
+              <a href="/opportunities" className="flex items-center gap-1 rounded-lg bg-blue-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-blue-500">+ Add</a>
             </div>
             {opportunities.length === 0 ? (
               <p className="text-xs text-[var(--muted)] italic">No opportunities yet.</p>
@@ -444,6 +444,12 @@ function ConversationPane({
               disabled={!supplierEmail}
               className="input w-full resize-none text-xs disabled:opacity-50"
             />
+            <p className="text-[10px] text-[var(--muted)]">
+              Variables:{" "}
+              {["first_name","last_name","company_name","email","phone","website"].map((v) => (
+                <code key={v} className="mr-1 rounded bg-[var(--accent-soft)] px-1">&#123;&#123;{v}&#125;&#125;</code>
+              ))}
+            </p>
             <div className="flex items-center justify-between">
               {sent && (
                 <span className="flex items-center gap-1 text-xs text-emerald-500">

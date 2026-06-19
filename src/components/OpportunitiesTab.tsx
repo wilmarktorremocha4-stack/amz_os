@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, DollarSign, Trash2, ChevronDown, LayoutGrid, List, Search, X } from "lucide-react";
 import {
   createOpportunity,
@@ -203,6 +204,7 @@ function AddOppModal({
   const [pending, startTransition] = useTransition();
   const [supplierId, setSupplierId] = useState("");
   const [name, setName] = useState("");
+  const router = useRouter();
 
   // Auto-fill opportunity name from selected contact
   function handleContactChange(id: string) {
@@ -219,6 +221,7 @@ function AddOppModal({
     fd.set("supplierId", supplierId);
     startTransition(async () => {
       await createOpportunity(fd);
+      router.refresh();
       onClose();
     });
   }
@@ -255,6 +258,25 @@ function AddOppModal({
             <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Value ($)</label>
             <input name="value" type="number" step="0.01" min="0" placeholder="0"
               className="input w-full" />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Source</label>
+            <select name="source" className="input w-full">
+              <option value="">Select source…</option>
+              <option>Direct outreach</option>
+              <option>Brand Finder</option>
+              <option>Referral</option>
+              <option>Cold email</option>
+              <option>Social media</option>
+              <option>Trade show</option>
+              <option>Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Business name</label>
+            <input name="businessName" placeholder="Legal business name (optional)" className="input w-full" />
           </div>
 
           <div>
@@ -302,7 +324,7 @@ export function OpportunitiesTab({
         <div className="text-4xl">🔀</div>
         <p className="font-medium text-[var(--foreground)]">No pipelines yet</p>
         <p className="text-sm text-[var(--muted)]">Create a pipeline first from the Pipelines tab.</p>
-        <a href="/crm?tab=pipelines" className="btn-primary">Go to Pipelines →</a>
+        <a href="/opportunities?tab=pipelines" className="btn-primary">Go to Pipelines →</a>
       </div>
     );
   }
@@ -319,7 +341,7 @@ export function OpportunitiesTab({
           <select
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
-            className="input appearance-none pr-8 font-medium"
+            className="input max-w-[200px] appearance-none pr-8 font-medium"
           >
             {pipelines.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
