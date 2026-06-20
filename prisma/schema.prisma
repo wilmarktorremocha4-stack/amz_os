@@ -509,9 +509,53 @@ model Workflow {
   edges         Json     @default("[]")
   enrollCount   Int      @default(0)
   archived      Boolean  @default(false)
+  builderMode   String   @default("standard")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   enrollments   WorkflowEnrollment[]
+  executionLogs WorkflowExecutionLog[]
+  notes         WorkflowNote[]
+  versions      WorkflowVersion[]
+}
+
+model WorkflowExecutionLog {
+  id           String   @id @default(cuid())
+  workflow     Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId   String
+  enrollmentId String?
+  supplierId   String?
+  supplierName String?
+  stepId       String?
+  stepType     String?
+  stepLabel    String?
+  status       String
+  message      String?
+  errorDetail  String?
+  durationMs   Int?
+  createdAt    DateTime @default(now())
+
+  @@index([workflowId, createdAt])
+}
+
+model WorkflowNote {
+  id         String   @id @default(cuid())
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId String
+  content    String
+  authorId   String
+  authorName String
+  createdAt  DateTime @default(now())
+}
+
+model WorkflowVersion {
+  id         String   @id @default(cuid())
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId String
+  steps      Json
+  nodes      Json
+  edges      Json
+  savedBy    String
+  createdAt  DateTime @default(now())
 }
 
 model WorkflowEnrollment {

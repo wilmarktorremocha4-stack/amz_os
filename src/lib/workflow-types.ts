@@ -21,6 +21,8 @@ export const TRIGGER_TYPES = {
   BRAND_CREATED:              "brand.created",
   INBOUND_WEBHOOK:            "system.webhook",
   SCHEDULER:                  "system.scheduler",
+  CONTACT_REPLIED:            "email.replied",
+  WORKFLOW_COMPLETED:         "workflow.completed",
 } as const;
 
 export type TriggerType = typeof TRIGGER_TYPES[keyof typeof TRIGGER_TYPES];
@@ -46,6 +48,7 @@ export const STEP_TYPES = {
   REMOVE_FROM_WORKFLOW:    "control.remove",
   WEBHOOK:                 "action.webhook",
   AI_ACTION:               "action.ai",
+  ENROLL_IN_WORKFLOW:      "action.enroll_in_workflow",
 } as const;
 
 export type StepType = typeof STEP_TYPES[keyof typeof STEP_TYPES];
@@ -114,6 +117,7 @@ export interface WorkflowStep {
   trueBranch?: WorkflowStep[];
   falseBranch?: WorkflowStep[];
   goToStepId?: string;
+  targetWorkflowId?: string;
   webhookUrl?: string;
   webhookMethod?: "POST" | "GET" | "PUT";
   webhookBody?: string;
@@ -121,7 +125,7 @@ export interface WorkflowStep {
   aiOutputField?: string;
 }
 
-export const TRIGGER_DISPLAY: Record<TriggerType, { label: string; category: string; description: string; icon: string }> = {
+export const TRIGGER_DISPLAY: Record<TriggerType, { label: string; category: string; description: string; icon: string; beta?: boolean }> = {
   "contact.created":              { label: "Contact Created",           category: "Contact",   description: "Fires when a new contact is added",                  icon: "UserPlus" },
   "contact.updated":              { label: "Contact Updated",            category: "Contact",   description: "Fires when any contact field changes",               icon: "UserCog" },
   "contact.tag_added":            { label: "Tag Added",                  category: "Contact",   description: "Fires when a specific tag is added",                 icon: "Tag" },
@@ -144,6 +148,8 @@ export const TRIGGER_DISPLAY: Record<TriggerType, { label: string; category: str
   "brand.created":                { label: "Brand Created",              category: "Sourcing",  description: "Fires when a new brand is added",                    icon: "Store" },
   "system.webhook":               { label: "Inbound Webhook",            category: "System",    description: "Fires when data is received at your webhook URL",    icon: "Globe" },
   "system.scheduler":             { label: "Time-Based Scheduler",       category: "System",    description: "Fires on a recurring schedule",                      icon: "Calendar" },
+  "email.replied":                { label: "Contact Replied",            category: "Email",     description: "Fires when a contact replies to an email",           icon: "Reply",   beta: true },
+  "workflow.completed":           { label: "Workflow Completed",         category: "System",    description: "Fires when another workflow finishes for this contact", icon: "CheckCircle", beta: true },
 };
 
 export const STEP_DISPLAY: Record<StepType, { label: string; category: string; description: string; icon: string; color: string }> = {
@@ -167,4 +173,5 @@ export const STEP_DISPLAY: Record<StepType, { label: string; category: string; d
   "control.remove":            { label: "Remove from Workflow",  category: "Control",       description: "Unenroll the contact from this workflow",  icon: "UserX",           color: "#EF4444" },
   "action.webhook":            { label: "Send Webhook",          category: "External",      description: "POST data to an external URL",             icon: "Globe",           color: "#64748B" },
   "action.ai":                 { label: "AI Action",             category: "AI",            description: "Run an AI prompt via OpenAI",              icon: "Sparkles",        color: "#8B5CF6" },
+  "action.enroll_in_workflow": { label: "Enroll in Workflow",    category: "Control",       description: "Enroll this contact in another workflow",  icon: "Share2",          color: "#6366F1" },
 };

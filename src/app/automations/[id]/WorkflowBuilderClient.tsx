@@ -4,19 +4,27 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   X, Plus, ChevronDown, Search,
-  MessageSquare, Clock, History, FileText, Share2, Puzzle,
+  Clock, History, FileText, Puzzle,
   Zap, Mail, Bell, Tag, Edit3, CheckSquare, ArrowRight,
   Briefcase, GitBranch, Flag, GitMerge, Calendar,
   CornerDownRight, StopCircle, UserX, Globe, Sparkles,
   UserPlus, Send, MousePointer, AlertCircle, UserMinus,
   BadgeCheck, Store, ArrowRightCircle, CheckCircle2,
-  Trash2, Save, ChevronRight, Move,
+  Trash2, Save, ChevronRight, Move, Share2, Reply,
+  MessageSquare, Webhook,
 } from "lucide-react";
 import {
-  TRIGGER_DISPLAY, TriggerType,
+  TRIGGER_DISPLAY, TriggerType, TriggerConfig,
   STEP_DISPLAY, STEP_TYPES, StepType, WorkflowStep,
 } from "@/lib/workflow-types";
-import { updateWorkflow } from "@/lib/actions/workflows";
+import { updateWorkflow, testWorkflowStep, listWorkflowsForPicker } from "@/lib/actions/workflows";
+import { TriggerConfigPanel } from "@/components/workflow/TriggerConfigPanel";
+import { WorkflowSettingsTab } from "@/components/workflow/WorkflowSettingsTab";
+import { WorkflowEnrollmentsTab } from "@/components/workflow/WorkflowEnrollmentsTab";
+import { WorkflowLogsTab } from "@/components/workflow/WorkflowLogsTab";
+import { WorkflowNotesPanel } from "@/components/workflow/WorkflowNotesPanel";
+import { WorkflowVersionPanel } from "@/components/workflow/WorkflowVersionPanel";
+import { WorkflowIntegrationsPanel } from "@/components/workflow/WorkflowIntegrationsPanel";
 
 const ICON_MAP: Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>> = {
   Mail, MessageSquare, Bell, Tag, Edit3, FileText, CheckSquare,
@@ -24,20 +32,22 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number; style?: Reac
   CornerDownRight, StopCircle, UserX, Globe, Sparkles, X,
   UserPlus, Send, MousePointer, AlertCircle, UserMinus,
   BadgeCheck, Store, ArrowRightCircle, CheckCircle2,
+  Share2, Reply, CheckCircle: CheckCircle2, Webhook,
 };
 function Icon({ name, size = 14, style }: { name: string; size?: number; style?: React.CSSProperties }) {
   const C = ICON_MAP[name] ?? Zap;
   return <C size={size} style={style} />;
 }
 
-type WorkflowData = { id: string; name: string; status: string; triggerType: string; triggerConfig: unknown; steps: unknown };
+type WorkflowData = { id: string; name: string; status: string; triggerType: string; triggerConfig: unknown; steps: unknown; description?: string | null; builderMode?: string };
 type Tag = { id: string; name: string; color: string };
 type Pipeline = { id: string; name: string; stages: { id: string; name: string }[] };
 type CustomField = { id: string; name: string; type: string };
 type Contact = { id: string; companyName: string; email: string | null };
 type Props = { workflow: WorkflowData; tags: Tag[]; pipelines: Pipeline[]; customFields: CustomField[]; contacts: Contact[] };
-type PanelMode = "trigger-picker" | "step-picker" | "step-editor" | null;
+type PanelMode = "trigger-picker" | "step-picker" | "step-editor" | "trigger-config" | null;
 type Tool = "pointer" | "hand";
+type SidePanel = "notes" | "versions" | "integrations" | null;
 
 const TRIGGER_CATS = ["Contact", "Email", "Pipeline", "Sourcing", "System"] as const;
 const STEP_CATS = ["Communication", "Contact", "Pipeline", "Control", "External", "AI"] as const;
@@ -50,26 +60,35 @@ function catColor(cat: string) {
   return map[cat] ?? "#64748B";
 }
 
-export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields }: Props) {
+export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields, contacts }: Props) {
   const initSteps = (workflow.steps as WorkflowStep[]) ?? [];
   const [name, setName] = useState(workflow.name);
   const [editingName, setEditingName] = useState(false);
   const [triggerType, setTriggerType] = useState<TriggerType | "">(workflow.triggerType as TriggerType | "");
+  const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>((workflow.triggerConfig as TriggerConfig) ?? {});
   const [steps, setSteps] = useState<WorkflowStep[]>(initSteps);
   const [status, setStatus] = useState(workflow.status);
+  const [builderMode, setBuilderMode] = useState(workflow.builderMode ?? "standard");
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
   const [insertAfterIdx, setInsertAfterIdx] = useState(-1);
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"builder" | "settings" | "history" | "logs">("builder");
+  const [activeTab, setActiveTab] = useState<"builder" | "settings" | "enrollments" | "logs">("builder");
   const [tool, setTool] = useState<Tool>("pointer");
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
+  const [sidePanel, setSidePanel] = useState<SidePanel>(null);
+  const [testModal, setTestModal] = useState(false);
+  const [testContactId, setTestContactId] = useState("");
+  const [testRunning, setTestRunning] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [otherWorkflows, setOtherWorkflows] = useState<{ id: string; name: string }[]>([]);
   const isPanning = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const counter = useRef(initSteps.length);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeStep = steps.find((s) => s.id === activeStepId) ?? null;
 
@@ -84,20 +103,32 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const save = useCallback(async (overrides?: Partial<{ name: string; triggerType: TriggerType | ""; steps: WorkflowStep[]; status: string }>) => {
+  // Load other workflows for the ENROLL_IN_WORKFLOW step picker
+  useEffect(() => {
+    listWorkflowsForPicker(workflow.id).then(setOtherWorkflows);
+  }, [workflow.id]);
+
+  const save = useCallback(async (overrides?: Partial<{ name: string; triggerType: TriggerType | ""; triggerConfig: TriggerConfig; steps: WorkflowStep[]; status: string; builderMode: string }>) => {
     setSaving(true);
     try {
       await updateWorkflow(workflow.id, {
         name: overrides?.name ?? name,
         triggerType: (overrides?.triggerType ?? triggerType) as TriggerType,
+        triggerConfig: overrides?.triggerConfig ?? triggerConfig,
         steps: overrides?.steps ?? steps,
         status: (overrides?.status ?? status) as "draft" | "active" | "paused",
+        builderMode: overrides?.builderMode ?? builderMode,
       });
     } finally { setSaving(false); }
-  }, [workflow.id, name, triggerType, steps, status]);
+  }, [workflow.id, name, triggerType, triggerConfig, steps, status, builderMode]);
 
-  function selectTrigger(t: TriggerType) { setTriggerType(t); setPanelMode(null); save({ triggerType: t }); }
-  function removeTrigger() { setTriggerType(""); save({ triggerType: "" }); }
+  function scheduleAutoSave(overrides?: Parameters<typeof save>[0]) {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => save(overrides), 2000);
+  }
+
+  function selectTrigger(t: TriggerType) { setTriggerType(t); setPanelMode("trigger-config"); save({ triggerType: t }); }
+  function removeTrigger() { setTriggerType(""); setTriggerConfig({}); save({ triggerType: "", triggerConfig: {} }); }
   function openStepPicker(afterIdx: number) { setInsertAfterIdx(afterIdx); setSearch(""); setPanelMode("step-picker"); setActiveStepId(null); }
   function addStep(type: StepType) {
     const id = `step_${Date.now()}_${counter.current++}`;
@@ -107,15 +138,25 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
       : [...steps.slice(0, insertAfterIdx + 1), step, ...steps.slice(insertAfterIdx + 1)];
     setSteps(newSteps); setActiveStepId(id); setPanelMode("step-editor"); save({ steps: newSteps });
   }
-  function updateStep(updated: WorkflowStep) { const n = steps.map((s) => s.id === updated.id ? updated : s); setSteps(n); save({ steps: n }); }
+  function updateStep(updated: WorkflowStep) { const n = steps.map((s) => s.id === updated.id ? updated : s); setSteps(n); scheduleAutoSave({ steps: n }); }
   function deleteStep(id: string) {
     const n = steps.filter((s) => s.id !== id); setSteps(n);
     if (activeStepId === id) { setActiveStepId(null); setPanelMode(null); }
     save({ steps: n });
   }
   function openStepEditor(id: string) { setActiveStepId(id); setPanelMode("step-editor"); }
-  async function togglePublish() { const next = status === "active" ? "draft" : "active"; setStatus(next); await save({ status: next }); }
+  async function togglePublish() {
+    if (steps.length === 0 && status !== "active") return;
+    const next = status === "active" ? "draft" : "active";
+    setStatus(next);
+    await save({ status: next });
+  }
   function commitName() { setEditingName(false); save({ name }); }
+
+  function handleTriggerConfigChange(cfg: TriggerConfig) {
+    setTriggerConfig(cfg);
+    scheduleAutoSave({ triggerConfig: cfg });
+  }
 
   // Pan handlers
   function onMouseDown(e: React.MouseEvent) {
@@ -131,13 +172,32 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
   }
   function onMouseUp() { isPanning.current = false; }
 
-  const triggerMeta = triggerType ? TRIGGER_DISPLAY[triggerType] : null;
-  const TAB_LABELS = { builder: "Builder", settings: "Settings", history: "Enrollment History", logs: "Execution Logs" };
+  async function runTest() {
+    if (!testContactId) return;
+    setTestRunning(true);
+    setTestResult(null);
+    const result = await testWorkflowStep(workflow.id, testContactId);
+    setTestRunning(false);
+    if ("error" in result) {
+      setTestResult(`Error: ${result.error}`);
+    } else {
+      setTestResult(`Enrolled! Enrollment ID: ${result.enrollmentId}`);
+    }
+  }
 
-  // Use position:fixed so builder overlays entire screen regardless of layout
+  function toggleSidePanel(panel: SidePanel) {
+    setSidePanel((prev) => prev === panel ? null : panel);
+    if (panelMode && panel) { setPanelMode(null); setActiveStepId(null); }
+  }
+
+  const triggerMeta = triggerType ? TRIGGER_DISPLAY[triggerType] : null;
+  const TAB_LABELS = { builder: "Builder", settings: "Settings", enrollments: "Enrollments", logs: "Logs" };
+
+  const canPublish = steps.length > 0;
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", background: "var(--background)" }}>
-      {/* ── Top bar ── */}
+      {/* Top bar */}
       <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 16px", height: 50, gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
           <Link href="/automations" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--muted)", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
@@ -156,7 +216,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
           )}
         </div>
         <div style={{ display: "flex", alignItems: "stretch", height: "100%", flexShrink: 0 }}>
-          {(["builder", "settings", "history", "logs"] as const).map((tab) => (
+          {(["builder", "settings", "enrollments", "logs"] as const).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               style={{ padding: "0 14px", fontSize: 12, fontWeight: activeTab === tab ? 600 : 400, color: activeTab === tab ? "#3B82F6" : "var(--muted)", background: "transparent", border: "none", borderBottom: activeTab === tab ? "2px solid #3B82F6" : "2px solid transparent", cursor: "pointer" }}>
               {TAB_LABELS[tab]}
@@ -164,20 +224,22 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <button style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: "var(--muted)", background: "transparent", cursor: "pointer" }}>
-            Standard builder <ChevronDown size={11} />
+          <button onClick={() => { const next = builderMode === "standard" ? "advanced" : "standard"; setBuilderMode(next); save({ builderMode: next }); }}
+            style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: "var(--muted)", background: "transparent", cursor: "pointer" }}>
+            {builderMode === "standard" ? "Standard" : "Advanced"} builder <ChevronDown size={11} />
           </button>
-          <button style={{ borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: "var(--muted)", background: "transparent", cursor: "pointer" }}>
+          <button onClick={() => setTestModal(true)}
+            style={{ borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: "var(--muted)", background: "transparent", cursor: "pointer" }}>
             Test workflow
           </button>
           <button onClick={() => save()} disabled={saving}
             style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: "var(--muted)", background: "transparent", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
             <Save size={12} /> {saving ? "Saving…" : "Save"}
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4, borderLeft: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4, borderLeft: "1px solid var(--border)" }} title={!canPublish ? "Add steps before publishing" : undefined}>
             <span style={{ fontSize: 12, color: status !== "active" ? "var(--foreground)" : "var(--muted)", fontWeight: status !== "active" ? 600 : 400 }}>Draft</span>
-            <button onClick={togglePublish}
-              style={{ width: 36, height: 20, borderRadius: 999, border: "none", cursor: "pointer", background: status === "active" ? "#3B82F6" : "#CBD5E1", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+            <button onClick={canPublish ? togglePublish : undefined}
+              style={{ width: 36, height: 20, borderRadius: 999, border: "none", cursor: canPublish ? "pointer" : "not-allowed", background: status === "active" ? "#3B82F6" : "#CBD5E1", position: "relative", transition: "background 0.2s", flexShrink: 0, opacity: canPublish ? 1 : 0.5 }}>
               <span style={{ position: "absolute", top: 2, left: status === "active" ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "white", transition: "left 0.2s", display: "block", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
             </button>
             <span style={{ fontSize: 12, color: status === "active" ? "#3B82F6" : "var(--muted)", fontWeight: status === "active" ? 600 : 400 }}>Published</span>
@@ -185,194 +247,285 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
         </div>
       </div>
 
-      {/* ── Body ── */}
+      {/* Body */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Left icon sidebar */}
-        <div style={{ width: 44, flexShrink: 0, borderRight: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 10, gap: 2 }}>
-          {/* Tool selector */}
-          <button onClick={() => setTool("pointer")} title="Select (V)"
-            style={{ width: 34, height: 34, borderRadius: 7, border: `1px solid ${tool === "pointer" ? "#3B82F6" : "transparent"}`, background: tool === "pointer" ? "#EFF6FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: tool === "pointer" ? "#3B82F6" : "var(--muted)" }}>
-            <MousePointer size={15} />
-          </button>
-          <button onClick={() => setTool("hand")} title="Pan (H)"
-            style={{ width: 34, height: 34, borderRadius: 7, border: `1px solid ${tool === "hand" ? "#3B82F6" : "transparent"}`, background: tool === "hand" ? "#EFF6FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: tool === "hand" ? "#3B82F6" : "var(--muted)" }}>
-            <Move size={15} />
-          </button>
-          <div style={{ width: 28, height: 1, background: "var(--border)", margin: "4px 0" }} />
-          {[MessageSquare, Clock, History, FileText, Share2, Puzzle].map((IC, i) => (
-            <button key={i} title={["Conversations", "Delays", "History", "Notes", "Share", "Integrations"][i]}
-              style={{ width: 34, height: 34, borderRadius: 7, border: "none", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--accent-soft)"; (e.currentTarget as HTMLButtonElement).style.color = "#3B82F6"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--muted)"; }}>
-              <IC size={15} />
-            </button>
-          ))}
-        </div>
+        {activeTab === "builder" && (
+          <>
+            {/* Left icon sidebar */}
+            <div style={{ width: 44, flexShrink: 0, borderRight: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 10, gap: 2 }}>
+              {/* Tool selector */}
+              <button onClick={() => setTool("pointer")} title="Select (V)"
+                style={{ width: 34, height: 34, borderRadius: 7, border: `1px solid ${tool === "pointer" ? "#3B82F6" : "transparent"}`, background: tool === "pointer" ? "#EFF6FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: tool === "pointer" ? "#3B82F6" : "var(--muted)" }}>
+                <MousePointer size={15} />
+              </button>
+              <button onClick={() => setTool("hand")} title="Pan (H)"
+                style={{ width: 34, height: 34, borderRadius: 7, border: `1px solid ${tool === "hand" ? "#3B82F6" : "transparent"}`, background: tool === "hand" ? "#EFF6FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: tool === "hand" ? "#3B82F6" : "var(--muted)" }}>
+                <Move size={15} />
+              </button>
+              <div style={{ width: 28, height: 1, background: "var(--border)", margin: "4px 0" }} />
+              {([
+                { IC: FileText, key: "notes" as SidePanel, label: "Notes" },
+                { IC: History, key: "versions" as SidePanel, label: "Version History" },
+                { IC: Puzzle, key: "integrations" as SidePanel, label: "Integrations" },
+              ]).map(({ IC, key, label }) => (
+                <button key={key} title={label} onClick={() => toggleSidePanel(key)}
+                  style={{ width: 34, height: 34, borderRadius: 7, border: `1px solid ${sidePanel === key ? "#3B82F6" : "transparent"}`, background: sidePanel === key ? "#EFF6FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: sidePanel === key ? "#3B82F6" : "var(--muted)" }}
+                  onMouseEnter={(e) => { if (sidePanel !== key) { (e.currentTarget as HTMLButtonElement).style.background = "var(--accent-soft)"; (e.currentTarget as HTMLButtonElement).style.color = "#3B82F6"; } }}
+                  onMouseLeave={(e) => { if (sidePanel !== key) { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--muted)"; } }}>
+                  <IC size={15} />
+                </button>
+              ))}
+            </div>
 
-        {/* Canvas */}
-        <div
-          ref={canvasRef}
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onMouseLeave={onMouseUp}
-          style={{
-            flex: 1,
-            overflow: "hidden",
-            background: "#F0F2F7",
-            backgroundImage: "radial-gradient(circle, #C8CDD8 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
-            cursor: tool === "hand" ? (isPanning.current ? "grabbing" : "grab") : "default",
-            userSelect: "none",
-          }}>
-          {/* Pannable content */}
-          <div style={{
-            transform: `translate(${panX}px, ${panY}px)`,
-            paddingTop: 48,
-            paddingBottom: 80,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-          }}>
-            <div style={{ width: 480, display: "flex", flexDirection: "column", alignItems: "center" }}>
-              {/* Trigger node */}
-              <TriggerCard
-                triggerMeta={triggerMeta}
-                triggerType={triggerType}
-                onClickEmpty={() => { setSearch(""); setPanelMode("trigger-picker"); }}
-                onEdit={() => { setSearch(""); setPanelMode("trigger-picker"); }}
-                onRemove={removeTrigger}
-                disabled={tool === "hand"}
-              />
-              <NodeConnector onAdd={() => { if (tool !== "hand") openStepPicker(-1); }} />
-              {steps.map((step, idx) => {
-                const meta = STEP_DISPLAY[step.type];
-                const color = meta ? catColor(meta.category) : "#64748B";
-                const isActive = activeStepId === step.id;
-                return (
-                  <div key={step.id} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <StepCard step={step} meta={meta} color={color} isActive={isActive}
-                      onClick={() => { if (tool !== "hand") openStepEditor(step.id); }}
-                      onDelete={() => deleteStep(step.id)} />
-                    <NodeConnector onAdd={() => { if (tool !== "hand") openStepPicker(idx); }} />
+            {/* Canvas */}
+            <div
+              ref={canvasRef}
+              onMouseDown={onMouseDown}
+              onMouseMove={onMouseMove}
+              onMouseUp={onMouseUp}
+              onMouseLeave={onMouseUp}
+              style={{
+                flex: 1,
+                overflow: "hidden",
+                background: "#F0F2F7",
+                backgroundImage: "radial-gradient(circle, #C8CDD8 1px, transparent 1px)",
+                backgroundSize: "24px 24px",
+                cursor: tool === "hand" ? (isPanning.current ? "grabbing" : "grab") : "default",
+                userSelect: "none",
+              }}>
+              <div style={{ transform: `translate(${panX}px, ${panY}px)`, paddingTop: 48, paddingBottom: 80, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{ width: 480, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  {/* Trigger node */}
+                  <TriggerCard
+                    triggerMeta={triggerMeta}
+                    triggerType={triggerType}
+                    onClickEmpty={() => { setSearch(""); setPanelMode("trigger-picker"); setSidePanel(null); }}
+                    onEdit={() => { setSearch(""); setPanelMode("trigger-picker"); setSidePanel(null); }}
+                    onConfigClick={() => { setPanelMode("trigger-config"); setSidePanel(null); }}
+                    onRemove={removeTrigger}
+                    disabled={tool === "hand"}
+                  />
+                  <NodeConnector onAdd={() => { if (tool !== "hand") openStepPicker(-1); }} />
+                  {steps.map((step, idx) => {
+                    const meta = STEP_DISPLAY[step.type];
+                    const color = meta ? catColor(meta.category) : "#64748B";
+                    const isActive = activeStepId === step.id;
+                    return (
+                      <div key={step.id} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                        <StepCard step={step} meta={meta} color={color} isActive={isActive}
+                          onClick={() => { if (tool !== "hand") openStepEditor(step.id); }}
+                          onDelete={() => deleteStep(step.id)} />
+                        <NodeConnector onAdd={() => { if (tool !== "hand") openStepPicker(idx); }} />
+                      </div>
+                    );
+                  })}
+                  <div style={{ borderRadius: 999, border: "1px solid #CBD5E1", background: "white", padding: "6px 28px", fontSize: 11, fontWeight: 700, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                    END
                   </div>
-                );
-              })}
-              {/* END */}
-              <div style={{ borderRadius: 999, border: "1px solid #CBD5E1", background: "white", padding: "6px 28px", fontSize: 11, fontWeight: 700, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                END
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Right slide-in panel */}
-        {panelMode && (
-          <div style={{ width: 360, flexShrink: 0, borderLeft: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "-4px 0 16px rgba(0,0,0,0.06)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>
-                {panelMode === "trigger-picker" ? "Choose a Trigger" : panelMode === "step-picker" ? "Add an Action" : "Edit Step"}
-              </span>
-              <button onClick={() => { setPanelMode(null); setActiveStepId(null); }}
-                style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "var(--accent-soft)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>
-                <X size={14} />
-              </button>
-            </div>
-            {(panelMode === "trigger-picker" || panelMode === "step-picker") && (
-              <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, borderRadius: 8, border: "1px solid var(--border)", padding: "7px 10px", background: "var(--background)" }}>
-                  <Search size={13} style={{ color: "var(--muted)", flexShrink: 0 }} />
-                  <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
-                    style={{ border: "none", background: "transparent", fontSize: 13, color: "var(--foreground)", outline: "none", width: "100%" }} />
+            {/* Right slide-in panel (trigger picker / step picker / step editor / trigger config) */}
+            {panelMode && (
+              <div style={{ width: 360, flexShrink: 0, borderLeft: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "-4px 0 16px rgba(0,0,0,0.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>
+                    {panelMode === "trigger-picker" ? "Choose a Trigger" : panelMode === "trigger-config" ? "Configure Trigger" : panelMode === "step-picker" ? "Add an Action" : "Edit Step"}
+                  </span>
+                  <button onClick={() => { setPanelMode(null); setActiveStepId(null); }}
+                    style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "var(--accent-soft)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>
+                    <X size={14} />
+                  </button>
+                </div>
+                {(panelMode === "trigger-picker" || panelMode === "step-picker") && (
+                  <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, borderRadius: 8, border: "1px solid var(--border)", padding: "7px 10px", background: "var(--background)" }}>
+                      <Search size={13} style={{ color: "var(--muted)", flexShrink: 0 }} />
+                      <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
+                        style={{ border: "none", background: "transparent", fontSize: 13, color: "var(--foreground)", outline: "none", width: "100%" }} />
+                    </div>
+                  </div>
+                )}
+                <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
+                  {panelMode === "trigger-picker" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                      {TRIGGER_CATS.map((cat) => {
+                        const items = Object.entries(TRIGGER_DISPLAY).filter(([, m]) =>
+                          m.category === cat && (!search || m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase())));
+                        if (!items.length) return null;
+                        return (
+                          <div key={cat}>
+                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", marginBottom: 6 }}>{cat}</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                              {items.map(([type, meta]) => (
+                                <PickerItem key={type} icon={meta.icon} iconColor="#3B82F6" label={meta.label} desc={meta.description} beta={meta.beta} onClick={() => selectTrigger(type as TriggerType)} />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {panelMode === "trigger-config" && (
+                    <div>
+                      {triggerMeta && (
+                        <div style={{ marginBottom: 14, padding: "10px 12px", borderRadius: 10, background: "#3B82F610", border: "1px solid #3B82F625" }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--foreground)" }}>{triggerMeta.label}</div>
+                          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{triggerMeta.description}</div>
+                        </div>
+                      )}
+                      <TriggerConfigPanel
+                        triggerType={triggerType}
+                        config={triggerConfig}
+                        onChange={handleTriggerConfigChange}
+                        tags={tags}
+                        pipelines={pipelines}
+                        customFields={customFields}
+                      />
+                    </div>
+                  )}
+                  {panelMode === "step-picker" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                      {STEP_CATS.map((cat) => {
+                        const items = Object.entries(STEP_DISPLAY).filter(([, m]) =>
+                          m.category === cat && (!search || m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase())));
+                        if (!items.length) return null;
+                        return (
+                          <div key={cat}>
+                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", marginBottom: 6 }}>{cat}</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                              {items.map(([type, meta]) => (
+                                <PickerItem key={type} icon={meta.icon} iconColor={meta.color} label={meta.label} desc={meta.description} onClick={() => addStep(type as StepType)} />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {panelMode === "step-editor" && activeStep && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, padding: "10px 12px", borderRadius: 10, background: `${catColor(STEP_DISPLAY[activeStep.type]?.category ?? "")}10`, border: `1px solid ${catColor(STEP_DISPLAY[activeStep.type]?.category ?? "")}25` }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 7, background: `${catColor(STEP_DISPLAY[activeStep.type]?.category ?? "")}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Icon name={STEP_DISPLAY[activeStep.type]?.icon ?? "Zap"} size={13} style={{ color: catColor(STEP_DISPLAY[activeStep.type]?.category ?? "") }} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--foreground)" }}>{STEP_DISPLAY[activeStep.type]?.label}</div>
+                            <div style={{ fontSize: 10, color: "var(--muted)" }}>{STEP_DISPLAY[activeStep.type]?.category}</div>
+                          </div>
+                        </div>
+                        <button onClick={() => deleteStep(activeStep.id)}
+                          style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #FCA5A5", background: "#FEF2F2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444" }}>
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                      <StepEditor step={activeStep} onChange={updateStep} tags={tags} pipelines={pipelines} customFields={customFields} otherWorkflows={otherWorkflows} />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
-            <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
-              {panelMode === "trigger-picker" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                  {TRIGGER_CATS.map((cat) => {
-                    const items = Object.entries(TRIGGER_DISPLAY).filter(([, m]) =>
-                      m.category === cat && (!search || m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase())));
-                    if (!items.length) return null;
-                    return (
-                      <div key={cat}>
-                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", marginBottom: 6 }}>{cat}</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                          {items.map(([type, meta]) => (
-                            <PickerItem key={type} icon={meta.icon} iconColor="#3B82F6" label={meta.label} desc={meta.description} onClick={() => selectTrigger(type as TriggerType)} />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {panelMode === "step-picker" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                  {STEP_CATS.map((cat) => {
-                    const items = Object.entries(STEP_DISPLAY).filter(([, m]) =>
-                      m.category === cat && (!search || m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase())));
-                    if (!items.length) return null;
-                    return (
-                      <div key={cat}>
-                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", marginBottom: 6 }}>{cat}</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                          {items.map(([type, meta]) => (
-                            <PickerItem key={type} icon={meta.icon} iconColor={meta.color} label={meta.label} desc={meta.description} onClick={() => addStep(type as StepType)} />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {panelMode === "step-editor" && activeStep && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, padding: "10px 12px", borderRadius: 10, background: `${catColor(STEP_DISPLAY[activeStep.type]?.category ?? "")}10`, border: `1px solid ${catColor(STEP_DISPLAY[activeStep.type]?.category ?? "")}25` }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 7, background: `${catColor(STEP_DISPLAY[activeStep.type]?.category ?? "")}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Icon name={STEP_DISPLAY[activeStep.type]?.icon ?? "Zap"} size={13} style={{ color: catColor(STEP_DISPLAY[activeStep.type]?.category ?? "") }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--foreground)" }}>{STEP_DISPLAY[activeStep.type]?.label}</div>
-                        <div style={{ fontSize: 10, color: "var(--muted)" }}>{STEP_DISPLAY[activeStep.type]?.category}</div>
-                      </div>
-                    </div>
-                    <button onClick={() => deleteStep(activeStep.id)}
-                      style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #FCA5A5", background: "#FEF2F2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444" }}>
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                  <StepEditor step={activeStep} onChange={updateStep} tags={tags} pipelines={pipelines} customFields={customFields} />
-                </div>
-              )}
-            </div>
+
+            {/* Side panels (Notes, Versions, Integrations) */}
+            {sidePanel && (
+              <div style={{ width: 300, flexShrink: 0, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                {sidePanel === "notes" && <WorkflowNotesPanel workflowId={workflow.id} />}
+                {sidePanel === "versions" && <WorkflowVersionPanel workflowId={workflow.id} />}
+                {sidePanel === "integrations" && <WorkflowIntegrationsPanel workflowId={workflow.id} />}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === "settings" && (
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            <WorkflowSettingsTab
+              workflowId={workflow.id}
+              name={name}
+              description={workflow.description ?? ""}
+              builderMode={builderMode}
+              onBuilderModeChange={(m) => { setBuilderMode(m); }}
+            />
+          </div>
+        )}
+
+        {activeTab === "enrollments" && (
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            <WorkflowEnrollmentsTab workflowId={workflow.id} />
+          </div>
+        )}
+
+        {activeTab === "logs" && (
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            <WorkflowLogsTab workflowId={workflow.id} />
           </div>
         )}
       </div>
 
-      {/* Tool hint */}
-      <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.6)", color: "white", fontSize: 11, padding: "4px 10px", borderRadius: 6, pointerEvents: "none" }}>
-        {tool === "hand" ? "Pan mode — click & drag to move canvas · Press V to switch to select" : "Select mode · Press H to pan"}
-      </div>
+      {/* Tool hint (builder tab only) */}
+      {activeTab === "builder" && (
+        <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.6)", color: "white", fontSize: 11, padding: "4px 10px", borderRadius: 6, pointerEvents: "none" }}>
+          {tool === "hand" ? "Pan mode — click & drag to move canvas · Press V to switch to select" : "Select mode · Press H to pan"}
+        </div>
+      )}
+
+      {/* Test Workflow Modal */}
+      {testModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 440, borderRadius: 14, background: "#0A1628", border: "1px solid #1E3A5F", padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: "#E2E8F0", margin: 0 }}>Test Workflow</h2>
+              <button onClick={() => { setTestModal(false); setTestResult(null); }}
+                style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "#1E3A5F", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8" }}>
+                <X size={14} />
+              </button>
+            </div>
+            <p style={{ fontSize: 12, color: "#64748B", marginBottom: 16 }}>Select a contact to enroll in this workflow for testing.</p>
+            <select value={testContactId} onChange={(e) => setTestContactId(e.target.value)}
+              style={{ width: "100%", borderRadius: 8, border: "1px solid #1E3A5F", background: "#030A18", color: "#E2E8F0", padding: "8px 12px", fontSize: 13, outline: "none", marginBottom: 16 }}>
+              <option value="">Select a contact…</option>
+              {contacts.map((c) => <option key={c.id} value={c.id}>{c.companyName}{c.email ? ` — ${c.email}` : ""}</option>)}
+            </select>
+            {testResult && (
+              <div style={{ borderRadius: 8, border: `1px solid ${testResult.startsWith("Error") ? "#EF444440" : "#10B98140"}`, background: testResult.startsWith("Error") ? "#EF444410" : "#10B98110", padding: "10px 12px", marginBottom: 16, fontSize: 12, color: testResult.startsWith("Error") ? "#EF4444" : "#10B981" }}>
+                {testResult}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => { setTestModal(false); setTestResult(null); }}
+                style={{ borderRadius: 8, border: "1px solid #1E3A5F", padding: "8px 16px", fontSize: 13, color: "#94A3B8", background: "transparent", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={runTest} disabled={testRunning || !testContactId}
+                style={{ borderRadius: 8, border: "none", background: "#0E90C8", color: "white", padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: testRunning || !testContactId ? "not-allowed" : "pointer", opacity: testRunning || !testContactId ? 0.6 : 1 }}>
+                {testRunning ? "Running…" : "Run Test"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ── Sub-components ── */
+/* Sub-components */
 
-function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onRemove, disabled }: {
+function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onConfigClick, onRemove, disabled }: {
   triggerMeta: typeof TRIGGER_DISPLAY[TriggerType] | null;
   triggerType: TriggerType | "";
   onClickEmpty: () => void;
   onEdit: () => void;
+  onConfigClick: () => void;
   onRemove: () => void;
   disabled?: boolean;
 }) {
   const [hov, setHov] = useState(false);
   if (triggerType && triggerMeta) {
     return (
-      <div style={{ width: "100%", borderRadius: 10, border: "2px solid #3B82F6", background: "white", padding: "10px 14px", boxShadow: "0 2px 8px rgba(59,130,246,0.12)" }}>
+      <div style={{ width: "100%", borderRadius: 10, border: "2px solid #3B82F6", background: "white", padding: "10px 14px", boxShadow: "0 2px 8px rgba(59,130,246,0.12)", cursor: disabled ? "default" : "pointer" }}
+        onClick={disabled ? undefined : onConfigClick}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Icon name={triggerMeta.icon} size={15} style={{ color: "#3B82F6" }} />
@@ -463,7 +616,7 @@ function NodeConnector({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function PickerItem({ icon, iconColor, label, desc, onClick }: { icon: string; iconColor: string; label: string; desc: string; onClick: () => void }) {
+function PickerItem({ icon, iconColor, label, desc, onClick, beta }: { icon: string; iconColor: string; label: string; desc: string; onClick: () => void; beta?: boolean }) {
   const [hov, setHov] = useState(false);
   return (
     <button onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
@@ -472,7 +625,10 @@ function PickerItem({ icon, iconColor, label, desc, onClick }: { icon: string; i
         <Icon name={icon} size={13} style={{ color: iconColor }} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", lineHeight: 1.3 }}>{label}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", lineHeight: 1.3, display: "flex", alignItems: "center", gap: 6 }}>
+          {label}
+          {beta && <span style={{ fontSize: 9, fontWeight: 700, background: "#8B5CF620", color: "#8B5CF6", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.05em" }}>BETA</span>}
+        </div>
         <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{desc}</div>
       </div>
       <ChevronRight size={12} style={{ color: "#CBD5E1", flexShrink: 0 }} />
@@ -480,10 +636,11 @@ function PickerItem({ icon, iconColor, label, desc, onClick }: { icon: string; i
   );
 }
 
-/* ── Step Editor ── */
-function StepEditor({ step, onChange, tags, pipelines, customFields }: {
+/* Step Editor */
+function StepEditor({ step, onChange, tags, pipelines, customFields, otherWorkflows }: {
   step: WorkflowStep; onChange: (s: WorkflowStep) => void;
   tags: Tag[]; pipelines: Pipeline[]; customFields: CustomField[];
+  otherWorkflows: { id: string; name: string }[];
 }) {
   const patch = (u: Partial<WorkflowStep>) => onChange({ ...step, ...u });
   const inp: React.CSSProperties = { width: "100%", borderRadius: 8, border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)", padding: "7px 10px", fontSize: 12, outline: "none", boxSizing: "border-box" };
@@ -588,6 +745,17 @@ function StepEditor({ step, onChange, tags, pipelines, customFields }: {
           </div>
         ))}
         <button onClick={() => patch({ conditions: [...(step.conditions ?? []), { field: "", operator: "equals" as const, value: "" }] })} style={{ fontSize: 12, color: "#3B82F6", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>+ Add condition</button>
+      </div>
+    );
+    case STEP_TYPES.ENROLL_IN_WORKFLOW: return (
+      <div style={wrap}>
+        {LabelField}
+        <F label="Target workflow">
+          <select value={step.targetWorkflowId ?? ""} onChange={(e) => patch({ targetWorkflowId: e.target.value })} style={inp}>
+            <option value="">Select workflow…</option>
+            {otherWorkflows.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        </F>
       </div>
     );
     default: return <div style={wrap}>{LabelField}</div>;
