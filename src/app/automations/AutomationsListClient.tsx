@@ -7,6 +7,7 @@ import {
   Zap, Trash2, Edit, Copy,
 } from "lucide-react";
 import { createDefaultWorkflow, deleteWorkflow } from "@/lib/actions/workflows";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
 type Workflow = {
   id: string;
@@ -29,6 +30,7 @@ export function AutomationsListClient({ workflows }: Props) {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "review" | "deleted">("all");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filtered = workflows.filter((wf) => {
@@ -47,10 +49,12 @@ export function AutomationsListClient({ workflows }: Props) {
     startTransition(async () => {
       await deleteWorkflow(id);
     });
+    setDeleteConfirmId(null);
     setMenuOpenId(null);
   }
 
   return (
+    <>
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--background)" }}>
       {/* Top tab bar */}
       <div style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)", display: "flex", alignItems: "center", gap: 0, padding: "0 24px" }}>
@@ -219,7 +223,7 @@ export function AutomationsListClient({ workflows }: Props) {
                               <Copy size={13} /> Duplicate
                             </button>
                             <button
-                              onClick={() => handleDelete(wf.id)}
+                              onClick={() => { setDeleteConfirmId(wf.id); setMenuOpenId(null); }}
                               style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "10px 14px", fontSize: 13, color: "#EF4444", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
                               onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#EF444410"; }}
                               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = ""; }}
@@ -243,5 +247,16 @@ export function AutomationsListClient({ workflows }: Props) {
         </table>
       </div>
     </div>
+
+    {deleteConfirmId && (
+      <DeleteConfirmModal
+        title={`Delete "${workflows.find((w) => w.id === deleteConfirmId)?.name ?? "workflow"}"?`}
+        description="This workflow and all its enrollment history will be permanently deleted."
+        onConfirm={() => handleDelete(deleteConfirmId)}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
+    )}
+    </>
   );
 }
+

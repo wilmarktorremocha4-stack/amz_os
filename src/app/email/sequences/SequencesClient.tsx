@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Plus, Trash2, Mail, Clock, Users, ChevronDown, ChevronRight, X, Play } from "lucide-react";
 import { createSequence, deleteSequence, addSequenceStep, deleteSequenceStep, enrollInSequence } from "@/lib/actions/email-sequences";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { EmailBuilder } from "@/components/EmailBuilder";
 import { EmailDoc, DEFAULT_DOC } from "@/lib/email-builder";
 
@@ -19,6 +20,8 @@ export function SequencesClient({ sequences, suppliers }: { sequences: Sequence[
   const [stepBody, setStepBody] = useState<EmailDoc>(DEFAULT_DOC);
   const [stepDelay, setStepDelay] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteSeqId, setDeleteSeqId] = useState<string | null>(null);
+  const [deleteStepId, setDeleteStepId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const withEmail = suppliers.filter((s) => s.email);
@@ -113,7 +116,7 @@ export function SequencesClient({ sequences, suppliers }: { sequences: Sequence[
                     className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500">
                     <Play size={11} /> Enroll
                   </button>
-                  <button onClick={() => startTransition(() => deleteSequence(seq.id))} className="rounded-lg p-1.5 text-red-400 hover:bg-red-50">
+                  <button onClick={() => setDeleteSeqId(seq.id)} className="rounded-lg p-1.5 text-red-400 hover:bg-red-50">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -131,7 +134,7 @@ export function SequencesClient({ sequences, suppliers }: { sequences: Sequence[
                             <Clock size={10} /> {step.delayDays === 0 ? "Send immediately" : `Send after ${step.delayDays} day${step.delayDays !== 1 ? "s" : ""}`}
                           </div>
                         </div>
-                        <button onClick={() => startTransition(() => deleteSequenceStep(step.id))} className="text-red-400 hover:text-red-500">
+                        <button onClick={() => setDeleteStepId(step.id)} className="text-red-400 hover:text-red-500">
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -165,6 +168,24 @@ export function SequencesClient({ sequences, suppliers }: { sequences: Sequence[
           );
         })}
       </div>
+
+      {deleteSeqId && (
+        <DeleteConfirmModal
+          title={`Delete "${sequences.find((s) => s.id === deleteSeqId)?.name ?? "sequence"}"?`}
+          description="All steps and enrollment data for this sequence will be permanently deleted."
+          onConfirm={() => { startTransition(() => deleteSequence(deleteSeqId)); setDeleteSeqId(null); }}
+          onCancel={() => setDeleteSeqId(null)}
+        />
+      )}
+
+      {deleteStepId && (
+        <DeleteConfirmModal
+          title="Delete this step?"
+          description="This step will be removed from the sequence permanently."
+          onConfirm={() => { startTransition(() => deleteSequenceStep(deleteStepId)); setDeleteStepId(null); }}
+          onCancel={() => setDeleteStepId(null)}
+        />
+      )}
 
       {/* Enroll modal */}
       {enrolling && (

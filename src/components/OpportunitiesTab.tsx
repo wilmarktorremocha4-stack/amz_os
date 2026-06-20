@@ -10,6 +10,7 @@ import {
   updateOpportunityStatus,
 } from "@/lib/actions/pipelines";
 import { OpportunityKanban } from "@/components/OpportunityKanban";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
 type Stage = { id: string; name: string; order: number };
 type Pipeline = { id: string; name: string; stages: Stage[] };
@@ -49,7 +50,7 @@ function OppCard({ opp, stages }: { opp: Opp; stages: Stage[] }) {
           )}
         </div>
         <button
-          onClick={() => setConfirmDelete(!confirmDelete)}
+          onClick={() => setConfirmDelete(true)}
           className="shrink-0 rounded p-1 text-[var(--muted)] opacity-0 hover:text-red-500 group-hover:opacity-100"
         >
           <Trash2 size={12} />
@@ -90,20 +91,12 @@ function OppCard({ opp, stages }: { opp: Opp; stages: Stage[] }) {
       </select>
 
       {confirmDelete && (
-        <div className="mt-2 flex gap-1.5 border-t border-[var(--border)] pt-2">
-          <button
-            onClick={() => setConfirmDelete(false)}
-            className="flex-1 rounded-lg border border-[var(--border)] py-1 text-xs text-[var(--muted)]"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => startTransition(() => deleteOpportunity(opp.id))}
-            className="flex-1 rounded-lg bg-red-600 py-1 text-xs font-medium text-white"
-          >
-            Delete
-          </button>
-        </div>
+        <DeleteConfirmModal
+          title={`Delete "${opp.name}"?`}
+          description="This opportunity will be permanently deleted from the pipeline."
+          onConfirm={() => { startTransition(() => deleteOpportunity(opp.id)); setConfirmDelete(false); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
       )}
     </div>
   );

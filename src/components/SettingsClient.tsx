@@ -9,6 +9,7 @@ import {
   createCustomField,
   deleteCustomField,
 } from "@/lib/actions/customFields";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
 const FIELD_TYPES = [
   { value: "single_line", label: "Single line" },
@@ -178,8 +179,10 @@ function ProfileForm({ user }: { user: ProfileUser }) {
 
 function CustomFieldsManager({ folders }: { folders: CustomFieldFolder[] }) {
   const [showNewFolder, setShowNewFolder] = useState(false);
-  const [showNewField, setShowNewField] = useState<string | null>(null); // folderId or "unfoldered"
+  const [showNewField, setShowNewField] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(folders.map((f) => f.id)));
+  const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
+  const [deleteFieldId, setDeleteFieldId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   function toggleFolder(id: string) {
@@ -210,6 +213,7 @@ function CustomFieldsManager({ folders }: { folders: CustomFieldFolder[] }) {
   }
 
   return (
+    <>
     <div className="flex max-w-2xl flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-[var(--muted)]">
@@ -255,7 +259,7 @@ function CustomFieldsManager({ folders }: { folders: CustomFieldFolder[] }) {
                 className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--surface)] hover:text-blue-500">
                 <Plus size={12} /> Add field
               </button>
-              <button onClick={() => startTransition(() => deleteCustomFieldFolder(folder.id))}
+              <button onClick={() => setDeleteFolderId(folder.id)}
                 className="rounded-lg p-1 text-[var(--muted)] hover:text-red-500">
                 <Trash2 size={13} />
               </button>
@@ -276,7 +280,7 @@ function CustomFieldsManager({ folders }: { folders: CustomFieldFolder[] }) {
                       {FIELD_TYPES.find((t) => t.value === field.type)?.label ?? field.type}
                     </span>
                   </div>
-                  <button onClick={() => startTransition(() => deleteCustomField(field.id))}
+                  <button onClick={() => setDeleteFieldId(field.id)}
                     className="rounded-lg p-1 text-[var(--muted)] hover:text-red-500">
                     <Trash2 size={13} />
                   </button>
@@ -294,6 +298,25 @@ function CustomFieldsManager({ folders }: { folders: CustomFieldFolder[] }) {
         </div>
       ))}
     </div>
+
+    {deleteFolderId && (
+      <DeleteConfirmModal
+        title={`Delete folder "${folders.find((f) => f.id === deleteFolderId)?.name ?? ""}"?`}
+        description={`This will permanently delete the folder and all ${folders.find((f) => f.id === deleteFolderId)?.fields.length ?? 0} field(s) inside it.`}
+        onConfirm={() => { startTransition(() => deleteCustomFieldFolder(deleteFolderId)); setDeleteFolderId(null); }}
+        onCancel={() => setDeleteFolderId(null)}
+      />
+    )}
+
+    {deleteFieldId && (
+      <DeleteConfirmModal
+        title={`Delete field "${folders.flatMap((f) => f.fields).find((f) => f.id === deleteFieldId)?.name ?? ""}"?`}
+        description="This custom field and any stored values will be permanently deleted."
+        onConfirm={() => { startTransition(() => deleteCustomField(deleteFieldId)); setDeleteFieldId(null); }}
+        onCancel={() => setDeleteFieldId(null)}
+      />
+    )}
+    </>
   );
 }
 

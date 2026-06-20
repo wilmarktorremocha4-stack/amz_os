@@ -25,8 +25,15 @@ export function ArchiveSection({
         ) : (
           <ChevronRight size={16} className="shrink-0 text-[var(--muted)]" />
         )}
-        <span className="font-medium text-[var(--foreground)]">{title}</span>
-        <span className="ml-auto rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-medium text-[var(--muted)]">
+        <div>
+          <span className="font-medium text-[var(--foreground)]">{title}</span>
+          {open && (
+            <p className="text-xs text-[var(--muted)] mt-0.5">
+              Click <span className="font-medium text-[var(--accent)]">Restore</span> to move back to active, or <span className="font-medium text-red-500">Delete permanently</span> to remove forever.
+            </p>
+          )}
+        </div>
+        <span className="ml-auto shrink-0 rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-medium text-[var(--muted)]">
           {count}
         </span>
       </button>
