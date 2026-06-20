@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   X, Plus, ChevronDown, Search,
@@ -10,7 +10,7 @@ import {
   CornerDownRight, StopCircle, UserX, Globe, Sparkles,
   UserPlus, Send, MousePointer, AlertCircle, UserMinus,
   BadgeCheck, Store, ArrowRightCircle, CheckCircle2,
-  Trash2, Save, ChevronRight,
+  Trash2, Save, ChevronRight, Move,
 } from "lucide-react";
 import {
   TRIGGER_DISPLAY, TriggerType,
@@ -37,6 +37,7 @@ type CustomField = { id: string; name: string; type: string };
 type Contact = { id: string; companyName: string; email: string | null };
 type Props = { workflow: WorkflowData; tags: Tag[]; pipelines: Pipeline[]; customFields: CustomField[]; contacts: Contact[] };
 type PanelMode = "trigger-picker" | "step-picker" | "step-editor" | null;
+type Tool = "pointer" | "hand";
 
 const TRIGGER_CATS = ["Contact", "Email", "Pipeline", "Sourcing", "System"] as const;
 const STEP_CATS = ["Communication", "Contact", "Pipeline", "Control", "External", "AI"] as const;
@@ -62,9 +63,26 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"builder" | "settings" | "history" | "logs">("builder");
+  const [tool, setTool] = useState<Tool>("pointer");
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const isPanning = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
   const counter = useRef(initSteps.length);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   const activeStep = steps.find((s) => s.id === activeStepId) ?? null;
+
+  // Keyboard shortcut: H = hand, V = pointer
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "h" || e.key === "H") setTool("hand");
+      if (e.key === "v" || e.key === "V") setTool("pointer");
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const save = useCallback(async (overrides?: Partial<{ name: string; triggerType: TriggerType | ""; steps: WorkflowStep[]; status: string }>) => {
     setSaving(true);
@@ -80,55 +98,47 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
 
   function selectTrigger(t: TriggerType) { setTriggerType(t); setPanelMode(null); save({ triggerType: t }); }
   function removeTrigger() { setTriggerType(""); save({ triggerType: "" }); }
-
-  function openStepPicker(afterIdx: number) {
-    setInsertAfterIdx(afterIdx); setSearch(""); setPanelMode("step-picker"); setActiveStepId(null);
-  }
-
+  function openStepPicker(afterIdx: number) { setInsertAfterIdx(afterIdx); setSearch(""); setPanelMode("step-picker"); setActiveStepId(null); }
   function addStep(type: StepType) {
     const id = `step_${Date.now()}_${counter.current++}`;
     const step: WorkflowStep = { id, type, label: STEP_DISPLAY[type]?.label };
     const newSteps = insertAfterIdx === -1 || insertAfterIdx >= steps.length - 1
       ? [...steps, step]
       : [...steps.slice(0, insertAfterIdx + 1), step, ...steps.slice(insertAfterIdx + 1)];
-    setSteps(newSteps);
-    setActiveStepId(id);
-    setPanelMode("step-editor");
-    save({ steps: newSteps });
+    setSteps(newSteps); setActiveStepId(id); setPanelMode("step-editor"); save({ steps: newSteps });
   }
-
-  function updateStep(updated: WorkflowStep) {
-    const newSteps = steps.map((s) => s.id === updated.id ? updated : s);
-    setSteps(newSteps);
-    save({ steps: newSteps });
-  }
-
+  function updateStep(updated: WorkflowStep) { const n = steps.map((s) => s.id === updated.id ? updated : s); setSteps(n); save({ steps: n }); }
   function deleteStep(id: string) {
-    const newSteps = steps.filter((s) => s.id !== id);
-    setSteps(newSteps);
+    const n = steps.filter((s) => s.id !== id); setSteps(n);
     if (activeStepId === id) { setActiveStepId(null); setPanelMode(null); }
-    save({ steps: newSteps });
+    save({ steps: n });
   }
-
   function openStepEditor(id: string) { setActiveStepId(id); setPanelMode("step-editor"); }
-
-  async function togglePublish() {
-    const next = status === "active" ? "draft" : "active";
-    setStatus(next);
-    await save({ status: next });
-  }
-
+  async function togglePublish() { const next = status === "active" ? "draft" : "active"; setStatus(next); await save({ status: next }); }
   function commitName() { setEditingName(false); save({ name }); }
 
-  const triggerMeta = triggerType ? TRIGGER_DISPLAY[triggerType] : null;
+  // Pan handlers
+  function onMouseDown(e: React.MouseEvent) {
+    if (tool !== "hand") return;
+    isPanning.current = true;
+    lastPos.current = { x: e.clientX, y: e.clientY };
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    if (!isPanning.current) return;
+    setPanX((p) => p + e.clientX - lastPos.current.x);
+    setPanY((p) => p + e.clientY - lastPos.current.y);
+    lastPos.current = { x: e.clientX, y: e.clientY };
+  }
+  function onMouseUp() { isPanning.current = false; }
 
+  const triggerMeta = triggerType ? TRIGGER_DISPLAY[triggerType] : null;
   const TAB_LABELS = { builder: "Builder", settings: "Settings", history: "Enrollment History", logs: "Execution Logs" };
 
+  // Use position:fixed so builder overlays entire screen regardless of layout
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#F5F6FA", overflow: "hidden", fontFamily: "inherit" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", background: "var(--background)" }}>
       {/* ── Top bar ── */}
       <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 16px", height: 50, gap: 12 }}>
-        {/* Left: back + name */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
           <Link href="/automations" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--muted)", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
             ← Workflows list
@@ -145,8 +155,6 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
             </span>
           )}
         </div>
-
-        {/* Center: tabs */}
         <div style={{ display: "flex", alignItems: "stretch", height: "100%", flexShrink: 0 }}>
           {(["builder", "settings", "history", "logs"] as const).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
@@ -155,8 +163,6 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
             </button>
           ))}
         </div>
-
-        {/* Right: actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <button style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: "var(--muted)", background: "transparent", cursor: "pointer" }}>
             Standard builder <ChevronDown size={11} />
@@ -168,7 +174,6 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
             style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: "var(--muted)", background: "transparent", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
             <Save size={12} /> {saving ? "Saving…" : "Save"}
           </button>
-          {/* Draft / Publish toggle */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4, borderLeft: "1px solid var(--border)" }}>
             <span style={{ fontSize: 12, color: status !== "active" ? "var(--foreground)" : "var(--muted)", fontWeight: status !== "active" ? 600 : 400 }}>Draft</span>
             <button onClick={togglePublish}
@@ -184,6 +189,16 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* Left icon sidebar */}
         <div style={{ width: 44, flexShrink: 0, borderRight: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 10, gap: 2 }}>
+          {/* Tool selector */}
+          <button onClick={() => setTool("pointer")} title="Select (V)"
+            style={{ width: 34, height: 34, borderRadius: 7, border: `1px solid ${tool === "pointer" ? "#3B82F6" : "transparent"}`, background: tool === "pointer" ? "#EFF6FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: tool === "pointer" ? "#3B82F6" : "var(--muted)" }}>
+            <MousePointer size={15} />
+          </button>
+          <button onClick={() => setTool("hand")} title="Pan (H)"
+            style={{ width: 34, height: 34, borderRadius: 7, border: `1px solid ${tool === "hand" ? "#3B82F6" : "transparent"}`, background: tool === "hand" ? "#EFF6FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: tool === "hand" ? "#3B82F6" : "var(--muted)" }}>
+            <Move size={15} />
+          </button>
+          <div style={{ width: 28, height: 1, background: "var(--border)", margin: "4px 0" }} />
           {[MessageSquare, Clock, History, FileText, Share2, Puzzle].map((IC, i) => (
             <button key={i} title={["Conversations", "Delays", "History", "Notes", "Share", "Integrations"][i]}
               style={{ width: 34, height: 34, borderRadius: 7, border: "none", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)" }}
@@ -195,39 +210,58 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
         </div>
 
         {/* Canvas */}
-        <div style={{ flex: 1, overflowY: "auto", background: "#F0F2F7", backgroundImage: "radial-gradient(circle, #D1D5DB 1px, transparent 1px)", backgroundSize: "24px 24px", padding: "40px 0" }}>
-          <div style={{ width: 480, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center" }}>
-
-            {/* Trigger node */}
-            <TriggerCard
-              triggerMeta={triggerMeta}
-              triggerType={triggerType}
-              onClickEmpty={() => { setSearch(""); setPanelMode("trigger-picker"); }}
-              onEdit={() => { setSearch(""); setPanelMode("trigger-picker"); }}
-              onRemove={removeTrigger}
-            />
-
-            <NodeConnector onAdd={() => openStepPicker(-1)} />
-
-            {steps.map((step, idx) => {
-              const meta = STEP_DISPLAY[step.type];
-              const color = meta ? catColor(meta.category) : "#64748B";
-              const isActive = activeStepId === step.id;
-              return (
-                <div key={step.id} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <StepCard
-                    step={step} meta={meta} color={color} isActive={isActive}
-                    onClick={() => openStepEditor(step.id)}
-                    onDelete={() => deleteStep(step.id)}
-                  />
-                  <NodeConnector onAdd={() => openStepPicker(idx)} />
-                </div>
-              );
-            })}
-
-            {/* END */}
-            <div style={{ borderRadius: 999, border: "1px solid #CBD5E1", background: "white", padding: "6px 28px", fontSize: 11, fontWeight: 700, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              END
+        <div
+          ref={canvasRef}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseUp}
+          style={{
+            flex: 1,
+            overflow: "hidden",
+            background: "#F0F2F7",
+            backgroundImage: "radial-gradient(circle, #C8CDD8 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+            cursor: tool === "hand" ? (isPanning.current ? "grabbing" : "grab") : "default",
+            userSelect: "none",
+          }}>
+          {/* Pannable content */}
+          <div style={{
+            transform: `translate(${panX}px, ${panY}px)`,
+            paddingTop: 48,
+            paddingBottom: 80,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}>
+            <div style={{ width: 480, display: "flex", flexDirection: "column", alignItems: "center" }}>
+              {/* Trigger node */}
+              <TriggerCard
+                triggerMeta={triggerMeta}
+                triggerType={triggerType}
+                onClickEmpty={() => { setSearch(""); setPanelMode("trigger-picker"); }}
+                onEdit={() => { setSearch(""); setPanelMode("trigger-picker"); }}
+                onRemove={removeTrigger}
+                disabled={tool === "hand"}
+              />
+              <NodeConnector onAdd={() => { if (tool !== "hand") openStepPicker(-1); }} />
+              {steps.map((step, idx) => {
+                const meta = STEP_DISPLAY[step.type];
+                const color = meta ? catColor(meta.category) : "#64748B";
+                const isActive = activeStepId === step.id;
+                return (
+                  <div key={step.id} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <StepCard step={step} meta={meta} color={color} isActive={isActive}
+                      onClick={() => { if (tool !== "hand") openStepEditor(step.id); }}
+                      onDelete={() => deleteStep(step.id)} />
+                    <NodeConnector onAdd={() => { if (tool !== "hand") openStepPicker(idx); }} />
+                  </div>
+                );
+              })}
+              {/* END */}
+              <div style={{ borderRadius: 999, border: "1px solid #CBD5E1", background: "white", padding: "6px 28px", fontSize: 11, fontWeight: 700, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                END
+              </div>
             </div>
           </div>
         </div>
@@ -235,8 +269,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
         {/* Right slide-in panel */}
         {panelMode && (
           <div style={{ width: 360, flexShrink: 0, borderLeft: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "-4px 0 16px rgba(0,0,0,0.06)" }}>
-            {/* Panel header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0, background: "var(--surface)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>
                 {panelMode === "trigger-picker" ? "Choose a Trigger" : panelMode === "step-picker" ? "Add an Action" : "Edit Step"}
               </span>
@@ -245,8 +278,6 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
                 <X size={14} />
               </button>
             </div>
-
-            {/* Search (picker modes) */}
             {(panelMode === "trigger-picker" || panelMode === "step-picker") && (
               <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7, borderRadius: 8, border: "1px solid var(--border)", padding: "7px 10px", background: "var(--background)" }}>
@@ -256,15 +287,12 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
                 </div>
               </div>
             )}
-
             <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
-              {/* Trigger picker */}
               {panelMode === "trigger-picker" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                   {TRIGGER_CATS.map((cat) => {
                     const items = Object.entries(TRIGGER_DISPLAY).filter(([, m]) =>
-                      m.category === cat && (!search || m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase()))
-                    );
+                      m.category === cat && (!search || m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase())));
                     if (!items.length) return null;
                     return (
                       <div key={cat}>
@@ -279,14 +307,11 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
                   })}
                 </div>
               )}
-
-              {/* Step picker */}
               {panelMode === "step-picker" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                   {STEP_CATS.map((cat) => {
                     const items = Object.entries(STEP_DISPLAY).filter(([, m]) =>
-                      m.category === cat && (!search || m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase()))
-                    );
+                      m.category === cat && (!search || m.label.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase())));
                     if (!items.length) return null;
                     return (
                       <div key={cat}>
@@ -301,11 +326,8 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
                   })}
                 </div>
               )}
-
-              {/* Step editor */}
               {panelMode === "step-editor" && activeStep && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  {/* Step editor header */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, padding: "10px 12px", borderRadius: 10, background: `${catColor(STEP_DISPLAY[activeStep.type]?.category ?? "")}10`, border: `1px solid ${catColor(STEP_DISPLAY[activeStep.type]?.category ?? "")}25` }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ width: 28, height: 28, borderRadius: 7, background: `${catColor(STEP_DISPLAY[activeStep.type]?.category ?? "")}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -328,18 +350,24 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields 
           </div>
         )}
       </div>
+
+      {/* Tool hint */}
+      <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.6)", color: "white", fontSize: 11, padding: "4px 10px", borderRadius: 6, pointerEvents: "none" }}>
+        {tool === "hand" ? "Pan mode — click & drag to move canvas · Press V to switch to select" : "Select mode · Press H to pan"}
+      </div>
     </div>
   );
 }
 
 /* ── Sub-components ── */
 
-function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onRemove }: {
+function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onRemove, disabled }: {
   triggerMeta: typeof TRIGGER_DISPLAY[TriggerType] | null;
   triggerType: TriggerType | "";
   onClickEmpty: () => void;
   onEdit: () => void;
   onRemove: () => void;
+  disabled?: boolean;
 }) {
   const [hov, setHov] = useState(false);
   if (triggerType && triggerMeta) {
@@ -354,29 +382,31 @@ function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onRemove 
             <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{triggerMeta.label}</div>
             <div style={{ fontSize: 11, color: "#6B7280", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{triggerMeta.description}</div>
           </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #E5E7EB", background: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7280" }}>
-              <Edit3 size={11} />
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #FECACA", background: "#FEF2F2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444" }}>
-              <X size={11} />
-            </button>
-          </div>
+          {!disabled && (
+            <div style={{ display: "flex", gap: 4 }}>
+              <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #E5E7EB", background: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7280" }}>
+                <Edit3 size={11} />
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
+                style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #FECACA", background: "#FEF2F2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444" }}>
+                <X size={11} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
   return (
-    <button onClick={onClickEmpty}
+    <button onClick={disabled ? undefined : onClickEmpty}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ width: "100%", borderRadius: 10, border: `2px dashed ${hov ? "#3B82F6" : "#CBD5E1"}`, background: hov ? "#EFF6FF" : "white", padding: "14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, transition: "all 0.15s" }}>
-      <div style={{ width: 36, height: 36, borderRadius: 9, background: hov ? "#DBEAFE" : "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <Zap size={16} style={{ color: hov ? "#3B82F6" : "#94A3B8" }} />
+      style={{ width: "100%", borderRadius: 10, border: `2px dashed ${hov && !disabled ? "#3B82F6" : "#CBD5E1"}`, background: hov && !disabled ? "#EFF6FF" : "white", padding: "14px", cursor: disabled ? "default" : "pointer", display: "flex", alignItems: "center", gap: 12, transition: "all 0.15s" }}>
+      <div style={{ width: 36, height: 36, borderRadius: 9, background: hov && !disabled ? "#DBEAFE" : "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Zap size={16} style={{ color: hov && !disabled ? "#3B82F6" : "#94A3B8" }} />
       </div>
       <div style={{ textAlign: "left" }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: hov ? "#3B82F6" : "#374151" }}>Add a Trigger</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: hov && !disabled ? "#3B82F6" : "#374151" }}>Add a Trigger</div>
         <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>Choose what starts this workflow</div>
       </div>
       <ChevronRight size={14} style={{ color: "#9CA3AF", marginLeft: "auto" }} />
@@ -407,7 +437,6 @@ function StepCard({ step, meta, color, isActive, onClick, onDelete }: {
           </button>
         )}
       </div>
-      {/* Step summary */}
       {step.type === STEP_TYPES.WAIT && step.waitAmount && (
         <div style={{ marginTop: 5, fontSize: 11, color: "#6B7280", paddingLeft: 40 }}>Wait {step.waitAmount} {step.waitUnit}</div>
       )}
@@ -452,7 +481,6 @@ function PickerItem({ icon, iconColor, label, desc, onClick }: { icon: string; i
 }
 
 /* ── Step Editor ── */
-
 function StepEditor({ step, onChange, tags, pipelines, customFields }: {
   step: WorkflowStep; onChange: (s: WorkflowStep) => void;
   tags: Tag[]; pipelines: Pipeline[]; customFields: CustomField[];
@@ -461,10 +489,7 @@ function StepEditor({ step, onChange, tags, pipelines, customFields }: {
   const inp: React.CSSProperties = { width: "100%", borderRadius: 8, border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)", padding: "7px 10px", fontSize: 12, outline: "none", boxSizing: "border-box" };
   const lbl: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" };
   const wrap: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 14 };
-  function F({ label, children }: { label: string; children: React.ReactNode }) {
-    return <div><label style={lbl}>{label}</label>{children}</div>;
-  }
-
+  function F({ label, children }: { label: string; children: React.ReactNode }) { return <div><label style={lbl}>{label}</label>{children}</div>; }
   const LabelField = <F label="Step label"><input value={step.label ?? ""} onChange={(e) => patch({ label: e.target.value })} style={inp} placeholder="Label this step…" /></F>;
 
   switch (step.type) {
@@ -472,17 +497,14 @@ function StepEditor({ step, onChange, tags, pipelines, customFields }: {
       <div style={wrap}>
         {LabelField}
         <F label="Subject"><input value={step.emailSubject ?? ""} onChange={(e) => patch({ emailSubject: e.target.value })} style={inp} placeholder="Subject line…" /></F>
-        <F label="Body (HTML)">
-          <textarea value={step.emailBody ?? ""} onChange={(e) => patch({ emailBody: e.target.value })} rows={8} style={{ ...inp, resize: "vertical" }} placeholder={"<p>Hi {{firstName}},</p>"} />
-        </F>
-        <p style={{ fontSize: 10, color: "var(--muted)", margin: 0 }}>Available vars: {"{{firstName}} {{companyName}} {{email}} {{senderName}}"}</p>
+        <F label="Body (HTML)"><textarea value={step.emailBody ?? ""} onChange={(e) => patch({ emailBody: e.target.value })} rows={8} style={{ ...inp, resize: "vertical" }} placeholder={"<p>Hi {{firstName}},</p>"} /></F>
+        <p style={{ fontSize: 10, color: "var(--muted)", margin: 0 }}>{"{{firstName}} {{companyName}} {{email}} {{senderName}}"}</p>
       </div>
     );
     case STEP_TYPES.SEND_SMS: return (
       <div style={wrap}>
         {LabelField}
         <F label="Message"><textarea value={step.smsBody ?? ""} onChange={(e) => patch({ smsBody: e.target.value })} rows={5} style={{ ...inp, resize: "vertical" }} placeholder={"Hi {{firstName}}…"} /></F>
-        <p style={{ fontSize: 10, color: "var(--muted)", margin: 0 }}>Requires SENDBLUE_API_KEY in environment variables.</p>
       </div>
     );
     case STEP_TYPES.WAIT: return (
@@ -491,9 +513,7 @@ function StepEditor({ step, onChange, tags, pipelines, customFields }: {
           <div style={{ display: "flex", gap: 8 }}>
             <input type="number" min={1} value={step.waitAmount ?? 1} onChange={(e) => patch({ waitAmount: Number(e.target.value) })} style={{ ...inp, width: 90 }} />
             <select value={step.waitUnit ?? "days"} onChange={(e) => patch({ waitUnit: e.target.value as "minutes" | "hours" | "days" })} style={{ ...inp, flex: 1 }}>
-              <option value="minutes">Minutes</option>
-              <option value="hours">Hours</option>
-              <option value="days">Days</option>
+              <option value="minutes">Minutes</option><option value="hours">Hours</option><option value="days">Days</option>
             </select>
           </div>
         </F>
@@ -512,20 +532,11 @@ function StepEditor({ step, onChange, tags, pipelines, customFields }: {
     );
     case STEP_TYPES.UPDATE_CONTACT_FIELD: return (
       <div style={wrap}>
-        <F label="Custom field">
-          <select value={step.fieldId ?? ""} onChange={(e) => patch({ fieldId: e.target.value })} style={inp}>
-            <option value="">Select field…</option>
-            {customFields.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
-        </F>
+        <F label="Custom field"><select value={step.fieldId ?? ""} onChange={(e) => patch({ fieldId: e.target.value })} style={inp}><option value="">Select field…</option>{customFields.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></F>
         <F label="New value"><input value={step.fieldValue ?? ""} onChange={(e) => patch({ fieldValue: e.target.value })} style={inp} placeholder="Value (supports merge vars)" /></F>
       </div>
     );
-    case STEP_TYPES.ADD_NOTE: return (
-      <div style={wrap}>
-        <F label="Note content"><textarea value={step.noteContent ?? ""} onChange={(e) => patch({ noteContent: e.target.value })} rows={5} style={{ ...inp, resize: "vertical" }} /></F>
-      </div>
-    );
+    case STEP_TYPES.ADD_NOTE: return <div style={wrap}><F label="Note content"><textarea value={step.noteContent ?? ""} onChange={(e) => patch({ noteContent: e.target.value })} rows={5} style={{ ...inp, resize: "vertical" }} /></F></div>;
     case STEP_TYPES.ADD_TASK: return (
       <div style={wrap}>
         <F label="Task title"><input value={step.taskTitle ?? ""} onChange={(e) => patch({ taskTitle: e.target.value })} style={inp} placeholder={"Follow up with {{companyName}}"} /></F>
@@ -533,35 +544,14 @@ function StepEditor({ step, onChange, tags, pipelines, customFields }: {
       </div>
     );
     case STEP_TYPES.UPDATE_STAGE: return (
-      <div style={wrap}>
-        <F label="New outreach stage">
-          <select value={step.newStage ?? ""} onChange={(e) => patch({ newStage: e.target.value })} style={inp}>
-            <option value="">Select stage…</option>
-            {["RESEARCHING","CONTACTED","FOLLOWED_UP","NEGOTIATING","APPROVED","REJECTED","ONBOARDED"].map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </F>
-      </div>
+      <div style={wrap}><F label="New outreach stage"><select value={step.newStage ?? ""} onChange={(e) => patch({ newStage: e.target.value })} style={inp}><option value="">Select stage…</option>{["RESEARCHING","CONTACTED","FOLLOWED_UP","NEGOTIATING","APPROVED","REJECTED","ONBOARDED"].map((s) => <option key={s} value={s}>{s}</option>)}</select></F></div>
     );
     case STEP_TYPES.CREATE_OPPORTUNITY:
     case STEP_TYPES.MOVE_OPPORTUNITY: return (
       <div style={wrap}>
-        <F label="Pipeline">
-          <select value={step.pipelineId ?? ""} onChange={(e) => patch({ pipelineId: e.target.value, stageId: "" })} style={inp}>
-            <option value="">Select pipeline…</option>
-            {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </F>
-        {step.pipelineId && (
-          <F label="Stage">
-            <select value={step.stageId ?? ""} onChange={(e) => patch({ stageId: e.target.value })} style={inp}>
-              <option value="">Select stage…</option>
-              {pipelines.find((p) => p.id === step.pipelineId)?.stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </F>
-        )}
-        {step.type === STEP_TYPES.CREATE_OPPORTUNITY && (
-          <F label="Opportunity name"><input value={step.opportunityName ?? ""} onChange={(e) => patch({ opportunityName: e.target.value })} style={inp} placeholder={"{{companyName}} – Deal"} /></F>
-        )}
+        <F label="Pipeline"><select value={step.pipelineId ?? ""} onChange={(e) => patch({ pipelineId: e.target.value, stageId: "" })} style={inp}><option value="">Select pipeline…</option>{pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></F>
+        {step.pipelineId && <F label="Stage"><select value={step.stageId ?? ""} onChange={(e) => patch({ stageId: e.target.value })} style={inp}><option value="">Select stage…</option>{pipelines.find((p) => p.id === step.pipelineId)?.stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></F>}
+        {step.type === STEP_TYPES.CREATE_OPPORTUNITY && <F label="Opportunity name"><input value={step.opportunityName ?? ""} onChange={(e) => patch({ opportunityName: e.target.value })} style={inp} placeholder={"{{companyName}} – Deal"} /></F>}
       </div>
     );
     case STEP_TYPES.SEND_INTERNAL_NOTIFY: return (
@@ -574,21 +564,13 @@ function StepEditor({ step, onChange, tags, pipelines, customFields }: {
     case STEP_TYPES.WEBHOOK: return (
       <div style={wrap}>
         <F label="URL"><input value={step.webhookUrl ?? ""} onChange={(e) => patch({ webhookUrl: e.target.value })} style={inp} placeholder="https://…" /></F>
-        <F label="Method">
-          <select value={step.webhookMethod ?? "POST"} onChange={(e) => patch({ webhookMethod: e.target.value as "POST" | "GET" | "PUT" })} style={inp}>
-            <option>POST</option><option>GET</option><option>PUT</option>
-          </select>
-        </F>
-        <F label="Body (JSON)">
-          <textarea value={step.webhookBody ?? ""} onChange={(e) => patch({ webhookBody: e.target.value })} rows={4} style={{ ...inp, fontFamily: "monospace", fontSize: 11, resize: "vertical" }} placeholder={'{"contact": "{{companyName}}"}'} />
-        </F>
+        <F label="Method"><select value={step.webhookMethod ?? "POST"} onChange={(e) => patch({ webhookMethod: e.target.value as "POST" | "GET" | "PUT" })} style={inp}><option>POST</option><option>GET</option><option>PUT</option></select></F>
+        <F label="Body (JSON)"><textarea value={step.webhookBody ?? ""} onChange={(e) => patch({ webhookBody: e.target.value })} rows={4} style={{ ...inp, fontFamily: "monospace", fontSize: 11, resize: "vertical" }} placeholder={'{"contact": "{{companyName}}"}'} /></F>
       </div>
     );
     case STEP_TYPES.AI_ACTION: return (
       <div style={wrap}>
-        <F label="AI prompt">
-          <textarea value={step.aiPrompt ?? ""} onChange={(e) => patch({ aiPrompt: e.target.value })} rows={6} style={{ ...inp, resize: "vertical" }} placeholder={"Write an outreach email for {{companyName}}…"} />
-        </F>
+        <F label="AI prompt"><textarea value={step.aiPrompt ?? ""} onChange={(e) => patch({ aiPrompt: e.target.value })} rows={6} style={{ ...inp, resize: "vertical" }} placeholder={"Write an outreach email for {{companyName}}…"} /></F>
         <p style={{ fontSize: 10, color: "var(--muted)", margin: 0 }}>Output saved as contact note. Requires OPENAI_API_KEY.</p>
       </div>
     );
@@ -597,7 +579,7 @@ function StepEditor({ step, onChange, tags, pipelines, customFields }: {
         <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>Contacts matching ALL conditions go to the Yes branch.</p>
         {(step.conditions ?? []).map((c, i) => (
           <div key={i} style={{ borderRadius: 9, border: "1px solid var(--border)", padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-            <input value={c.field} onChange={(e) => { const cs = [...(step.conditions ?? [])]; cs[i] = { ...cs[i], field: e.target.value }; patch({ conditions: cs }); }} style={inp} placeholder="Field (e.g. stage, email, tag)" />
+            <input value={c.field} onChange={(e) => { const cs = [...(step.conditions ?? [])]; cs[i] = { ...cs[i], field: e.target.value }; patch({ conditions: cs }); }} style={inp} placeholder="Field (stage, email, tag…)" />
             <select value={c.operator} onChange={(e) => { const cs = [...(step.conditions ?? [])]; cs[i] = { ...cs[i], operator: e.target.value as "equals" }; patch({ conditions: cs }); }} style={inp}>
               {["equals","not_equals","contains","not_contains","is_empty","is_not_empty","greater_than","less_than"].map((op) => <option key={op} value={op}>{op}</option>)}
             </select>
@@ -608,8 +590,6 @@ function StepEditor({ step, onChange, tags, pipelines, customFields }: {
         <button onClick={() => patch({ conditions: [...(step.conditions ?? []), { field: "", operator: "equals" as const, value: "" }] })} style={{ fontSize: 12, color: "#3B82F6", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>+ Add condition</button>
       </div>
     );
-    default: return (
-      <div style={wrap}>{LabelField}</div>
-    );
+    default: return <div style={wrap}>{LabelField}</div>;
   }
 }

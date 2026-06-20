@@ -15,13 +15,7 @@ export default async function EmailTemplatesPage() {
   } catch { /* table not yet migrated */ }
 
   return (
-    <main className="flex flex-1 flex-col gap-6 p-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">Email Templates</h1>
-        <p className="mt-0.5 text-sm text-[var(--muted)]">
-          Reusable templates for your outreach campaigns and sequences.
-        </p>
-      </div>
+    <main className="flex flex-1 flex-col p-8 overflow-y-auto">
       <EmailTemplatesTab templates={templates} />
     </main>
   );
