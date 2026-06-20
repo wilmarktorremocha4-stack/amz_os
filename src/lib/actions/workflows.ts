@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { WorkflowStep, TriggerType, TriggerConfig } from "@/lib/workflow-types";
@@ -60,4 +61,22 @@ export async function manuallyEnroll(workflowId: string, supplierIds: string[]) 
     });
   }
   revalidatePath(`/automations/${workflowId}`);
+}
+
+export async function createDefaultWorkflow() {
+  "use server";
+  const user = await getCurrentUser();
+  const workflow = await prisma.workflow.create({
+    data: {
+      userId: user.id,
+      name: `New Workflow : ${Date.now()}`,
+      triggerType: "",
+      triggerConfig: {},
+      steps: [],
+      nodes: [],
+      edges: [],
+      status: "draft",
+    },
+  });
+  redirect(`/automations/${workflow.id}`);
 }
