@@ -35,10 +35,24 @@ export async function updateWorkflow(workflowId: string, data: { name?: string; 
   return workflow;
 }
 
-export async function deleteWorkflow(workflowId: string) {
+export async function archiveWorkflow(workflowId: string) {
+  const user = await getCurrentUser();
+  await prisma.workflow.update({ where: { id: workflowId, userId: user.id }, data: { archived: true } });
+  revalidatePath("/automations");
+  revalidatePath("/archive");
+}
+
+export async function restoreWorkflow(workflowId: string) {
+  const user = await getCurrentUser();
+  await prisma.workflow.update({ where: { id: workflowId, userId: user.id }, data: { archived: false } });
+  revalidatePath("/automations");
+  revalidatePath("/archive");
+}
+
+export async function deleteWorkflowPermanently(workflowId: string) {
   const user = await getCurrentUser();
   await prisma.workflow.delete({ where: { id: workflowId, userId: user.id } });
-  revalidatePath("/automations");
+  revalidatePath("/archive");
 }
 
 export async function toggleWorkflowStatus(workflowId: string) {

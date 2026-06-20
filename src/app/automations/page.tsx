@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function AutomationsPage() {
   const user = await getCurrentUser();
   const workflows = await prisma.workflow.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, archived: false },
     include: { _count: { select: { enrollments: true } } },
     orderBy: { updatedAt: "desc" },
   });

@@ -6,7 +6,7 @@ import {
   Search, FolderPlus, Plus, ChevronDown, MoreHorizontal, Folder,
   Zap, Trash2, Edit, Copy,
 } from "lucide-react";
-import { createDefaultWorkflow, deleteWorkflow } from "@/lib/actions/workflows";
+import { createDefaultWorkflow, archiveWorkflow } from "@/lib/actions/workflows";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
 type Workflow = {
@@ -47,7 +47,7 @@ export function AutomationsListClient({ workflows }: Props) {
 
   function handleDelete(id: string) {
     startTransition(async () => {
-      await deleteWorkflow(id);
+      await archiveWorkflow(id);
     });
     setDeleteConfirmId(null);
     setMenuOpenId(null);
@@ -251,7 +251,7 @@ export function AutomationsListClient({ workflows }: Props) {
     {deleteConfirmId && (
       <DeleteConfirmModal
         title={`Delete "${workflows.find((w) => w.id === deleteConfirmId)?.name ?? "workflow"}"?`}
-        description="This workflow and all its enrollment history will be permanently deleted."
+        description="This workflow will be moved to the archive. You can restore it later."
         onConfirm={() => handleDelete(deleteConfirmId)}
         onCancel={() => setDeleteConfirmId(null)}
       />

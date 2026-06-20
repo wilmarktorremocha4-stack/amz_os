@@ -9,9 +9,11 @@ import {
   Receipt,
   Truck,
   RotateCcw,
+  ScanBarcode,
 } from "lucide-react";
 
 const calculators = [
+  { href: "/calculators/asin-lookup", name: "ASIN FBA Calculator", icon: ScanBarcode, highlight: true },
   { href: "/calculators/roi", name: "ROI Calculator", icon: Percent },
   { href: "/calculators/margin", name: "Margin Calculator", icon: Scale },
   {
@@ -68,7 +70,7 @@ export default function CalculatorsPage() {
           <Link
             key={calc.href}
             href={calc.href}
-            className="card card-glow group relative flex items-center gap-4 p-5 transition-all hover:border-[var(--accent)] hover:shadow-lg hover:shadow-blue-500/10"
+            className={`card card-glow group relative flex items-center gap-4 p-5 transition-all hover:border-[var(--accent)] hover:shadow-lg hover:shadow-blue-500/10 ${"highlight" in calc && calc.highlight ? "border-blue-500/30 bg-blue-50/30 dark:bg-blue-950/10" : ""}`}
           >
             <div className="relative z-10 rounded-lg bg-[var(--accent-soft)] p-2.5 text-[var(--accent)] transition-transform group-hover:scale-110">
               <calc.icon size={20} />
