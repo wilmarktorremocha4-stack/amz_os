@@ -17,49 +17,36 @@ export async function createWorkflow(data: { name: string; description?: string;
 
 export async function updateWorkflow(workflowId: string, data: { name?: string; description?: string; triggerType?: TriggerType; triggerConfig?: TriggerConfig; steps?: WorkflowStep[]; nodes?: unknown[]; edges?: unknown[]; status?: "draft" | "active" | "paused"; builderMode?: string }) {
   const user = await getCurrentUser();
+  const authorName = (user.firstName ? `${user.firstName} ${user.lastName ?? ""}`.trim() : user.email) ?? "Team member";
 
-  if (data.steps) {
+  // Save current state as a version snapshot before overwriting steps
+  if (data.steps !== undefined) {
     const current = await prisma.workflow.findUnique({ where: { id: workflowId }, select: { steps: true, nodes: true, edges: true } });
     if (current) {
       await prisma.workflowVersion.create({
-        data: { workflowId, steps: current.steps as never, nodes: current.nodes as never, edges: current.edges as never, savedBy: (user.firstName ? `${user.firstName} ${user.lastName ?? ""}`.trim() : user.email) ?? "Team member" },
-      });
-      const old = await prisma.workflowVersion.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, skip: 20, select: { id: true } });
-      if (old.length) await prisma.workflowVersion.deleteMany({ where: { id: { in: old.map((v) => v.id) } } });
+        data: { workflowId, steps: current.steps as never, nodes: current.nodes as never, edges: current.edges as never, savedBy: authorName },
+      }).catch(() => {});
+      const old = await prisma.workflowVersion.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, skip: 20, select: { id: true } }).catch(() => []);
+      if (old.length) await prisma.workflowVersion.deleteMany({ where: { id: { in: old.map((v) => v.id) } } }).catch(() => {});
     }
   }
 
+  const updateData: Record<string, unknown> = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.triggerType !== undefined) updateData.triggerType = data.triggerType;
+  if (data.triggerConfig !== undefined) updateData.triggerConfig = data.triggerConfig;
+  if (data.steps !== undefined) updateData.steps = data.steps;
+  if (data.nodes !== undefined) updateData.nodes = data.nodes;
+  if (data.edges !== undefined) updateData.edges = data.edges;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.builderMode !== undefined) updateData.builderMode = data.builderMode;
+
   const workflow = await prisma.workflow.update({
     where: { id: workflowId, userId: user.id },
-    data: {
-      ...(data.name !== undefined && { name: data.name }),
-      ...(data.description !== undefined && { description: data.description }),
-      ...(data.triggerType !== undefined && { triggerType: data.triggerType }),
-      ...(data.triggerConfig !== undefined && { triggerConfig: data.triggerConfig as never }),
-      ...(data.steps !== undefined && { steps: data.steps as never }),
-      ...(data.nodes !== undefined && { nodes: data.nodes as never }),
-      ...(data.edges !== undefined && { edges: data.edges as never }),
-      ...(data.status !== undefined && { status: data.status }),
-      ...(data.builderMode !== undefined && { builderMode: data.builderMode }),
-    },
+    data: updateData as never,
   });
-  // Create a version snapshot when steps are updated, keep only last 20
-  if (data.steps !== undefined) {
-    await prisma.workflowVersion.create({
-      data: {
-        workflowId,
-        steps: data.steps as never,
-        nodes: (data.nodes ?? workflow.nodes) as never,
-        edges: (data.edges ?? workflow.edges) as never,
-        savedBy: user.name ?? user.email,
-      },
-    });
-    const versions = await prisma.workflowVersion.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, select: { id: true } });
-    if (versions.length > 20) {
-      const toDelete = versions.slice(20).map((v) => v.id);
-      await prisma.workflowVersion.deleteMany({ where: { id: { in: toDelete } } });
-    }
-  }
+
   revalidatePath("/automations");
   revalidatePath(`/automations/${workflowId}`);
   return workflow;
@@ -110,7 +97,7 @@ export async function manuallyEnroll(workflowId: string, supplierIds: string[]) 
 export async function getWorkflowExecutionLogs(workflowId: string) {
   const user = await getCurrentUser();
   await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
-  return prisma.workflowExecutionLog.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, take: 200 });
+  return prisma.workflowExecutionLog.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, take: 200 }).catch(() => []);
 }
 
 export async function getWorkflowEnrollments(workflowId: string) {
@@ -135,14 +122,15 @@ export async function removeEnrollment(enrollmentId: string) {
 export async function getWorkflowNotes(workflowId: string) {
   const user = await getCurrentUser();
   await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
-  return prisma.workflowNote.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" } });
+  return prisma.workflowNote.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" } }).catch(() => []);
 }
 
 export async function addWorkflowNote(workflowId: string, content: string) {
   const user = await getCurrentUser();
   await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
+  const authorName = (user.firstName ? `${user.firstName} ${user.lastName ?? ""}`.trim() : user.email) ?? "Team member";
   const note = await prisma.workflowNote.create({
-    data: { workflowId, content, authorId: user.id, authorName: user.name ?? user.email },
+    data: { workflowId, content, authorId: user.id, authorName },
   });
   revalidatePath(`/automations/${workflowId}`);
   return note;
@@ -151,12 +139,12 @@ export async function addWorkflowNote(workflowId: string, content: string) {
 export async function getWorkflowVersions(workflowId: string) {
   const user = await getCurrentUser();
   await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
-  return prisma.workflowVersion.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, take: 20 });
+  return prisma.workflowVersion.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, take: 20 }).catch(() => []);
 }
 
 export async function restoreWorkflowVersion(versionId: string) {
   const user = await getCurrentUser();
-  const version = await prisma.workflowVersion.findFirst({ where: { id: versionId }, include: { workflow: true } });
+  const version = await prisma.workflowVersion.findFirst({ where: { id: versionId }, include: { workflow: true } }).catch(() => null);
   if (!version || version.workflow.userId !== user.id) return;
   await prisma.workflow.update({
     where: { id: version.workflowId },
