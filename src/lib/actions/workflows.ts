@@ -44,6 +44,23 @@ export async function updateWorkflow(workflowId: string, data: { name?: string; 
       ...(data.builderMode !== undefined && { builderMode: data.builderMode }),
     },
   });
+  // Create a version snapshot when steps are updated, keep only last 20
+  if (data.steps !== undefined) {
+    await prisma.workflowVersion.create({
+      data: {
+        workflowId,
+        steps: data.steps as never,
+        nodes: (data.nodes ?? workflow.nodes) as never,
+        edges: (data.edges ?? workflow.edges) as never,
+        savedBy: user.name ?? user.email,
+      },
+    });
+    const versions = await prisma.workflowVersion.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, select: { id: true } });
+    if (versions.length > 20) {
+      const toDelete = versions.slice(20).map((v) => v.id);
+      await prisma.workflowVersion.deleteMany({ where: { id: { in: toDelete } } });
+    }
+  }
   revalidatePath("/automations");
   revalidatePath(`/automations/${workflowId}`);
   return workflow;
@@ -89,6 +106,86 @@ export async function manuallyEnroll(workflowId: string, supplierIds: string[]) 
     });
   }
   revalidatePath(`/automations/${workflowId}`);
+}
+
+export async function getWorkflowExecutionLogs(workflowId: string) {
+  const user = await getCurrentUser();
+  await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
+  return prisma.workflowExecutionLog.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, take: 200 });
+}
+
+export async function getWorkflowEnrollments(workflowId: string) {
+  const user = await getCurrentUser();
+  await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
+  return prisma.workflowEnrollment.findMany({
+    where: { workflowId },
+    include: { supplier: { select: { id: true, companyName: true, email: true, stage: true } } },
+    orderBy: { startedAt: "desc" },
+    take: 200,
+  });
+}
+
+export async function removeEnrollment(enrollmentId: string) {
+  const user = await getCurrentUser();
+  const enrollment = await prisma.workflowEnrollment.findFirst({ where: { id: enrollmentId }, include: { workflow: true } });
+  if (!enrollment || enrollment.workflow.userId !== user.id) return;
+  await prisma.workflowEnrollment.delete({ where: { id: enrollmentId } });
+  revalidatePath(`/automations/${enrollment.workflowId}`);
+}
+
+export async function getWorkflowNotes(workflowId: string) {
+  const user = await getCurrentUser();
+  await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
+  return prisma.workflowNote.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" } });
+}
+
+export async function addWorkflowNote(workflowId: string, content: string) {
+  const user = await getCurrentUser();
+  await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
+  const note = await prisma.workflowNote.create({
+    data: { workflowId, content, authorId: user.id, authorName: user.name ?? user.email },
+  });
+  revalidatePath(`/automations/${workflowId}`);
+  return note;
+}
+
+export async function getWorkflowVersions(workflowId: string) {
+  const user = await getCurrentUser();
+  await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
+  return prisma.workflowVersion.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, take: 20 });
+}
+
+export async function restoreWorkflowVersion(versionId: string) {
+  const user = await getCurrentUser();
+  const version = await prisma.workflowVersion.findFirst({ where: { id: versionId }, include: { workflow: true } });
+  if (!version || version.workflow.userId !== user.id) return;
+  await prisma.workflow.update({
+    where: { id: version.workflowId },
+    data: { steps: version.steps as never, nodes: version.nodes as never, edges: version.edges as never },
+  });
+  revalidatePath(`/automations/${version.workflowId}`);
+}
+
+export async function testWorkflowStep(workflowId: string, supplierId: string) {
+  const user = await getCurrentUser();
+  const wf = await prisma.workflow.findFirst({ where: { id: workflowId, userId: user.id } });
+  if (!wf) return { error: "Workflow not found" };
+  const enrollment = await prisma.workflowEnrollment.upsert({
+    where: { workflowId_supplierId: { workflowId, supplierId } },
+    create: { workflowId, supplierId, status: "active", currentStep: 0, nextRunAt: new Date() },
+    update: { status: "active", currentStep: 0, nextRunAt: new Date() },
+  });
+  revalidatePath(`/automations/${workflowId}`);
+  return { enrollmentId: enrollment.id };
+}
+
+export async function listWorkflowsForPicker(excludeWorkflowId?: string) {
+  const user = await getCurrentUser();
+  return prisma.workflow.findMany({
+    where: { userId: user.id, archived: false, ...(excludeWorkflowId ? { id: { not: excludeWorkflowId } } : {}) },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 }
 
 export async function createDefaultWorkflow() {

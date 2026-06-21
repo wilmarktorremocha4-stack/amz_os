@@ -21,6 +21,8 @@ export const TRIGGER_TYPES = {
   BRAND_CREATED:              "brand.created",
   INBOUND_WEBHOOK:            "system.webhook",
   SCHEDULER:                  "system.scheduler",
+  CONTACT_REPLIED:            "email.replied",
+  WORKFLOW_COMPLETED:         "workflow.completed",
 } as const;
 
 export type TriggerType = typeof TRIGGER_TYPES[keyof typeof TRIGGER_TYPES];
@@ -115,6 +117,7 @@ export interface WorkflowStep {
   trueBranch?: WorkflowStep[];
   falseBranch?: WorkflowStep[];
   goToStepId?: string;
+  targetWorkflowId?: string;
   webhookUrl?: string;
   webhookMethod?: "POST" | "GET" | "PUT";
   webhookBody?: string;
@@ -123,7 +126,7 @@ export interface WorkflowStep {
   targetWorkflowId?: string;
 }
 
-export const TRIGGER_DISPLAY: Record<TriggerType, { label: string; category: string; description: string; icon: string }> = {
+export const TRIGGER_DISPLAY: Record<TriggerType, { label: string; category: string; description: string; icon: string; beta?: boolean }> = {
   "contact.created":              { label: "Contact Created",           category: "Contact",   description: "Fires when a new contact is added",                  icon: "UserPlus" },
   "contact.updated":              { label: "Contact Updated",            category: "Contact",   description: "Fires when any contact field changes",               icon: "UserCog" },
   "contact.tag_added":            { label: "Tag Added",                  category: "Contact",   description: "Fires when a specific tag is added",                 icon: "Tag" },
@@ -146,6 +149,8 @@ export const TRIGGER_DISPLAY: Record<TriggerType, { label: string; category: str
   "brand.created":                { label: "Brand Created",              category: "Sourcing",  description: "Fires when a new brand is added",                    icon: "Store" },
   "system.webhook":               { label: "Inbound Webhook",            category: "System",    description: "Fires when data is received at your webhook URL",    icon: "Globe" },
   "system.scheduler":             { label: "Time-Based Scheduler",       category: "System",    description: "Fires on a recurring schedule",                      icon: "Calendar" },
+  "email.replied":                { label: "Contact Replied",            category: "Email",     description: "Fires when a contact replies to an email",           icon: "Reply",   beta: true },
+  "workflow.completed":           { label: "Workflow Completed",         category: "System",    description: "Fires when another workflow finishes for this contact", icon: "CheckCircle", beta: true },
 };
 
 export const STEP_DISPLAY: Record<StepType, { label: string; category: string; description: string; icon: string; color: string }> = {

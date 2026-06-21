@@ -33,6 +33,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number; style?: Reac
   CornerDownRight, StopCircle, UserX, Globe, Sparkles, X,
   UserPlus, Send, MousePointer, AlertCircle, UserMinus,
   BadgeCheck, Store, ArrowRightCircle, CheckCircle2,
+  Share2, Reply, CheckCircle: CheckCircle2, Webhook,
 };
 function Icon({ name, size = 14, style }: { name: string; size?: number; style?: React.CSSProperties }) {
   const C = ICON_MAP[name] ?? Zap;
@@ -197,6 +198,11 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
     } finally { setTestRunning(false); }
   }
 
+  function handleTriggerConfigChange(cfg: TriggerConfig) {
+    setTriggerConfig(cfg);
+    scheduleAutoSave({ triggerConfig: cfg });
+  }
+
   // Pan handlers
   function onMouseDown(e: React.MouseEvent) {
     if (tool !== "hand") return;
@@ -215,7 +221,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", background: "var(--background)" }}>
-      {/* ── Top bar ── */}
+      {/* Top bar */}
       <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 16px", height: 50, gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
           <Link href="/automations" style={{ fontSize: 12, color: "var(--muted)", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
@@ -262,7 +268,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
             style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: saveOk ? "#10B981" : "var(--muted)", background: "transparent", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
             <Save size={12} /> {saving ? "Saving…" : saveOk ? "Saved!" : "Save"}
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4, borderLeft: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4, borderLeft: "1px solid var(--border)" }} title={!canPublish ? "Add steps before publishing" : undefined}>
             <span style={{ fontSize: 12, color: status !== "active" ? "var(--foreground)" : "var(--muted)", fontWeight: status !== "active" ? 600 : 400 }}>Draft</span>
             <button
               onClick={handlePublishToggle}
@@ -506,9 +512,9 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
   );
 }
 
-/* ── Sub-components ── */
+/* Sub-components */
 
-function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onRemove, disabled }: {
+function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onConfigClick, onRemove, disabled }: {
   triggerMeta: typeof TRIGGER_DISPLAY[TriggerType] | null;
   triggerType: TriggerType | ""; onClickEmpty: () => void; onEdit: () => void; onRemove: () => void; disabled?: boolean;
 }) {
@@ -607,7 +613,7 @@ function NodeConnector({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function PickerItem({ icon, iconColor, label, desc, onClick }: { icon: string; iconColor: string; label: string; desc: string; onClick: () => void }) {
+function PickerItem({ icon, iconColor, label, desc, onClick, beta }: { icon: string; iconColor: string; label: string; desc: string; onClick: () => void; beta?: boolean }) {
   const [hov, setHov] = useState(false);
   return (
     <button onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
@@ -616,7 +622,10 @@ function PickerItem({ icon, iconColor, label, desc, onClick }: { icon: string; i
         <Icon name={icon} size={13} style={{ color: iconColor }} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", lineHeight: 1.3 }}>{label}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", lineHeight: 1.3, display: "flex", alignItems: "center", gap: 6 }}>
+          {label}
+          {beta && <span style={{ fontSize: 9, fontWeight: 700, background: "#8B5CF620", color: "#8B5CF6", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.05em" }}>BETA</span>}
+        </div>
         <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{desc}</div>
       </div>
       <ChevronRight size={12} style={{ color: "#CBD5E1", flexShrink: 0 }} />
@@ -742,6 +751,17 @@ function StepEditor({ step, onChange, tags, pipelines, customFields, otherWorkfl
           </div>
         ))}
         <button onClick={() => patch({ conditions: [...(step.conditions ?? []), { field: "", operator: "equals" as const, value: "" }] })} style={{ fontSize: 12, color: "#3B82F6", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>+ Add condition</button>
+      </div>
+    );
+    case STEP_TYPES.ENROLL_IN_WORKFLOW: return (
+      <div style={wrap}>
+        {LabelField}
+        <F label="Target workflow">
+          <select value={step.targetWorkflowId ?? ""} onChange={(e) => patch({ targetWorkflowId: e.target.value })} style={inp}>
+            <option value="">Select workflow…</option>
+            {otherWorkflows.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        </F>
       </div>
     );
     default: return <div style={wrap}>{LabelField}</div>;

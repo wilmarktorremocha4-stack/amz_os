@@ -510,6 +510,7 @@ model Workflow {
   enrollCount   Int      @default(0)
   builderMode   String   @default("standard")
   archived      Boolean  @default(false)
+  builderMode   String   @default("standard")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   enrollments   WorkflowEnrollment[]
