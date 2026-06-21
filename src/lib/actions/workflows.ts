@@ -17,19 +17,6 @@ export async function createWorkflow(data: { name: string; description?: string;
 
 export async function updateWorkflow(workflowId: string, data: { name?: string; description?: string; triggerType?: TriggerType; triggerConfig?: TriggerConfig; steps?: WorkflowStep[]; nodes?: unknown[]; edges?: unknown[]; status?: "draft" | "active" | "paused" }) {
   const user = await getCurrentUser();
-  const authorName = (user.firstName ? `${user.firstName} ${user.lastName ?? ""}`.trim() : user.email) ?? "Team member";
-
-  // Save current state as a version snapshot before overwriting steps
-  if (data.steps !== undefined) {
-    const current = await prisma.workflow.findUnique({ where: { id: workflowId }, select: { steps: true, nodes: true, edges: true } });
-    if (current) {
-      await prisma.workflowVersion.create({
-        data: { workflowId, steps: current.steps as never, nodes: current.nodes as never, edges: current.edges as never, savedBy: authorName },
-      }).catch(() => {});
-      const old = await prisma.workflowVersion.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, skip: 20, select: { id: true } }).catch(() => []);
-      if (old.length) await prisma.workflowVersion.deleteMany({ where: { id: { in: old.map((v) => v.id) } } }).catch(() => {});
-    }
-  }
 
   const updateData: Record<string, unknown> = {};
   if (data.name !== undefined) updateData.name = data.name;
@@ -93,10 +80,8 @@ export async function manuallyEnroll(workflowId: string, supplierIds: string[]) 
   revalidatePath(`/automations/${workflowId}`);
 }
 
-export async function getWorkflowExecutionLogs(workflowId: string) {
-  const user = await getCurrentUser();
-  await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
-  return prisma.workflowExecutionLog.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, take: 200 }).catch(() => []);
+export async function getWorkflowExecutionLogs(_workflowId: string) {
+  return [] as never[];
 }
 
 export async function getWorkflowEnrollments(workflowId: string) {
@@ -118,38 +103,20 @@ export async function removeEnrollment(enrollmentId: string) {
   revalidatePath(`/automations/${enrollment.workflowId}`);
 }
 
-export async function getWorkflowNotes(workflowId: string) {
-  const user = await getCurrentUser();
-  await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
-  return prisma.workflowNote.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" } }).catch(() => []);
+export async function getWorkflowNotes(_workflowId: string) {
+  return [] as never[];
 }
 
-export async function addWorkflowNote(workflowId: string, content: string) {
-  const user = await getCurrentUser();
-  await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
-  const authorName = (user.firstName ? `${user.firstName} ${user.lastName ?? ""}`.trim() : user.email) ?? "Team member";
-  const note = await prisma.workflowNote.create({
-    data: { workflowId, content, authorId: user.id, authorName },
-  });
-  revalidatePath(`/automations/${workflowId}`);
-  return note;
+export async function addWorkflowNote(_workflowId: string, _content: string) {
+  return null;
 }
 
-export async function getWorkflowVersions(workflowId: string) {
-  const user = await getCurrentUser();
-  await prisma.workflow.findFirstOrThrow({ where: { id: workflowId, userId: user.id } });
-  return prisma.workflowVersion.findMany({ where: { workflowId }, orderBy: { createdAt: "desc" }, take: 20 }).catch(() => []);
+export async function getWorkflowVersions(_workflowId: string) {
+  return [] as never[];
 }
 
-export async function restoreWorkflowVersion(versionId: string) {
-  const user = await getCurrentUser();
-  const version = await prisma.workflowVersion.findFirst({ where: { id: versionId }, include: { workflow: true } }).catch(() => null);
-  if (!version || version.workflow.userId !== user.id) return;
-  await prisma.workflow.update({
-    where: { id: version.workflowId },
-    data: { steps: version.steps as never, nodes: version.nodes as never, edges: version.edges as never },
-  });
-  revalidatePath(`/automations/${version.workflowId}`);
+export async function restoreWorkflowVersion(_versionId: string) {
+  return;
 }
 
 export async function testWorkflowStep(workflowId: string, supplierId: string) {

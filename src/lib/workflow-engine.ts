@@ -84,9 +84,6 @@ async function processEnrollmentStep(enrollment: EnrollmentWithIncludes) {
   };
   const render = (t: string) => t.replace(/\{\{(\w+)\}\}/g, (_, k) => mergeVars[k] ?? `{{${k}}}`);
 
-  const _startTime = Date.now();
-  let _logStatus: "success" | "failed" | "skipped" = "success";
-  let _logMessage = "";
   let _logError = "";
 
   try {
@@ -223,7 +220,6 @@ async function processEnrollmentStep(enrollment: EnrollmentWithIncludes) {
       }
     }
 
-    _logMessage = `Executed ${step.type} successfully`;
     const historyEntry = { stepIndex: enrollment.currentStep, stepType: step.type, stepLabel: step.label, executedAt: new Date().toISOString() };
     if (shouldEnd) {
       await prisma.workflowEnrollment.update({ where: { id: enrollment.id }, data: { status: "completed", completedAt: new Date(), nextRunAt: null } });
@@ -231,25 +227,8 @@ async function processEnrollmentStep(enrollment: EnrollmentWithIncludes) {
       await prisma.workflowEnrollment.update({ where: { id: enrollment.id }, data: { currentStep: nextStep, nextRunAt, history: { push: historyEntry } as never } });
     }
   } catch (err) {
-    _logStatus = "failed";
     _logError = err instanceof Error ? err.message : String(err);
     await prisma.workflowEnrollment.update({ where: { id: enrollment.id }, data: { status: "error", errorMessage: _logError, nextRunAt: null } });
-  } finally {
-    await prisma.workflowExecutionLog.create({
-      data: {
-        workflowId: enrollment.workflowId,
-        enrollmentId: enrollment.id,
-        supplierId: supplier.id,
-        supplierName: supplier.companyName,
-        stepId: step.id,
-        stepType: step.type,
-        stepLabel: step.label ?? null,
-        status: _logStatus,
-        message: _logMessage || null,
-        errorDetail: _logError || null,
-        durationMs: Date.now() - _startTime,
-      },
-    }).catch(() => {});
   }
 }
 
