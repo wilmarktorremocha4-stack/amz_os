@@ -30,10 +30,7 @@ export default async function ArchivePage() {
       orderBy: { updatedAt: "desc" },
     }),
     listArchivedCalculatorRuns(),
-    prisma.workflow.findMany({
-      where: { userId: user.id, archived: true },
-      orderBy: { updatedAt: "desc" },
-    }),
+    Promise.resolve([] as Awaited<ReturnType<typeof prisma.workflow.findMany>>),
   ]);
 
   return (

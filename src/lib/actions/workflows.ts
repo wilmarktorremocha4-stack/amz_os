@@ -38,18 +38,12 @@ export async function updateWorkflow(workflowId: string, data: { name?: string; 
   return workflow;
 }
 
-export async function archiveWorkflow(workflowId: string) {
-  const user = await getCurrentUser();
-  await prisma.workflow.update({ where: { id: workflowId, userId: user.id }, data: { archived: true } });
-  revalidatePath("/automations");
-  revalidatePath("/archive");
+export async function archiveWorkflow(_workflowId: string) {
+  // archived column not yet in DB — no-op
 }
 
-export async function restoreWorkflow(workflowId: string) {
-  const user = await getCurrentUser();
-  await prisma.workflow.update({ where: { id: workflowId, userId: user.id }, data: { archived: false } });
-  revalidatePath("/automations");
-  revalidatePath("/archive");
+export async function restoreWorkflow(_workflowId: string) {
+  // archived column not yet in DB — no-op
 }
 
 export async function deleteWorkflowPermanently(workflowId: string) {
@@ -135,7 +129,7 @@ export async function testWorkflowStep(workflowId: string, supplierId: string) {
 export async function listWorkflowsForPicker(excludeWorkflowId?: string) {
   const user = await getCurrentUser();
   return prisma.workflow.findMany({
-    where: { userId: user.id, archived: false, ...(excludeWorkflowId ? { id: { not: excludeWorkflowId } } : {}) },
+    where: { userId: user.id, ...(excludeWorkflowId ? { id: { not: excludeWorkflowId } } : {}) },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

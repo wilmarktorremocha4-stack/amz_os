@@ -14,7 +14,7 @@ export default async function AutomationsPage() {
   try {
     const user = await getCurrentUser();
     const workflows = await prisma.workflow.findMany({
-      where: { userId: user.id, archived: false },
+      where: { userId: user.id },
       include: { _count: { select: { enrollments: true } } },
       orderBy: { updatedAt: "desc" },
     });
