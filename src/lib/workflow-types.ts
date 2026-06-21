@@ -46,6 +46,7 @@ export const STEP_TYPES = {
   REMOVE_FROM_WORKFLOW:    "control.remove",
   WEBHOOK:                 "action.webhook",
   AI_ACTION:               "action.ai",
+  ENROLL_IN_WORKFLOW:      "action.enroll_in_workflow",
 } as const;
 
 export type StepType = typeof STEP_TYPES[keyof typeof STEP_TYPES];
@@ -119,6 +120,7 @@ export interface WorkflowStep {
   webhookBody?: string;
   aiPrompt?: string;
   aiOutputField?: string;
+  targetWorkflowId?: string;
 }
 
 export const TRIGGER_DISPLAY: Record<TriggerType, { label: string; category: string; description: string; icon: string }> = {
@@ -165,6 +167,7 @@ export const STEP_DISPLAY: Record<StepType, { label: string; category: string; d
   "control.go_to":             { label: "Go To",                 category: "Control",       description: "Jump to another step in this workflow",    icon: "CornerDownRight", color: "#64748B" },
   "control.end":               { label: "End Workflow",          category: "Control",       description: "End the workflow for this contact",        icon: "StopCircle",      color: "#EF4444" },
   "control.remove":            { label: "Remove from Workflow",  category: "Control",       description: "Unenroll the contact from this workflow",  icon: "UserX",           color: "#EF4444" },
-  "action.webhook":            { label: "Send Webhook",          category: "External",      description: "POST data to an external URL",             icon: "Globe",           color: "#64748B" },
-  "action.ai":                 { label: "AI Action",             category: "AI",            description: "Run an AI prompt via OpenAI",              icon: "Sparkles",        color: "#8B5CF6" },
+  "action.webhook":              { label: "Send Webhook",          category: "External",      description: "POST data to an external URL",             icon: "Globe",           color: "#64748B" },
+  "action.ai":                   { label: "AI Action",             category: "AI",            description: "Run an AI prompt via OpenAI",              icon: "Sparkles",        color: "#8B5CF6" },
+  "action.enroll_in_workflow":   { label: "Enroll in Workflow",    category: "Control",       description: "Enroll this contact in another workflow",  icon: "GitBranch",       color: "#10B981" },
 };
