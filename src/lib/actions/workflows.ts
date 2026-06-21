@@ -15,7 +15,7 @@ export async function createWorkflow(data: { name: string; description?: string;
   return workflow;
 }
 
-export async function updateWorkflow(workflowId: string, data: { name?: string; description?: string; triggerType?: TriggerType; triggerConfig?: TriggerConfig; steps?: WorkflowStep[]; nodes?: unknown[]; edges?: unknown[]; status?: "draft" | "active" | "paused"; builderMode?: string }) {
+export async function updateWorkflow(workflowId: string, data: { name?: string; description?: string; triggerType?: TriggerType; triggerConfig?: TriggerConfig; steps?: WorkflowStep[]; nodes?: unknown[]; edges?: unknown[]; status?: "draft" | "active" | "paused" }) {
   const user = await getCurrentUser();
   const authorName = (user.firstName ? `${user.firstName} ${user.lastName ?? ""}`.trim() : user.email) ?? "Team member";
 
@@ -40,7 +40,6 @@ export async function updateWorkflow(workflowId: string, data: { name?: string; 
   if (data.nodes !== undefined) updateData.nodes = data.nodes;
   if (data.edges !== undefined) updateData.edges = data.edges;
   if (data.status !== undefined) updateData.status = data.status;
-  if (data.builderMode !== undefined) updateData.builderMode = data.builderMode;
 
   const workflow = await prisma.workflow.update({
     where: { id: workflowId, userId: user.id },

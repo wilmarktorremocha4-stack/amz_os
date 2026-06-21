@@ -42,7 +42,7 @@ function Icon({ name, size = 14, style }: { name: string; size?: number; style?:
 
 type WorkflowData = {
   id: string; name: string; status: string; triggerType: string; triggerConfig: unknown;
-  steps: unknown; description: string | null; builderMode: string;
+  steps: unknown; description: string | null;
 };
 type TagItem = { id: string; name: string; color: string };
 type Pipeline = { id: string; name: string; stages: { id: string; name: string }[] };
@@ -70,7 +70,10 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>((workflow.triggerConfig as TriggerConfig) ?? {});
   const [steps, setSteps] = useState<WorkflowStep[]>(initSteps);
   const [status, setStatus] = useState(workflow.status);
-  const [builderMode, setBuilderMode] = useState(workflow.builderMode ?? "standard");
+  const [builderMode, setBuilderMode] = useState(() => {
+    if (typeof window === "undefined") return "standard";
+    return localStorage.getItem(`wf_mode_${workflow.id}`) ?? "standard";
+  });
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
   const [insertAfterIdx, setInsertAfterIdx] = useState(-1);
@@ -110,7 +113,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
 
   const save = useCallback(async (overrides?: Partial<{
     name: string; triggerType: TriggerType | ""; triggerConfig: TriggerConfig;
-    steps: WorkflowStep[]; status: string; builderMode: string;
+    steps: WorkflowStep[]; status: string;
   }>) => {
     setSaving(true);
     try {
@@ -120,7 +123,6 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
         triggerConfig: overrides?.triggerConfig ?? triggerConfig,
         steps: overrides?.steps ?? steps,
         status: (overrides?.status ?? status) as "draft" | "active" | "paused",
-        builderMode: overrides?.builderMode ?? builderMode,
       });
       setSaveOk(true);
       setTimeout(() => setSaveOk(false), 1500);
@@ -255,7 +257,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
 
         {/* Right actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <select value={builderMode} onChange={(e) => { setBuilderMode(e.target.value); scheduleAutoSave({ builderMode: e.target.value }); }}
+          <select value={builderMode} onChange={(e) => { setBuilderMode(e.target.value); localStorage.setItem(`wf_mode_${workflow.id}`, e.target.value); }}
             style={{ borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: "var(--muted)", background: "var(--surface)", cursor: "pointer" }}>
             <option value="standard">Standard builder</option>
             <option value="advanced">Advanced builder</option>

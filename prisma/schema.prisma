@@ -508,7 +508,6 @@ model Workflow {
   nodes         Json     @default("[]")
   edges         Json     @default("[]")
   enrollCount   Int      @default(0)
-  builderMode   String   @default("standard")
   archived      Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

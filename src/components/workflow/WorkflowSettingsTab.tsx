@@ -25,7 +25,8 @@ export function WorkflowSettingsTab({ workflowId, initialName, initialDescriptio
 
   async function handleSave() {
     setSaving(true);
-    await updateWorkflow(workflowId, { name, description, builderMode });
+    await updateWorkflow(workflowId, { name, description });
+    if (typeof window !== "undefined") localStorage.setItem(`wf_mode_${workflowId}`, builderMode);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);

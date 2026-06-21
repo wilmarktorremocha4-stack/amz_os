@@ -1,6 +1,4 @@
-ALTER TABLE "Workflow" ADD COLUMN "builderMode" TEXT NOT NULL DEFAULT 'standard';
-
-CREATE TABLE "WorkflowExecutionLog" (
+CREATE TABLE IF NOT EXISTS "WorkflowExecutionLog" (
     "id" TEXT NOT NULL,
     "workflowId" TEXT NOT NULL,
     "enrollmentId" TEXT,
