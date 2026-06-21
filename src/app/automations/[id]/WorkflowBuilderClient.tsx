@@ -33,7 +33,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number; style?: Reac
   CornerDownRight, StopCircle, UserX, Globe, Sparkles, X,
   UserPlus, Send, MousePointer, AlertCircle, UserMinus,
   BadgeCheck, Store, ArrowRightCircle, CheckCircle2,
-  Share2, Reply, CheckCircle: CheckCircle2, Webhook,
+  CheckCircle: CheckCircle2,
 };
 function Icon({ name, size = 14, style }: { name: string; size?: number; style?: React.CSSProperties }) {
   const C = ICON_MAP[name] ?? Zap;
@@ -268,7 +268,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
             style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: saveOk ? "#10B981" : "var(--muted)", background: "transparent", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
             <Save size={12} /> {saving ? "Saving…" : saveOk ? "Saved!" : "Save"}
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4, borderLeft: "1px solid var(--border)" }} title={!canPublish ? "Add steps before publishing" : undefined}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4, borderLeft: "1px solid var(--border)" }} title={steps.length === 0 && status !== "active" ? "Add steps before publishing" : undefined}>
             <span style={{ fontSize: 12, color: status !== "active" ? "var(--foreground)" : "var(--muted)", fontWeight: status !== "active" ? 600 : 400 }}>Draft</span>
             <button
               onClick={handlePublishToggle}
@@ -514,7 +514,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
 
 /* Sub-components */
 
-function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onConfigClick, onRemove, disabled }: {
+function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onRemove, disabled }: {
   triggerMeta: typeof TRIGGER_DISPLAY[TriggerType] | null;
   triggerType: TriggerType | ""; onClickEmpty: () => void; onEdit: () => void; onRemove: () => void; disabled?: boolean;
 }) {

@@ -123,7 +123,6 @@ export interface WorkflowStep {
   webhookBody?: string;
   aiPrompt?: string;
   aiOutputField?: string;
-  targetWorkflowId?: string;
 }
 
 export const TRIGGER_DISPLAY: Record<TriggerType, { label: string; category: string; description: string; icon: string; beta?: boolean }> = {
