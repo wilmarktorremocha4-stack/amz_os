@@ -42,7 +42,7 @@ function Icon({ name, size = 14, style }: { name: string; size?: number; style?:
 
 type WorkflowData = {
   id: string; name: string; status: string; triggerType: string; triggerConfig: unknown;
-  steps: unknown; description: string | null;
+  steps: unknown; nodes: unknown; description: string | null;
 };
 type TagItem = { id: string; name: string; color: string };
 type Pipeline = { id: string; name: string; stages: { id: string; name: string }[] };
@@ -53,13 +53,20 @@ type PanelMode = "trigger-picker" | "trigger-config" | "step-picker" | "step-edi
 type SidePanel = "notes" | "versions" | "integrations" | null;
 type Tool = "pointer" | "hand";
 type TestLog = { id: string; stepLabel: string | null; stepType: string | null; status: string; message: string | null; errorDetail: string | null; durationMs: number | null };
+type CanvasNote = { id: string; x: number; y: number; w: number; h: number; content: string; color: string };
 
 const TRIGGER_CATS = ["Contact", "Email", "Pipeline", "Sourcing", "System"] as const;
 const STEP_CATS = ["Communication", "Contact", "Pipeline", "Control", "External", "AI"] as const;
+const NOTE_COLORS = ["#FEF9C3", "#D1FAE5", "#DBEAFE", "#FCE7F3", "#FEE2E2", "#E0E7FF"];
 
 function catColor(cat: string) {
   const m: Record<string, string> = { Communication: "#0E90C8", Contact: "#F59E0B", Pipeline: "#8B5CF6", Control: "#64748B", External: "#10B981", AI: "#EC4899" };
   return m[cat] ?? "#64748B";
+}
+
+function parseCanvasNotes(nodes: unknown): CanvasNote[] {
+  if (!Array.isArray(nodes)) return [];
+  return nodes.filter((n: unknown) => (n as { type?: string }).type === "sticky") as CanvasNote[];
 }
 
 export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields, contacts }: Props) {
@@ -70,10 +77,8 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>((workflow.triggerConfig as TriggerConfig) ?? {});
   const [steps, setSteps] = useState<WorkflowStep[]>(initSteps);
   const [status, setStatus] = useState(workflow.status);
-  const [builderMode, setBuilderMode] = useState(() => {
-    if (typeof window === "undefined") return "standard";
-    return localStorage.getItem(`wf_mode_${workflow.id}`) ?? "standard";
-  });
+  const [builderMode, setBuilderMode] = useState("standard");
+  const [canvasNotes, setCanvasNotes] = useState<CanvasNote[]>(() => parseCanvasNotes(workflow.nodes));
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
   const [insertAfterIdx, setInsertAfterIdx] = useState(-1);
@@ -90,6 +95,8 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
   const [testRunning, setTestRunning] = useState(false);
   const [testLogs, setTestLogs] = useState<TestLog[] | null>(null);
   const [otherWorkflows, setOtherWorkflows] = useState<{ id: string; name: string }[]>([]);
+  const [draggingNoteId, setDraggingNoteId] = useState<string | null>(null);
+  const draggingOffset = useRef({ x: 0, y: 0 });
 
   const isPanning = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
@@ -97,15 +104,22 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Load builderMode from localStorage after mount (avoids hydration mismatch)
+  useEffect(() => {
+    const stored = localStorage.getItem(`wf_mode_${workflow.id}`);
+    if (stored) setBuilderMode(stored);
+  }, [workflow.id]);
+
   const activeStep = steps.find((s) => s.id === activeStepId) ?? null;
   const triggerMeta = triggerType ? TRIGGER_DISPLAY[triggerType as TriggerType] : null;
 
-  // Keyboard shortcut
+  // Keyboard shortcuts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "h" || e.key === "H") setTool("hand");
       if (e.key === "v" || e.key === "V") setTool("pointer");
+      if (e.key === "Escape") { setPanelMode(null); setActiveStepId(null); setSidePanel(null); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -113,21 +127,23 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
 
   const save = useCallback(async (overrides?: Partial<{
     name: string; triggerType: TriggerType | ""; triggerConfig: TriggerConfig;
-    steps: WorkflowStep[]; status: string;
+    steps: WorkflowStep[]; status: string; canvasNotes: CanvasNote[];
   }>) => {
     setSaving(true);
     try {
+      const notesToSave = overrides?.canvasNotes ?? canvasNotes;
       await updateWorkflow(workflow.id, {
         name: overrides?.name ?? name,
         triggerType: (overrides?.triggerType ?? triggerType) as TriggerType,
         triggerConfig: overrides?.triggerConfig ?? triggerConfig,
         steps: overrides?.steps ?? steps,
+        nodes: notesToSave as unknown[],
         status: (overrides?.status ?? status) as "draft" | "active" | "paused",
       });
       setSaveOk(true);
       setTimeout(() => setSaveOk(false), 1500);
     } finally { setSaving(false); }
-  }, [workflow.id, name, triggerType, triggerConfig, steps, status, builderMode]);
+  }, [workflow.id, name, triggerType, triggerConfig, steps, status, canvasNotes]);
 
   const saveRef = useRef(save);
   useEffect(() => { saveRef.current = save; }, [save]);
@@ -137,9 +153,25 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
     saveTimeoutRef.current = setTimeout(() => saveRef.current(overrides), 2000);
   }
 
-  function selectTrigger(t: TriggerType) { setTriggerType(t); setPanelMode("trigger-config"); scheduleAutoSave({ triggerType: t }); }
-  function removeTrigger() { setTriggerType(""); setTriggerConfig({}); save({ triggerType: "", triggerConfig: {} }); }
-  function openStepPicker(afterIdx: number) { setInsertAfterIdx(afterIdx); setSearch(""); setPanelMode("step-picker"); setActiveStepId(null); setSidePanel(null); }
+  function selectTrigger(t: TriggerType) {
+    setTriggerType(t);
+    setPanelMode("trigger-config");
+    setSidePanel(null);
+    scheduleAutoSave({ triggerType: t });
+  }
+  function removeTrigger() {
+    setTriggerType("");
+    setTriggerConfig({});
+    save({ triggerType: "", triggerConfig: {} });
+    setPanelMode(null);
+  }
+  function openStepPicker(afterIdx: number) {
+    setInsertAfterIdx(afterIdx);
+    setSearch("");
+    setPanelMode("step-picker");
+    setActiveStepId(null);
+    setSidePanel(null);
+  }
 
   function addStep(type: StepType) {
     const id = `step_${Date.now()}_${counter.current++}`;
@@ -147,7 +179,9 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
     const newSteps = insertAfterIdx === -1 || insertAfterIdx >= steps.length - 1
       ? [...steps, step]
       : [...steps.slice(0, insertAfterIdx + 1), step, ...steps.slice(insertAfterIdx + 1)];
-    setSteps(newSteps); setActiveStepId(id); setPanelMode("step-editor");
+    setSteps(newSteps);
+    setActiveStepId(id);
+    setPanelMode("step-editor");
     scheduleAutoSave({ steps: newSteps });
     if (type === STEP_TYPES.ENROLL_IN_WORKFLOW && otherWorkflows.length === 0) {
       listWorkflowsForPicker(workflow.id).then(setOtherWorkflows);
@@ -161,13 +195,16 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
   }
 
   function deleteStep(id: string) {
-    const n = steps.filter((s) => s.id !== id); setSteps(n);
+    const n = steps.filter((s) => s.id !== id);
+    setSteps(n);
     if (activeStepId === id) { setActiveStepId(null); setPanelMode(null); }
     scheduleAutoSave({ steps: n });
   }
 
   function openStepEditor(id: string) {
-    setActiveStepId(id); setPanelMode("step-editor"); setSidePanel(null);
+    setActiveStepId(id);
+    setPanelMode("step-editor");
+    setSidePanel(null);
     const step = steps.find((s) => s.id === id);
     if (step?.type === STEP_TYPES.ENROLL_IN_WORKFLOW && otherWorkflows.length === 0) {
       listWorkflowsForPicker(workflow.id).then(setOtherWorkflows);
@@ -175,7 +212,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
   }
 
   async function handlePublishToggle() {
-    if (status !== "active" && steps.length === 0) return;
+    if (steps.length === 0 && status !== "active") return;
     const next = status === "active" ? "draft" : "active";
     setStatus(next);
     await save({ status: next });
@@ -193,31 +230,78 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
     setTestRunning(true);
     setTestLogs(null);
     try {
-      const logs = await testWorkflowStep(workflow.id, testContactId);
-      setTestLogs(logs as unknown as TestLog[]);
+      const result = await testWorkflowStep(workflow.id, testContactId);
+      const logs = (result as { logs?: TestLog[] })?.logs ?? [];
+      setTestLogs(logs.length > 0 ? logs : [{ id: "ok", stepLabel: "Test enrolled", stepType: null, status: "success", message: "Contact enrolled. Run processWorkflowQueue to execute steps.", errorDetail: null, durationMs: null }]);
     } catch (e) {
       setTestLogs([{ id: "err", stepLabel: "Error", stepType: null, status: "failed", message: null, errorDetail: e instanceof Error ? e.message : String(e), durationMs: null }]);
     } finally { setTestRunning(false); }
   }
 
-  function handleTriggerConfigChange(cfg: TriggerConfig) {
-    setTriggerConfig(cfg);
-    scheduleAutoSave({ triggerConfig: cfg });
+  // Canvas sticky notes
+  function addCanvasNote() {
+    const note: CanvasNote = {
+      id: `note_${Date.now()}`,
+      x: 60,
+      y: Math.max(20, canvasNotes.length * 20),
+      w: 200,
+      h: 140,
+      content: "",
+      color: NOTE_COLORS[canvasNotes.length % NOTE_COLORS.length],
+    };
+    const updated = [...canvasNotes, note];
+    setCanvasNotes(updated);
+    scheduleAutoSave({ canvasNotes: updated });
   }
 
-  // Pan handlers
-  function onMouseDown(e: React.MouseEvent) {
-    if (tool !== "hand") return;
+  function updateCanvasNote(id: string, patch: Partial<CanvasNote>) {
+    const updated = canvasNotes.map((n) => n.id === id ? { ...n, ...patch } : n);
+    setCanvasNotes(updated);
+    scheduleAutoSave({ canvasNotes: updated });
+  }
+
+  function deleteCanvasNote(id: string) {
+    const updated = canvasNotes.filter((n) => n.id !== id);
+    setCanvasNotes(updated);
+    scheduleAutoSave({ canvasNotes: updated });
+  }
+
+  // Canvas pan handlers (only when tool === "hand" AND not dragging a note)
+  function onCanvasMouseDown(e: React.MouseEvent) {
+    if (tool !== "hand" || draggingNoteId) return;
+    if ((e.target as HTMLElement).closest("[data-canvas-note]")) return;
     isPanning.current = true;
     lastPos.current = { x: e.clientX, y: e.clientY };
   }
-  function onMouseMove(e: React.MouseEvent) {
+  function onCanvasMouseMove(e: React.MouseEvent) {
+    if (draggingNoteId) {
+      const note = canvasNotes.find((n) => n.id === draggingNoteId);
+      if (!note) return;
+      const newX = e.clientX - (canvasRef.current?.getBoundingClientRect().left ?? 0) - draggingOffset.current.x - panX;
+      const newY = e.clientY - (canvasRef.current?.getBoundingClientRect().top ?? 0) - draggingOffset.current.y - panY;
+      updateCanvasNote(draggingNoteId, { x: Math.max(0, newX), y: Math.max(0, newY) });
+      return;
+    }
     if (!isPanning.current) return;
     setPanX((p) => p + e.clientX - lastPos.current.x);
     setPanY((p) => p + e.clientY - lastPos.current.y);
     lastPos.current = { x: e.clientX, y: e.clientY };
   }
-  function onMouseUp() { isPanning.current = false; }
+  function onCanvasMouseUp() {
+    isPanning.current = false;
+    if (draggingNoteId) {
+      setDraggingNoteId(null);
+      scheduleAutoSave();
+    }
+  }
+
+  function startNoteDrag(e: React.MouseEvent, note: CanvasNote) {
+    if (tool === "hand") return; // hand mode = pan, not drag notes
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    draggingOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    setDraggingNoteId(note.id);
+  }
 
   const TAB_LABELS = { builder: "Builder", settings: "Settings", enrollments: "Enrollment History", logs: "Execution Logs" } as const;
 
@@ -270,10 +354,9 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
             style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 7, border: "1px solid var(--border)", padding: "5px 10px", fontSize: 12, color: saveOk ? "#10B981" : "var(--muted)", background: "transparent", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
             <Save size={12} /> {saving ? "Saving…" : saveOk ? "Saved!" : "Save"}
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4, borderLeft: "1px solid var(--border)" }} title={steps.length === 0 && status !== "active" ? "Add steps before publishing" : undefined}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4, borderLeft: "1px solid var(--border)" }}>
             <span style={{ fontSize: 12, color: status !== "active" ? "var(--foreground)" : "var(--muted)", fontWeight: status !== "active" ? 600 : 400 }}>Draft</span>
-            <button
-              onClick={handlePublishToggle}
+            <button onClick={handlePublishToggle}
               title={steps.length === 0 && status !== "active" ? "Add at least one step before publishing" : undefined}
               style={{ width: 36, height: 20, borderRadius: 999, border: "none", cursor: steps.length === 0 && status !== "active" ? "not-allowed" : "pointer", background: status === "active" ? "#3B82F6" : "#CBD5E1", position: "relative", transition: "background 0.2s", flexShrink: 0, opacity: steps.length === 0 && status !== "active" ? 0.5 : 1 }}>
               <span style={{ position: "absolute", top: 2, left: status === "active" ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "white", transition: "left 0.2s", display: "block", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
@@ -293,14 +376,19 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
       ) : (
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           {/* Left icon sidebar */}
-          <div style={{ width: 44, flexShrink: 0, borderRight: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 10, gap: 2 }}>
+          <div style={{ width: 44, flexShrink: 0, borderRight: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 10, gap: 2, zIndex: 10 }}>
             <button onClick={() => setTool("pointer")} title="Select (V)"
               style={{ width: 34, height: 34, borderRadius: 7, border: `1px solid ${tool === "pointer" ? "#3B82F6" : "transparent"}`, background: tool === "pointer" ? "#EFF6FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: tool === "pointer" ? "#3B82F6" : "var(--muted)" }}>
               <MousePointer size={15} />
             </button>
-            <button onClick={() => setTool("hand")} title="Pan (H)"
+            <button onClick={() => setTool("hand")} title="Pan canvas (H)"
               style={{ width: 34, height: 34, borderRadius: 7, border: `1px solid ${tool === "hand" ? "#3B82F6" : "transparent"}`, background: tool === "hand" ? "#EFF6FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: tool === "hand" ? "#3B82F6" : "var(--muted)" }}>
               <Move size={15} />
+            </button>
+            <div style={{ width: 28, height: 1, background: "var(--border)", margin: "4px 0" }} />
+            <button onClick={addCanvasNote} title="Add sticky note"
+              style={{ width: 34, height: 34, borderRadius: 7, border: "1px solid transparent", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)" }}>
+              <FileText size={15} />
             </button>
             <div style={{ width: 28, height: 1, background: "var(--border)", margin: "4px 0" }} />
             {([
@@ -318,26 +406,80 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
           {/* Canvas */}
           <div
             ref={canvasRef}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseUp={onMouseUp}
-            onMouseLeave={onMouseUp}
+            onMouseDown={onCanvasMouseDown}
+            onMouseMove={onCanvasMouseMove}
+            onMouseUp={onCanvasMouseUp}
+            onMouseLeave={onCanvasMouseUp}
             style={{
-              flex: 1, overflow: "hidden",
+              flex: 1, overflow: "hidden", position: "relative",
               background: "#F0F2F7",
               backgroundImage: "radial-gradient(circle, #C8CDD8 1px, transparent 1px)",
               backgroundSize: "24px 24px",
               cursor: tool === "hand" ? (isPanning.current ? "grabbing" : "grab") : "default",
-              userSelect: "none",
+              userSelect: draggingNoteId ? "none" : "auto",
             }}>
+            {/* Sticky notes – absolute positioned, above canvas transform */}
+            {canvasNotes.map((note) => (
+              <div
+                key={note.id}
+                data-canvas-note="true"
+                onMouseDown={(e) => startNoteDrag(e, note)}
+                style={{
+                  position: "absolute",
+                  left: note.x + panX,
+                  top: note.y + panY,
+                  width: note.w,
+                  minHeight: note.h,
+                  background: note.color,
+                  borderRadius: 4,
+                  boxShadow: draggingNoteId === note.id ? "0 8px 24px rgba(0,0,0,0.18)" : "0 2px 8px rgba(0,0,0,0.12)",
+                  cursor: tool === "hand" ? "default" : "move",
+                  zIndex: draggingNoteId === note.id ? 30 : 20,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "visible",
+                }}>
+                {/* Note header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 6px", background: "rgba(0,0,0,0.06)", borderRadius: "4px 4px 0 0" }}>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {NOTE_COLORS.map((c) => (
+                      <button key={c} onClick={(e) => { e.stopPropagation(); updateCanvasNote(note.id, { color: c }); }}
+                        style={{ width: 12, height: 12, borderRadius: "50%", background: c, border: note.color === c ? "2px solid #333" : "1px solid rgba(0,0,0,0.2)", cursor: "pointer", padding: 0 }} />
+                    ))}
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); deleteCanvasNote(note.id); }}
+                    style={{ width: 18, height: 18, borderRadius: 3, border: "none", background: "rgba(0,0,0,0.08)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#555" }}>
+                    <X size={10} />
+                  </button>
+                </div>
+                <textarea
+                  value={note.content}
+                  onChange={(e) => updateCanvasNote(note.id, { content: e.target.value })}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  placeholder="Add a note…"
+                  style={{ flex: 1, border: "none", background: "transparent", resize: "both", padding: "8px", fontSize: 12, color: "#333", outline: "none", minHeight: note.h - 28, fontFamily: "inherit", lineHeight: 1.5 }}
+                />
+              </div>
+            ))}
+
+            {/* Canvas content (flow) */}
             <div style={{ transform: `translate(${panX}px, ${panY}px)`, paddingTop: 48, paddingBottom: 80, display: "flex", flexDirection: "column", alignItems: "center" }}>
               <div style={{ width: 480, display: "flex", flexDirection: "column", alignItems: "center" }}>
                 {/* Trigger node */}
                 <TriggerCard
                   triggerMeta={triggerMeta}
                   triggerType={triggerType}
-                  onClickEmpty={() => { if (tool !== "hand") { setSearch(""); setPanelMode("trigger-picker"); setSidePanel(null); } }}
-                  onEdit={() => { if (tool !== "hand") { setPanelMode(triggerType ? "trigger-config" : "trigger-picker"); setSidePanel(null); } }}
+                  onClickEmpty={() => {
+                    if (tool === "hand") return;
+                    setSidePanel(null);
+                    setSearch("");
+                    setPanelMode("trigger-picker");
+                  }}
+                  onEdit={() => {
+                    if (tool === "hand") return;
+                    setSidePanel(null);
+                    setPanelMode(triggerType ? "trigger-config" : "trigger-picker");
+                  }}
                   onRemove={removeTrigger}
                   disabled={tool === "hand"}
                 />
@@ -361,9 +503,9 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
             </div>
           </div>
 
-          {/* Right slide-in panel (step/trigger editing) */}
+          {/* Right slide-in panel */}
           {panelMode && !sidePanel && (
-            <div style={{ width: 360, flexShrink: 0, borderLeft: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "-4px 0 16px rgba(0,0,0,0.06)" }}>
+            <div style={{ width: 360, flexShrink: 0, borderLeft: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "-4px 0 16px rgba(0,0,0,0.06)", zIndex: 10 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>
                   {panelMode === "trigger-picker" ? "Choose a Trigger" : panelMode === "trigger-config" ? "Configure Trigger" : panelMode === "step-picker" ? "Add an Action" : "Edit Step"}
@@ -393,7 +535,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
                           <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", marginBottom: 6 }}>{cat}</div>
                           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                             {items.map(([type, meta]) => (
-                              <PickerItem key={type} icon={meta.icon} iconColor="#3B82F6" label={meta.label} desc={meta.description} onClick={() => selectTrigger(type as TriggerType)} />
+                              <PickerItem key={type} icon={meta.icon} iconColor="#3B82F6" label={meta.label} desc={meta.description} beta={(meta as {beta?: boolean}).beta} onClick={() => selectTrigger(type as TriggerType)} />
                             ))}
                           </div>
                         </div>
@@ -453,7 +595,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
             </div>
           )}
 
-          {/* Side panels (Notes / Versions / Integrations) */}
+          {/* Side panels */}
           {sidePanel === "notes" && <WorkflowNotesPanel workflowId={workflow.id} onClose={() => setSidePanel(null)} />}
           {sidePanel === "versions" && <WorkflowVersionPanel workflowId={workflow.id} onClose={() => setSidePanel(null)} />}
           {sidePanel === "integrations" && <WorkflowIntegrationsPanel steps={steps} onClose={() => setSidePanel(null)} />}
@@ -462,8 +604,8 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
 
       {/* Tool hint */}
       {activeTab === "builder" && (
-        <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.6)", color: "white", fontSize: 11, padding: "4px 10px", borderRadius: 6, pointerEvents: "none" }}>
-          {tool === "hand" ? "Pan mode — drag to move canvas · Press V for select" : "Select mode · Press H to pan · Auto-saves 2s after edits"}
+        <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.6)", color: "white", fontSize: 11, padding: "4px 10px", borderRadius: 6, pointerEvents: "none", zIndex: 5 }}>
+          {tool === "hand" ? "Pan mode — drag to move canvas · Press V for select" : "Select mode · Press H to pan · Click trigger/steps to configure · Auto-saves 2s after edits"}
         </div>
       )}
 
@@ -479,13 +621,17 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
               <button onClick={() => { setShowTestModal(false); setTestLogs(null); }} style={{ color: "var(--muted)", background: "transparent", border: "none", cursor: "pointer" }}><X size={16} /></button>
             </div>
             <div style={{ padding: 20, overflowY: "auto", flex: 1 }}>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Contact</label>
-                <select value={testContactId} onChange={(e) => setTestContactId(e.target.value)}
-                  style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)", padding: "8px 10px", fontSize: 13, outline: "none" }}>
-                  {contacts.map((c) => <option key={c.id} value={c.id}>{c.companyName}{c.email ? ` — ${c.email}` : ""}</option>)}
-                </select>
-              </div>
+              {contacts.length === 0 ? (
+                <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>No contacts available. Add contacts in the CRM first.</p>
+              ) : (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Contact</label>
+                  <select value={testContactId} onChange={(e) => setTestContactId(e.target.value)}
+                    style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)", padding: "8px 10px", fontSize: 13, outline: "none" }}>
+                    {contacts.map((c) => <option key={c.id} value={c.id}>{c.companyName}{c.email ? ` — ${c.email}` : ""}</option>)}
+                  </select>
+                </div>
+              )}
               {testLogs && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Results</div>
@@ -493,16 +639,16 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
                     <div key={log.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--background)" }}>
                       <span style={{ fontSize: 16, marginTop: -1 }}>{log.status === "success" ? "✅" : log.status === "failed" ? "❌" : "⏭"}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>{log.stepLabel ?? log.stepType}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>{log.stepLabel ?? log.stepType ?? "Step"}</div>
                         {log.message && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{log.message}</div>}
                         {log.errorDetail && <div style={{ fontSize: 11, color: "#EF4444", fontFamily: "monospace", marginTop: 2 }}>{log.errorDetail}</div>}
-                        {log.durationMs !== null && <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{log.durationMs}ms</div>}
+                        {log.durationMs !== null && log.durationMs !== undefined && <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{log.durationMs}ms</div>}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              <button onClick={runTest} disabled={testRunning || !testContactId || steps.length === 0}
+              <button onClick={runTest} disabled={testRunning || !testContactId || steps.length === 0 || contacts.length === 0}
                 style={{ width: "100%", borderRadius: 10, border: "none", padding: "10px", fontSize: 13, fontWeight: 600, color: "white", background: testRunning ? "#6B7280" : "#3B82F6", cursor: testRunning || !testContactId || steps.length === 0 ? "not-allowed" : "pointer", opacity: steps.length === 0 ? 0.5 : 1 }}>
                 {testRunning ? "Running test…" : steps.length === 0 ? "Add steps first" : testLogs ? "Run Again" : "Run Test"}
               </button>
@@ -514,7 +660,7 @@ export function WorkflowBuilderClient({ workflow, tags, pipelines, customFields,
   );
 }
 
-/* Sub-components */
+/* ── Sub-components ── */
 
 function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onRemove, disabled }: {
   triggerMeta: typeof TRIGGER_DISPLAY[TriggerType] | null;
@@ -524,7 +670,7 @@ function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onRemove,
   if (triggerType && triggerMeta) {
     return (
       <div onClick={disabled ? undefined : onEdit} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-        style={{ width: "100%", borderRadius: 10, border: `2px solid ${hov && !disabled ? "#2563EB" : "#3B82F6"}`, background: "white", padding: "10px 14px", boxShadow: "0 2px 8px rgba(59,130,246,0.12)", cursor: disabled ? "default" : "pointer" }}>
+        style={{ width: "100%", borderRadius: 10, border: `2px solid ${hov && !disabled ? "#2563EB" : "#3B82F6"}`, background: "white", padding: "10px 14px", boxShadow: "0 2px 8px rgba(59,130,246,0.12)", cursor: disabled ? "default" : "pointer", pointerEvents: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Icon name={triggerMeta.icon} size={15} style={{ color: "#3B82F6" }} />
@@ -537,23 +683,30 @@ function TriggerCard({ triggerMeta, triggerType, onClickEmpty, onEdit, onRemove,
           {!disabled && (
             <div style={{ display: "flex", gap: 4 }}>
               <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #E5E7EB", background: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7280" }}>
+                style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #E5E7EB", background: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7280", pointerEvents: "auto" }}>
                 <Edit3 size={11} />
               </button>
               <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
-                style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #FECACA", background: "#FEF2F2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444" }}>
+                style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #FECACA", background: "#FEF2F2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444", pointerEvents: "auto" }}>
                 <X size={11} />
               </button>
             </div>
           )}
         </div>
+        {(triggerMeta as {beta?: boolean}).beta && (
+          <div style={{ marginTop: 6, fontSize: 10, color: "#8B5CF6", background: "#8B5CF610", borderRadius: 4, padding: "2px 6px", display: "inline-block" }}>
+            Beta — requires additional setup
+          </div>
+        )}
       </div>
     );
   }
   return (
-    <button onClick={disabled ? undefined : onClickEmpty}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ width: "100%", borderRadius: 10, border: `2px dashed ${hov && !disabled ? "#3B82F6" : "#CBD5E1"}`, background: hov && !disabled ? "#EFF6FF" : "white", padding: "14px", cursor: disabled ? "default" : "pointer", display: "flex", alignItems: "center", gap: 12, transition: "all 0.15s" }}>
+    <button
+      onClick={disabled ? undefined : onClickEmpty}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{ width: "100%", borderRadius: 10, border: `2px dashed ${hov && !disabled ? "#3B82F6" : "#CBD5E1"}`, background: hov && !disabled ? "#EFF6FF" : "white", padding: "14px", cursor: disabled ? "default" : "pointer", display: "flex", alignItems: "center", gap: 12, transition: "all 0.15s", pointerEvents: "auto" }}>
       <div style={{ width: 36, height: 36, borderRadius: 9, background: hov && !disabled ? "#DBEAFE" : "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Zap size={16} style={{ color: hov && !disabled ? "#3B82F6" : "#94A3B8" }} />
       </div>
@@ -573,7 +726,7 @@ function StepCard({ step, meta, color, isActive, onClick, onDelete }: {
   const [hov, setHov] = useState(false);
   return (
     <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ width: "100%", borderRadius: 10, border: `1px solid ${isActive ? color : hov ? "#CBD5E1" : "#E5E7EB"}`, borderLeft: `3px solid ${color}`, background: "white", padding: "9px 12px", cursor: "pointer", boxShadow: isActive ? `0 0 0 3px ${color}20` : hov ? "0 2px 8px rgba(0,0,0,0.07)" : "0 1px 3px rgba(0,0,0,0.05)", transition: "all 0.12s" }}>
+      style={{ width: "100%", borderRadius: 10, border: `1px solid ${isActive ? color : hov ? "#CBD5E1" : "#E5E7EB"}`, borderLeft: `3px solid ${color}`, background: "white", padding: "9px 12px", cursor: "pointer", boxShadow: isActive ? `0 0 0 3px ${color}20` : hov ? "0 2px 8px rgba(0,0,0,0.07)" : "0 1px 3px rgba(0,0,0,0.05)", transition: "all 0.12s", pointerEvents: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: 30, height: 30, borderRadius: 7, background: `${color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <Icon name={meta?.icon ?? "Zap"} size={13} style={{ color }} />
@@ -584,7 +737,7 @@ function StepCard({ step, meta, color, isActive, onClick, onDelete }: {
         </div>
         {(hov || isActive) && (
           <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            style={{ width: 24, height: 24, borderRadius: 5, border: "none", background: "#FEF2F2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444", flexShrink: 0 }}>
+            style={{ width: 24, height: 24, borderRadius: 5, border: "none", background: "#FEF2F2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#EF4444", flexShrink: 0, pointerEvents: "auto" }}>
             <X size={11} />
           </button>
         )}
@@ -608,7 +761,7 @@ function NodeConnector({ onAdd }: { onAdd: () => void }) {
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", position: "relative", width: "100%", height: 44 }}>
       <div style={{ width: 1, height: "100%", background: "#CBD5E1", position: "absolute", left: "50%", top: 0 }} />
       <button onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onAdd}
-        style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 20, height: 20, borderRadius: "50%", border: `1.5px solid ${hov ? "#3B82F6" : "#CBD5E1"}`, background: hov ? "#3B82F6" : "white", color: hov ? "white" : "#94A3B8", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.12s", zIndex: 1, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+        style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 20, height: 20, borderRadius: "50%", border: `1.5px solid ${hov ? "#3B82F6" : "#CBD5E1"}`, background: hov ? "#3B82F6" : "white", color: hov ? "white" : "#94A3B8", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.12s", zIndex: 1, boxShadow: "0 1px 3px rgba(0,0,0,0.1)", pointerEvents: "auto" }}>
         <Plus size={10} />
       </button>
     </div>
@@ -619,7 +772,7 @@ function PickerItem({ icon, iconColor, label, desc, onClick, beta }: { icon: str
   const [hov, setHov] = useState(false);
   return (
     <button onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ display: "flex", alignItems: "center", gap: 10, borderRadius: 8, border: `1px solid ${hov ? "#E5E7EB" : "transparent"}`, padding: "8px 8px", textAlign: "left", cursor: "pointer", background: hov ? "var(--accent-soft)" : "transparent", transition: "all 0.1s", width: "100%" }}>
+      style={{ display: "flex", alignItems: "center", gap: 10, borderRadius: 8, border: `1px solid ${hov ? "#E5E7EB" : "transparent"}`, padding: "8px 8px", textAlign: "left", cursor: "pointer", background: hov ? "var(--accent-soft)" : "transparent", transition: "all 0.1s", width: "100%", pointerEvents: "auto" }}>
       <div style={{ width: 28, height: 28, borderRadius: 7, background: `${iconColor}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Icon name={icon} size={13} style={{ color: iconColor }} />
       </div>
@@ -654,7 +807,7 @@ function StepEditor({ step, onChange, tags, pipelines, customFields, otherWorkfl
         {LabelField}
         <F label="Subject"><input value={step.emailSubject ?? ""} onChange={(e) => patch({ emailSubject: e.target.value })} style={inp} placeholder="Subject line…" /></F>
         <F label="Body (HTML)"><textarea value={step.emailBody ?? ""} onChange={(e) => patch({ emailBody: e.target.value })} rows={8} style={{ ...inp, resize: "vertical" }} placeholder={"<p>Hi {{firstName}},</p>"} /></F>
-        <p style={{ fontSize: 10, color: "var(--muted)", margin: 0 }}>{"{{firstName}} {{companyName}} {{email}} {{senderName}}"}</p>
+        <p style={{ fontSize: 10, color: "var(--muted)", margin: 0 }}>Merge vars: {"{{firstName}} {{companyName}} {{email}} {{senderName}}"}</p>
       </div>
     );
     case STEP_TYPES.SEND_SMS: return (
@@ -670,6 +823,17 @@ function StepEditor({ step, onChange, tags, pipelines, customFields, otherWorkfl
             </select>
           </div>
         </F>
+      </div>
+    );
+    case STEP_TYPES.WAIT_UNTIL: return (
+      <div style={wrap}>
+        <F label="Wait until day">
+          <select value={step.waitUntilDayOfWeek ?? ""} onChange={(e) => patch({ waitUntilDayOfWeek: e.target.value ? Number(e.target.value) : undefined })} style={inp}>
+            <option value="">Any day</option>
+            {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map((d, i) => <option key={i} value={i}>{d}</option>)}
+          </select>
+        </F>
+        <F label="Wait until time"><input type="time" value={step.waitUntilTime ?? ""} onChange={(e) => patch({ waitUntilTime: e.target.value })} style={inp} /></F>
       </div>
     );
     case STEP_TYPES.ADD_TAG:
@@ -689,7 +853,12 @@ function StepEditor({ step, onChange, tags, pipelines, customFields, otherWorkfl
         <F label="New value"><input value={step.fieldValue ?? ""} onChange={(e) => patch({ fieldValue: e.target.value })} style={inp} placeholder="Value (supports merge vars)" /></F>
       </div>
     );
-    case STEP_TYPES.ADD_NOTE: return <div style={wrap}><F label="Note content"><textarea value={step.noteContent ?? ""} onChange={(e) => patch({ noteContent: e.target.value })} rows={5} style={{ ...inp, resize: "vertical" }} /></F></div>;
+    case STEP_TYPES.ADD_NOTE: return (
+      <div style={wrap}>
+        {LabelField}
+        <F label="Note content"><textarea value={step.noteContent ?? ""} onChange={(e) => patch({ noteContent: e.target.value })} rows={5} style={{ ...inp, resize: "vertical" }} /></F>
+      </div>
+    );
     case STEP_TYPES.ADD_TASK: return (
       <div style={wrap}>
         <F label="Task title"><input value={step.taskTitle ?? ""} onChange={(e) => patch({ taskTitle: e.target.value })} style={inp} placeholder={"Follow up with {{companyName}}"} /></F>
@@ -705,6 +874,12 @@ function StepEditor({ step, onChange, tags, pipelines, customFields, otherWorkfl
         <F label="Pipeline"><select value={step.pipelineId ?? ""} onChange={(e) => patch({ pipelineId: e.target.value, stageId: "" })} style={inp}><option value="">Select pipeline…</option>{pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></F>
         {step.pipelineId && <F label="Stage"><select value={step.stageId ?? ""} onChange={(e) => patch({ stageId: e.target.value })} style={inp}><option value="">Select stage…</option>{pipelines.find((p) => p.id === step.pipelineId)?.stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></F>}
         {step.type === STEP_TYPES.CREATE_OPPORTUNITY && <F label="Opportunity name"><input value={step.opportunityName ?? ""} onChange={(e) => patch({ opportunityName: e.target.value })} style={inp} placeholder={"{{companyName}} – Deal"} /></F>}
+      </div>
+    );
+    case STEP_TYPES.UPDATE_OPPORTUNITY: return (
+      <div style={wrap}>
+        {LabelField}
+        <F label="New status"><select value={step.opportunityStatus ?? ""} onChange={(e) => patch({ opportunityStatus: e.target.value })} style={inp}><option value="">Select…</option><option value="won">Won</option><option value="lost">Lost</option><option value="open">Re-open</option></select></F>
       </div>
     );
     case STEP_TYPES.SEND_INTERNAL_NOTIFY: return (
@@ -724,6 +899,7 @@ function StepEditor({ step, onChange, tags, pipelines, customFields, otherWorkfl
     case STEP_TYPES.AI_ACTION: return (
       <div style={wrap}>
         <F label="AI prompt"><textarea value={step.aiPrompt ?? ""} onChange={(e) => patch({ aiPrompt: e.target.value })} rows={6} style={{ ...inp, resize: "vertical" }} placeholder={"Write an outreach email for {{companyName}}…"} /></F>
+        <F label="Output field (optional)"><input value={step.aiOutputField ?? ""} onChange={(e) => patch({ aiOutputField: e.target.value })} style={inp} placeholder="Save output to this field name" /></F>
         <p style={{ fontSize: 10, color: "var(--muted)", margin: 0 }}>Output saved as contact note. Requires OPENAI_API_KEY.</p>
       </div>
     );
@@ -748,22 +924,26 @@ function StepEditor({ step, onChange, tags, pipelines, customFields, otherWorkfl
             <select value={c.operator} onChange={(e) => { const cs = [...(step.conditions ?? [])]; cs[i] = { ...cs[i], operator: e.target.value as "equals" }; patch({ conditions: cs }); }} style={inp}>
               {["equals","not_equals","contains","not_contains","is_empty","is_not_empty","greater_than","less_than"].map((op) => <option key={op} value={op}>{op}</option>)}
             </select>
-            <input value={c.value ?? ""} onChange={(e) => { const cs = [...(step.conditions ?? [])]; cs[i] = { ...cs[i], value: e.target.value }; patch({ conditions: cs }); }} style={inp} placeholder="Value" />
+            {!["is_empty","is_not_empty"].includes(c.operator) && (
+              <input value={c.value ?? ""} onChange={(e) => { const cs = [...(step.conditions ?? [])]; cs[i] = { ...cs[i], value: e.target.value }; patch({ conditions: cs }); }} style={inp} placeholder="Value" />
+            )}
             <button onClick={() => patch({ conditions: (step.conditions ?? []).filter((_, j) => j !== i) })} style={{ fontSize: 11, color: "#EF4444", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}>Remove</button>
           </div>
         ))}
         <button onClick={() => patch({ conditions: [...(step.conditions ?? []), { field: "", operator: "equals" as const, value: "" }] })} style={{ fontSize: 12, color: "#3B82F6", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>+ Add condition</button>
       </div>
     );
-    case STEP_TYPES.ENROLL_IN_WORKFLOW: return (
+    case STEP_TYPES.GO_TO: return (
       <div style={wrap}>
         {LabelField}
-        <F label="Target workflow">
-          <select value={step.targetWorkflowId ?? ""} onChange={(e) => patch({ targetWorkflowId: e.target.value })} style={inp}>
-            <option value="">Select workflow…</option>
-            {otherWorkflows.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
-        </F>
+        <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>Go To steps jump to another step by ID. Configure step IDs in Advanced mode.</p>
+      </div>
+    );
+    case STEP_TYPES.END:
+    case STEP_TYPES.REMOVE_FROM_WORKFLOW: return (
+      <div style={wrap}>
+        {LabelField}
+        <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>{step.type === STEP_TYPES.END ? "Ends the workflow for this contact." : "Removes the contact from this workflow without completing it."}</p>
       </div>
     );
     default: return <div style={wrap}>{LabelField}</div>;
