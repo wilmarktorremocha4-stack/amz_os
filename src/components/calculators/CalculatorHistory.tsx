@@ -9,6 +9,7 @@ import {
   saveCalculatorRun,
   archiveCalculatorRun,
 } from "@/lib/actions/calculators";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
 export function CalculatorHistory({
   type,
@@ -23,6 +24,7 @@ export function CalculatorHistory({
 }) {
   const [runs, setRuns] = useState<CalculatorRunSummary[]>([]);
   const [name, setName] = useState("");
+  const [archiveId, setArchiveId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export function CalculatorHistory({
   }
 
   return (
+    <>
     <div className="card p-6">
       <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--foreground)]">
         <History size={16} className="text-[var(--accent)]" />
@@ -103,10 +106,10 @@ export function CalculatorHistory({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDelete(run.id)}
+                  onClick={() => setArchiveId(run.id)}
                   disabled={isPending}
                   className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                  title="Delete"
+                  title="Archive"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -116,5 +119,15 @@ export function CalculatorHistory({
         </ul>
       )}
     </div>
+
+    {archiveId && (
+      <DeleteConfirmModal
+        title="Archive this computation?"
+        description="This calculation will be moved to the archive. You can restore it later."
+        onConfirm={() => { handleDelete(archiveId); setArchiveId(null); }}
+        onCancel={() => setArchiveId(null)}
+      />
+    )}
+    </>
   );
 }

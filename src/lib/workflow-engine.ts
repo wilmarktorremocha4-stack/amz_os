@@ -84,6 +84,8 @@ async function processEnrollmentStep(enrollment: EnrollmentWithIncludes) {
   };
   const render = (t: string) => t.replace(/\{\{(\w+)\}\}/g, (_, k) => mergeVars[k] ?? `{{${k}}}`);
 
+  let _logError = "";
+
   try {
     let nextRunAt: Date | null = new Date();
     let nextStep = enrollment.currentStep + 1;
@@ -205,6 +207,17 @@ async function processEnrollmentStep(enrollment: EnrollmentWithIncludes) {
       case STEP_TYPES.REMOVE_FROM_WORKFLOW:
         shouldEnd = true;
         break;
+      case STEP_TYPES.ENROLL_IN_WORKFLOW: {
+        const targetWfId = step.targetWorkflowId;
+        if (targetWfId) {
+          await prisma.workflowEnrollment.upsert({
+            where: { workflowId_supplierId: { workflowId: targetWfId, supplierId: supplier.id } },
+            create: { workflowId: targetWfId, supplierId: supplier.id, status: "active", currentStep: 0, nextRunAt: new Date() },
+            update: {},
+          });
+        }
+        break;
+      }
     }
 
     const historyEntry = { stepIndex: enrollment.currentStep, stepType: step.type, stepLabel: step.label, executedAt: new Date().toISOString() };
@@ -214,20 +227,55 @@ async function processEnrollmentStep(enrollment: EnrollmentWithIncludes) {
       await prisma.workflowEnrollment.update({ where: { id: enrollment.id }, data: { currentStep: nextStep, nextRunAt, history: { push: historyEntry } as never } });
     }
   } catch (err) {
-    await prisma.workflowEnrollment.update({ where: { id: enrollment.id }, data: { status: "error", errorMessage: err instanceof Error ? err.message : String(err), nextRunAt: null } });
+    _logError = err instanceof Error ? err.message : String(err);
+    await prisma.workflowEnrollment.update({ where: { id: enrollment.id }, data: { status: "error", errorMessage: _logError, nextRunAt: null } });
   }
 }
 
+export async function processOneEnrollment(enrollmentId: string) {
+  const enrollment = await prisma.workflowEnrollment.findUnique({
+    where: { id: enrollmentId },
+    include: {
+      workflow: true,
+      supplier: { include: { tags: { include: { tag: true } }, fieldValues: { include: { field: true } } } },
+    },
+  });
+  if (enrollment && enrollment.status === "active") await processEnrollmentStep(enrollment);
+}
+
 function matchesTriggerConfig(triggerType: TriggerType, config: TriggerConfig, eventData: Record<string, unknown>): boolean {
-  if ((triggerType === "contact.tag_added" || triggerType === "contact.tag_removed") && config.tagId) return eventData.tagId === config.tagId;
-  if (triggerType === "contact.stage_changed" && config.toStage) return eventData.toStage === config.toStage;
-  if (triggerType === "opportunity.stage_changed" && config.pipelineId) return eventData.pipelineId === config.pipelineId;
-  if (triggerType === "opportunity.stale" && config.daysStale) return ((Date.now() - Number(eventData.lastMovedAt)) / 86_400_000) >= config.daysStale;
-  if (triggerType === "contact.custom_field_updated" && config.fieldId) {
-    if (eventData.fieldId !== config.fieldId) return false;
-    if (config.fieldValue && eventData.newValue !== config.fieldValue) return false;
+  switch (triggerType) {
+    case "contact.tag_added":
+    case "contact.tag_removed":
+      if (config.tagId && eventData.tagId !== config.tagId) return false;
+      return true;
+    case "contact.stage_changed":
+      if (config.toStage && eventData.toStage !== config.toStage) return false;
+      if (config.fromStage && eventData.fromStage !== config.fromStage) return false;
+      return true;
+    case "opportunity.stage_changed":
+      if (config.pipelineId && eventData.pipelineId !== config.pipelineId) return false;
+      if (config.stageId && eventData.stageId !== config.stageId) return false;
+      return true;
+    case "opportunity.created":
+      if (config.pipelineId && eventData.pipelineId !== config.pipelineId) return false;
+      return true;
+    case "opportunity.stale":
+      if (config.daysStale) {
+        const days = (Date.now() - Number(eventData.lastMovedAt ?? Date.now())) / 86_400_000;
+        if (days < config.daysStale) return false;
+      }
+      return true;
+    case "contact.custom_field_updated":
+      if (config.fieldId && eventData.fieldId !== config.fieldId) return false;
+      if (config.fieldValue && eventData.newValue !== config.fieldValue) return false;
+      return true;
+    case "system.webhook":
+      if (config.webhookSecret && eventData.providedSecret !== config.webhookSecret) return false;
+      return true;
+    default:
+      return true;
   }
-  return true;
 }
 
 async function contactMatchesFilters(supplierId: string, filters: WorkflowFilter[]): Promise<boolean> {

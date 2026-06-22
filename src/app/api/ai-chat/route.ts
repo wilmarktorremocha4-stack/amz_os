@@ -3,14 +3,32 @@ import { getCurrentUser } from "@/lib/currentUser";
 import { prisma } from "@/lib/prisma";
 
 const DIFY_API_URL = process.env.DIFY_API_URL ?? "https://api.dify.ai/v1";
-const DIFY_KEY = process.env.DIFY_API_KEY ?? process.env.NEXT_PUBLIC_UDIFY_APP_KEY ?? "";
+
+function getDifyKey() {
+  return (
+    process.env.DIFY_API_KEY ??
+    process.env.NEXT_PUBLIC_UDIFY_APP_KEY ??
+    process.env.NEXT_PUBLIC_APP_KEY ??
+    process.env.UDIFY_APP_KEY ??
+    ""
+  );
+}
+
+async function appendMessage(convId: string, msg: Record<string, unknown>) {
+  const conv = await prisma.aiConversation.findUnique({ where: { id: convId }, select: { messages: true } });
+  const existing = (conv?.messages as unknown[]) ?? [];
+  await prisma.aiConversation.update({
+    where: { id: convId },
+    data: { messages: [...existing, msg] as never, updatedAt: new Date() },
+  });
+}
 
 export async function POST(req: NextRequest) {
   let user: Awaited<ReturnType<typeof getCurrentUser>>;
   try { user = await getCurrentUser(); } catch { return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); }
 
   const body = await req.json();
-  const { query, conversationDbId, difyConversationId, fileUrls } = body as {
+  const { query, conversationDbId, difyConversationId } = body as {
     query: string;
     conversationDbId?: string;
     difyConversationId?: string;
@@ -19,6 +37,10 @@ export async function POST(req: NextRequest) {
 
   if (!query?.trim()) return NextResponse.json({ error: "Empty query" }, { status: 400 });
 
+  const DIFY_KEY = getDifyKey();
+  if (!DIFY_KEY) return NextResponse.json({ error: "Dify API key not configured. Set DIFY_API_KEY in Vercel environment variables." }, { status: 503 });
+
+  // Create or reuse conversation record
   let convId = conversationDbId;
   if (!convId) {
     const conv = await prisma.aiConversation.create({
@@ -27,12 +49,11 @@ export async function POST(req: NextRequest) {
     convId = conv.id;
   }
 
-  const userMsg = { id: crypto.randomUUID(), role: "user", content: query, createdAt: Date.now(), fileUrls: fileUrls ?? [] };
-  await prisma.aiConversation.update({
-    where: { id: convId },
-    data: { messages: { push: userMsg } as never, updatedAt: new Date() },
-  });
+  // Save user message by reading + appending
+  const userMsg = { id: crypto.randomUUID(), role: "user", content: query, createdAt: Date.now(), fileUrls: [] };
+  await appendMessage(convId, userMsg);
 
+  // Call Dify
   const difyRes = await fetch(`${DIFY_API_URL}/chat-messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${DIFY_KEY}` },
@@ -95,15 +116,12 @@ export async function POST(req: NextRequest) {
           }
         }
       } finally {
+        // Save assistant message
         const assistantMsg = { id: crypto.randomUUID(), role: "assistant", content: fullContent, thought: thought || undefined, createdAt: Date.now() };
-        await prisma.aiConversation.update({
-          where: { id: finalConvId },
-          data: {
-            messages: { push: assistantMsg } as never,
-            difyConversationId: newDifyConvId || undefined,
-            updatedAt: new Date(),
-          },
-        });
+        await appendMessage(finalConvId, assistantMsg);
+        if (newDifyConvId) {
+          await prisma.aiConversation.update({ where: { id: finalConvId }, data: { difyConversationId: newDifyConvId } });
+        }
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
         controller.close();
       }
@@ -111,10 +129,6 @@ export async function POST(req: NextRequest) {
   });
 
   return new Response(readable, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "X-Conv-Db-Id": finalConvId,
-    },
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Conv-Db-Id": finalConvId },
   });
 }

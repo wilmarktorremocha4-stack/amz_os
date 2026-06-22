@@ -43,9 +43,8 @@ const links = [
   { href: "/research", label: "Product Research", icon: PackageSearch },
   { href: "/research/brands", label: "Brand Research", icon: Sparkles },
   { href: "/scout", label: "Market Scout", icon: Telescope },
-  { label: "─── Email", icon: Mail, href: "", divider: true },
+  { label: "─── Marketing", icon: Mail, href: "", divider: true },
   { href: "/email/campaigns", label: "Campaigns", icon: Send },
-  { href: "/email/sequences", label: "Sequences", icon: Zap },
   { href: "/email/templates", label: "Templates", icon: Mail },
   { href: "/email/analytics", label: "Email Analytics", icon: LineChart },
   { label: "─── Automations", icon: Zap, href: "", divider: true },
@@ -107,7 +106,7 @@ function SidebarInner({ userEmail }: { userEmail?: string }) {
   };
 
   const NavLinks = () => (
-    <nav className="flex flex-col gap-0.5 overflow-y-auto">
+    <nav className="flex flex-col gap-0.5 overflow-y-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
       {links.map((link) => {
         if ((link as { divider?: boolean }).divider) {
           if (collapsed) return null;

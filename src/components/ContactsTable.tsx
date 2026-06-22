@@ -210,7 +210,7 @@ export function ContactsTable({
               Delete {selected.size} contact{selected.size !== 1 ? "s" : ""}?
             </h2>
             <p className="text-sm text-[var(--muted)]">
-              This is permanent. Type{" "}
+              These contacts will be moved to the archive. You can restore them later. Type{" "}
               <span className="font-mono font-bold text-red-500">DELETE</span> to confirm.
             </p>
             <input

@@ -8,6 +8,7 @@ import {
   deleteCalculatorRunPermanently,
   listArchivedCalculatorRuns,
 } from "@/lib/actions/calculators";
+import { restoreWorkflow, deleteWorkflowPermanently } from "@/lib/actions/workflows";
 import { ArchiveSection } from "@/components/ArchiveSection";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function ArchivePage() {
   const user = await getCurrentUser();
 
-  const [suppliers, brands, products, calculatorRuns] = await Promise.all([
+  const [suppliers, brands, products, calculatorRuns, workflows] = await Promise.all([
     prisma.supplier.findMany({
       where: { userId: user.id, archived: true },
       orderBy: { updatedAt: "desc" },
@@ -29,6 +30,7 @@ export default async function ArchivePage() {
       orderBy: { updatedAt: "desc" },
     }),
     listArchivedCalculatorRuns(),
+    Promise.resolve([] as Awaited<ReturnType<typeof prisma.workflow.findMany>>),
   ]);
 
   return (
@@ -60,9 +62,17 @@ export default async function ArchivePage() {
                   <div className="text-xs text-[var(--muted)]">{s.email ?? s.website}</div>
                 )}
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <form action={restore}><button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button></form>
-                <form action={deletePerm}><button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button></form>
+              <div className="flex shrink-0 items-center gap-2">
+                <form action={restore}>
+                  <button type="submit" className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)] transition">
+                    ↩ Restore
+                  </button>
+                </form>
+                <form action={deletePerm}>
+                  <button type="submit" className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-100 transition">
+                    Delete permanently
+                  </button>
+                </form>
               </div>
             </li>
           );
@@ -79,9 +89,17 @@ export default async function ArchivePage() {
                 <div className="truncate font-medium text-[var(--foreground)]">{b.name}</div>
                 {b.category && <div className="text-xs text-[var(--muted)]">{b.category}</div>}
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <form action={restore}><button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button></form>
-                <form action={deletePerm}><button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button></form>
+              <div className="flex shrink-0 items-center gap-2">
+                <form action={restore}>
+                  <button type="submit" className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)] transition">
+                    ↩ Restore
+                  </button>
+                </form>
+                <form action={deletePerm}>
+                  <button type="submit" className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-100 transition">
+                    Delete permanently
+                  </button>
+                </form>
               </div>
             </li>
           );
@@ -98,9 +116,44 @@ export default async function ArchivePage() {
                 <div className="truncate font-medium text-[var(--foreground)]">{p.title}</div>
                 {p.asin && <div className="text-xs text-[var(--muted)]">{p.asin}</div>}
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <form action={restore}><button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button></form>
-                <form action={deletePerm}><button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button></form>
+              <div className="flex shrink-0 items-center gap-2">
+                <form action={restore}>
+                  <button type="submit" className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)] transition">
+                    ↩ Restore
+                  </button>
+                </form>
+                <form action={deletePerm}>
+                  <button type="submit" className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-100 transition">
+                    Delete permanently
+                  </button>
+                </form>
+              </div>
+            </li>
+          );
+        })}
+      </ArchiveSection>
+
+      <ArchiveSection title="Workflows" count={workflows.length}>
+        {workflows.map((wf) => {
+          async function restore() { "use server"; await restoreWorkflow(wf.id); }
+          async function deletePerm() { "use server"; await deleteWorkflowPermanently(wf.id); }
+          return (
+            <li key={wf.id} className="flex items-center justify-between gap-3 p-3">
+              <div className="min-w-0">
+                <div className="truncate font-medium text-[var(--foreground)]">{wf.name}</div>
+                <div className="text-xs text-[var(--muted)]">{wf.status}</div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <form action={restore}>
+                  <button type="submit" className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)] transition">
+                    ↩ Restore
+                  </button>
+                </form>
+                <form action={deletePerm}>
+                  <button type="submit" className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-100 transition">
+                    Delete permanently
+                  </button>
+                </form>
               </div>
             </li>
           );
@@ -117,9 +170,17 @@ export default async function ArchivePage() {
                 <div className="truncate font-medium text-[var(--foreground)]">{run.name}</div>
                 <div className="text-xs text-[var(--muted)]">{run.type.replaceAll("_", " ")}</div>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <form action={restore}><button type="submit" className="text-xs text-[var(--accent)] hover:underline">Restore</button></form>
-                <form action={deletePerm}><button type="submit" className="text-xs text-red-500 hover:underline">Delete permanently</button></form>
+              <div className="flex shrink-0 items-center gap-2">
+                <form action={restore}>
+                  <button type="submit" className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)] transition">
+                    ↩ Restore
+                  </button>
+                </form>
+                <form action={deletePerm}>
+                  <button type="submit" className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-100 transition">
+                    Delete permanently
+                  </button>
+                </form>
               </div>
             </li>
           );

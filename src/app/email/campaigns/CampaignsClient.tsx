@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Plus, Send, Trash2, Mail, BarChart3, ChevronDown, Users, X, CheckSquare } from "lucide-react";
 import { createCampaign, updateCampaign, deleteCampaign, sendCampaign } from "@/lib/actions/email-campaigns";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { EmailBuilder } from "@/components/EmailBuilder";
 import { EmailDoc, DEFAULT_DOC } from "@/lib/email-builder";
 
@@ -21,6 +22,7 @@ export function CampaignsClient({ campaigns, suppliers }: { campaigns: Campaign[
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function openCreate() { setDoc(DEFAULT_DOC); setName(""); setSubject(""); setCreating(true); }
@@ -104,7 +106,7 @@ export function CampaignsClient({ campaigns, suppliers }: { campaigns: Campaign[
                   <Send size={12} /> Send
                 </button>
               )}
-              <button onClick={() => startTransition(() => deleteCampaign(c.id))}
+              <button onClick={() => setDeleteConfirmId(c.id)}
                 className="rounded-lg p-1.5 text-red-400 hover:bg-red-50 transition"><Trash2 size={14} /></button>
             </div>
           </div>
@@ -146,6 +148,15 @@ export function CampaignsClient({ campaigns, suppliers }: { campaigns: Campaign[
       )}
 
       {/* Send modal */}
+      {deleteConfirmId && (
+        <DeleteConfirmModal
+          title={`Delete "${campaigns.find((x) => x.id === deleteConfirmId)?.name ?? "campaign"}"?`}
+          description="This campaign and all its stats will be permanently deleted."
+          onConfirm={() => { startTransition(() => deleteCampaign(deleteConfirmId)); setDeleteConfirmId(null); }}
+          onCancel={() => setDeleteConfirmId(null)}
+        />
+      )}
+
       {sending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
           <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl">

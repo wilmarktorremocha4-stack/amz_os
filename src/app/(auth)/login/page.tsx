@@ -60,9 +60,9 @@ export default async function LoginPage({
           <Image
             src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a3427f3671890ccaac6cf63.png"
             alt="AMZ OS"
-            width={280}
-            height={112}
-            className="h-32 w-auto object-contain drop-shadow-[0_0_30px_rgba(0,200,255,0.5)]"
+            width={400}
+            height={160}
+            className="h-48 w-auto object-contain drop-shadow-[0_0_30px_rgba(0,200,255,0.5)]"
             unoptimized
           />
         </div>
