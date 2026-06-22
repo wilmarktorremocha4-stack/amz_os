@@ -11,7 +11,8 @@ import {
 
 const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a399f8f7b00529580ab8d3d.png";
 
-const DAILY_MSG_LIMIT = 50; // configurable
+const DAILY_MSG_LIMIT = 50;
+const WINDOW_HOURS = 5;
 
 const GREETINGS = [
   "Hello! Grab a coffee and let's start the conversation ☕",
@@ -80,57 +81,62 @@ function addStoredFile(f: StoredFileRecord) {
   localStorage.setItem("ai-stored-files", JSON.stringify([f, ...existing].slice(0, 100)));
 }
 
-/* ─── Usage counter (daily) ─── */
-function getTodayKey() {
-  return new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local timezone
-}
-function getUsageCount(): number {
-  if (typeof window === "undefined") return 0;
+/* ─── Usage helpers (server-side, 5-hour rolling window) ─── */
+type UsageState = { count: number; limit: number; resetAt: string | null };
+async function fetchUsage(): Promise<UsageState> {
   try {
-    const raw = JSON.parse(localStorage.getItem("ai-usage") ?? "{}") as Record<string, number>;
-    return raw[getTodayKey()] ?? 0;
-  } catch { return 0; }
+    const res = await fetch("/api/ai-usage");
+    if (res.ok) return await res.json() as UsageState;
+  } catch { /* ignore */ }
+  return { count: 0, limit: DAILY_MSG_LIMIT, resetAt: null };
 }
-function incrementUsage(): number {
-  if (typeof window === "undefined") return 0;
-  const raw = JSON.parse(localStorage.getItem("ai-usage") ?? "{}") as Record<string, number>;
-  const today = getTodayKey();
-  raw[today] = (raw[today] ?? 0) + 1;
-  localStorage.setItem("ai-usage", JSON.stringify(raw));
-  return raw[today];
+async function incrementUsageServer(): Promise<UsageState | null> {
+  try {
+    const res = await fetch("/api/ai-usage", { method: "POST" });
+    if (res.status === 429) return await res.json() as UsageState;
+    if (res.ok) return await res.json() as UsageState;
+  } catch { /* ignore */ }
+  return null;
 }
-function getMidnightReset(): string {
-  const now = new Date();
-  const midnight = new Date(now);
-  midnight.setHours(24, 0, 0, 0);
-  const h = midnight.getHours() === 0 ? 12 : midnight.getHours() > 12 ? midnight.getHours() - 12 : midnight.getHours();
-  const ampm = new Date(midnight).setHours(0, 0, 0, 0) < new Date(midnight).getTime() ? "AM" : "PM";
-  // Format: "12:00 AM"
-  const mm = String(midnight.getMinutes()).padStart(2, "0");
-  const hh = String(midnight.getHours() === 0 ? 12 : midnight.getHours() > 12 ? midnight.getHours() - 12 : midnight.getHours()).padStart(2, "0");
-  const ap = midnight.getHours() < 12 ? "AM" : "PM";
-  void h; void ampm;
-  return `${hh}:${mm} ${ap}`;
+function formatResetTime(resetAt: string | null): string {
+  if (!resetAt) return `${WINDOW_HOURS}h`;
+  const ms = new Date(resetAt).getTime() - Date.now();
+  if (ms <= 0) return "soon";
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
 /* ─── CSS ─── */
 const STYLE = `
-/* ── Radar ring animation (concentric rings, brand blue) ── */
-.avatar-wrap { position: relative; display: inline-block; }
-.avatar-wrap .ring {
-  position: absolute;
-  inset: -6px;
+/* ── Corona / eclipse glow (brand blue) ── */
+.avatar-wrap {
+  position: relative;
+  display: inline-block;
   border-radius: 50%;
-  border: 2px solid rgba(59,130,246,0);
-  pointer-events: none;
+  line-height: 0;
 }
-.avatar-think .ring-1 { animation: ring-out 2.4s ease-out infinite 0s; }
-.avatar-think .ring-2 { animation: ring-out 2.4s ease-out infinite 0.6s; }
-.avatar-think .ring-3 { animation: ring-out 2.4s ease-out infinite 1.2s; }
-@keyframes ring-out {
-  0%   { transform: scale(1);   border-color: rgba(59,130,246,0.7); }
-  60%  { transform: scale(1.7); border-color: rgba(96,165,250,0.3); }
-  100% { transform: scale(2.2); border-color: rgba(147,197,253,0); }
+.avatar-think {
+  border-radius: 50%;
+  animation: corona-pulse 2s ease-in-out infinite;
+}
+@keyframes corona-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 2px rgba(59,130,246,0.85),
+      0 0 10px 4px rgba(37,99,235,0.65),
+      0 0 22px 8px rgba(96,165,250,0.35),
+      0 0 38px 14px rgba(147,197,253,0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(96,165,250,1.0),
+      0 0 16px 7px rgba(59,130,246,0.8),
+      0 0 32px 14px rgba(96,165,250,0.5),
+      0 0 55px 22px rgba(147,197,253,0.25);
+  }
 }
 .neon-btn {
   position: relative; background: transparent; border: none; outline: none; cursor: pointer;
@@ -158,17 +164,12 @@ type AiMessage = {
 type Conversation = { id: string; title: string; pinned: boolean; updatedAt: string; preview: string; };
 type PendingFile = { file: File; status: "uploading" | "ready" | "error"; analysis?: string; blobUrl?: string; };
 
-/* ─── Logo with radar rings ─── */
+/* ─── Logo with corona glow ─── */
 function AgentLogo({ size = 40, thinking = false }: { size?: number; thinking?: boolean }) {
   return (
-    <div className={`avatar-wrap ${thinking ? "avatar-think" : ""}`} style={{ display: "inline-block", lineHeight: 0, width: size, height: size }}>
-      {thinking && <>
-        <span className="ring ring-1" />
-        <span className="ring ring-2" />
-        <span className="ring ring-3" />
-      </>}
+    <div className={`avatar-wrap ${thinking ? "avatar-think" : ""}`} style={{ width: size, height: size, borderRadius: "50%" }}>
       <Image src={AGENT_IMG} alt="AMZ Navigator" width={size} height={size}
-        style={{ width: size, height: size, objectFit: "contain", position: "relative", zIndex: 1 }} unoptimized />
+        style={{ width: size, height: size, objectFit: "contain", borderRadius: "50%" }} unoptimized />
     </div>
   );
 }
@@ -599,22 +600,47 @@ function MiniRecentPanel({ conversations, activeConvId, onSelect }: { conversati
   );
 }
 
-/* ─── Usage bar ─── */
-function UsageBar({ count }: { count: number }) {
-  const pct = Math.min(100, Math.round((count / DAILY_MSG_LIMIT) * 100));
-  const resetTime = getMidnightReset();
-  const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
+/* ─── Compact usage bar ─── */
+function UsageBar({ count, limit, resetAt }: { count: number; limit: number; resetAt: string | null }) {
+  const [open, setOpen] = useState(false);
+  const pct = Math.min(100, Math.round((count / limit) * 100));
   const color = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#3b82f6";
+  const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
+  const resetIn = formatResetTime(resetAt);
+  const resetLocal = resetAt
+    ? new Date(resetAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
+
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between text-[10px] text-[var(--muted)]">
-        <span className="font-medium">Daily usage</span>
-        <span>Resets {resetTime}{tz ? ` (${tz.split("/").pop()?.replace(/_/g, " ")})` : ""} · {pct}%</span>
+    <div className="relative flex items-center gap-2 mt-1.5">
+      <span className="text-[10px] font-medium text-[var(--muted)] shrink-0">Daily usage</span>
+      <div className="flex-1 h-[3px] rounded-full bg-[var(--border)] overflow-hidden">
+        <div className="h-[3px] rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <div className="h-1 w-full rounded-full bg-[var(--border)] overflow-hidden">
-        <div className="h-1 rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
-      </div>
-      <p className="text-[9px] text-[var(--muted)]/60 text-right">{count} / {DAILY_MSG_LIMIT} messages today</p>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Usage details"
+        className="shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all hover:scale-110"
+        style={{ borderColor: color, background: `${color}22` }}
+      >
+        <span className="text-[7px] font-black leading-none" style={{ color }}>{pct >= 100 ? "!" : `${Math.round(pct / 10) * 10 > 0 ? "" : ""}`}</span>
+      </button>
+      {open && (
+        <div
+          className="absolute bottom-7 right-0 z-50 w-56 rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl p-3"
+          onMouseLeave={() => setOpen(false)}
+        >
+          <p className="text-[11px] font-bold text-[var(--foreground)] mb-0.5">{count} / {limit} messages</p>
+          <p className="text-[10px] text-[var(--muted)] mb-2">Rolling {WINDOW_HOURS}-hour window</p>
+          <div className="h-1.5 w-full rounded-full bg-[var(--border)] overflow-hidden mb-2">
+            <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+          </div>
+          {resetLocal && (
+            <p className="text-[10px] text-[var(--muted)]">Resets at {resetLocal}{tz ? ` · ${tz.split("/").pop()?.replace(/_/g, " ")}` : ""}</p>
+          )}
+          <p className="text-[10px] text-[var(--muted)]">Resets in ~{resetIn}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -641,7 +667,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const [starters, setStarters] = useState(() => shufflePick(ALL_STARTERS, 4));
   const [recentHover, setRecentHover] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [usageCount, setUsageCount] = useState(0);
+  const [usage, setUsage] = useState<UsageState>({ count: 0, limit: DAILY_MSG_LIMIT, resetAt: null });
   const recentHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<{ stop(): void } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -650,7 +676,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setUsageCount(getUsageCount());
+    fetchUsage().then(u => setUsage(u));
     fetch("/api/ai-conversations")
       .then(r => r.ok ? r.json() : [])
       .then((convs: Conversation[]) => setConversations(applyPinned(convs)))
@@ -737,7 +763,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || isResponding || usageCount >= DAILY_MSG_LIMIT) return;
+    if (!text || isResponding || usage.count >= usage.limit) return;
     if (pendingFiles.some(f => f.status === "uploading")) return;
 
     let queryWithContext = text;
@@ -757,8 +783,8 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     setInput(""); setPendingFiles([]); setIsResponding(true); setError(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
-    const newCount = incrementUsage();
-    setUsageCount(newCount);
+    const newUsage = await incrementUsageServer();
+    if (newUsage) setUsage(newUsage);
 
     const assistantId = crypto.randomUUID();
     let fullContent = "";
@@ -807,7 +833,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     } finally {
       setIsResponding(false);
     }
-  }, [input, isResponding, difyConvId, pendingFiles, usageCount]);
+  }, [input, isResponding, difyConvId, pendingFiles, usage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
@@ -869,12 +895,9 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         {/* ─── Full sidebar ─── */}
         {sidebarOpen && (
           <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-            {/* Collapse + search inline at top */}
-            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-              <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition shrink-0">
-                <PanelLeftClose size={15} />
-              </button>
-              <div className="neon-btn rounded-xl flex-1">
+            {/* Search full-width at top */}
+            <div className="px-3 pt-3 pb-2">
+              <div className="neon-btn rounded-xl w-full">
                 <div className="flex items-center gap-2 rounded-xl bg-[var(--background)] px-3 py-2">
                   <Search size={12} className="text-[var(--muted)] shrink-0" />
                   <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations…"
@@ -906,9 +929,13 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
               {filtered.length === 0 && search && <p className="px-3 py-6 text-xs text-[var(--muted)] text-center">No results found.</p>}
             </div>
 
-            <div className="border-t border-[var(--border)] px-3 py-2">
-              <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-2 w-full rounded-lg px-2 py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
+            <div className="border-t border-[var(--border)] px-3 py-2 flex items-center gap-1">
+              <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-2 flex-1 rounded-lg px-2 py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
                 <Settings size={13} /> Settings
+              </button>
+              <button onClick={() => setSidebarOpen(false)} title="Collapse sidebar"
+                className="p-2 rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition shrink-0">
+                <PanelLeftClose size={14} />
               </button>
             </div>
           </aside>
@@ -985,7 +1012,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
           </div>
 
           {/* Input area */}
-          <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-4 pt-3 pb-2">
+          <div className="shrink-0 border-t border-[var(--border)] px-4 pt-3 pb-2" style={{ background: "#dde3ea" }}>
             <div className="mx-auto max-w-2xl">
               {pendingFiles.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
@@ -1020,15 +1047,12 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                   className={`shrink-0 p-1.5 rounded-lg transition ${isListening ? "text-red-500 animate-pulse" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)]"}`}>
                   <Mic size={14} />
                 </button>
-                <button onClick={send} disabled={!input.trim() || isResponding || uploading || usageCount >= DAILY_MSG_LIMIT}
-                  className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-xl transition-all ${input.trim() && !isResponding && !uploading && usageCount < DAILY_MSG_LIMIT ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400" : "bg-[var(--accent-soft)] text-[var(--muted)] opacity-50"}`}>
+                <button onClick={send} disabled={!input.trim() || isResponding || uploading || usage.count >= usage.limit}
+                  className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-xl transition-all ${input.trim() && !isResponding && !uploading && usage.count < usage.limit ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400" : "bg-[var(--accent-soft)] text-[var(--muted)] opacity-50"}`}>
                   <Send size={14} />
                 </button>
               </div>
-              {/* Usage bar */}
-              <div className="mt-2">
-                <UsageBar count={usageCount} />
-              </div>
+              <UsageBar count={usage.count} limit={usage.limit} resetAt={usage.resetAt} />
               <p className="mt-1 text-center text-[10px] text-[var(--muted)]/50">
                 AMZ Navigator is AI and can make mistakes. Please double-check responses.
               </p>
