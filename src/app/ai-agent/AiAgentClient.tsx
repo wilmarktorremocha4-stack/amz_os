@@ -5,11 +5,20 @@ import Image from "next/image";
 import {
   Send, Brain, Search, BookOpen, Lightbulb, ChevronDown, ChevronUp,
   MoreHorizontal, Pin, Pencil, Trash2, X, Plus, PanelLeftClose, PanelLeftOpen,
-  Copy, Check, Paperclip, HardDrive, Settings, Archive, MessageSquare,
+  Copy, Check, Paperclip, Settings, Archive, MessageSquare, HardDrive, ImageIcon,
 } from "lucide-react";
 
-const LOGO = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a39790e610e9ace505dccdb.png";
 const AVATAR = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/68de916c065f281e19a858a2.png";
+const LOGO_URL = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a39790e610e9ace505dccdb.png";
+
+const GREETINGS = [
+  "How can I help you today?",
+  "What's on the agenda today?",
+  "Ready to find your next winning brand?",
+  "What would you like to source today?",
+  "Let's find your next opportunity.",
+  "What can I help you with today?",
+];
 
 type AiMessage = {
   id: string;
@@ -28,13 +37,12 @@ type Conversation = {
   preview: string;
 };
 
-/* ─── Logo — always static (no response-based pulsing here) ─── */
-function NeonLogo({ size = 40 }: { size?: number }) {
-  const px = `${size}px`;
+/* ─── Static logo circle — no animation ─── */
+function LogoCircle({ size = 40 }: { size?: number }) {
   return (
-    <div className="neon-ring shrink-0" style={{ width: px, height: px, borderRadius: "50%", overflow: "hidden", position: "relative" }}>
-      <div className="neon-ring-inner" style={{ width: "100%", height: "100%", borderRadius: "50%", background: "linear-gradient(135deg,#1e3a5f 0%,#0f172a 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Image src={LOGO} alt="OperationAMZ" width={size} height={size} style={{ width: `${Math.round(size * 0.75)}px`, height: `${Math.round(size * 0.75)}px`, objectFit: "contain" }} unoptimized />
+    <div style={{ width: size, height: size, borderRadius: "50%", padding: 2, background: "linear-gradient(135deg,#3b82f6,#8b5cf6,#06b6d4)", flexShrink: 0 }}>
+      <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: "linear-gradient(135deg,#1e3a5f,#0f172a)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Image src={LOGO_URL} alt="AMZ" width={Math.round(size * 0.65)} height={Math.round(size * 0.65)} style={{ width: Math.round(size * 0.65), height: Math.round(size * 0.65), objectFit: "contain" }} unoptimized />
       </div>
     </div>
   );
@@ -43,8 +51,7 @@ function NeonLogo({ size = 40 }: { size?: number }) {
 /* ─── AI avatar — pulses only when thinking ─── */
 function AiAvatar({ pulsing }: { pulsing: boolean }) {
   return (
-    <div className={`shrink-0 h-8 w-8 rounded-full overflow-hidden border-2 border-blue-500/40 bg-[#0f172a] ${pulsing ? "avatar-pulse" : ""}`}
-      style={{ padding: 3 }}>
+    <div className={`shrink-0 h-8 w-8 rounded-full overflow-hidden border-2 border-blue-500/40 bg-[#0f172a] ${pulsing ? "animate-pulse" : ""}`}>
       <Image src={AVATAR} alt="AMZ Navigator" width={32} height={32} className="w-full h-full rounded-full object-cover" unoptimized />
     </div>
   );
@@ -160,21 +167,10 @@ function MessageBubble({ msg, isThinking }: { msg: AiMessage; isThinking?: boole
         <div className={`relative rounded-2xl px-4 py-3 ${isUser
           ? "rounded-tr-sm bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20"
           : "rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] shadow-sm"}`}>
-          {isUser
-            ? <span className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</span>
-            : <MarkdownContent content={msg.content || "…"} />
-          }
+          {isUser ? <span className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</span> : <MarkdownContent content={msg.content || "…"} />}
         </div>
         {!isUser && msg.content && <CopyButton text={msg.content} />}
         {msg.thought && <ThoughtBlock thought={msg.thought} />}
-        {msg.fileUrls && msg.fileUrls.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1">
-            {msg.fileUrls.map((u, i) => (
-              <a key={i} href={u} target="_blank" rel="noopener noreferrer"
-                className="text-[10px] text-blue-400 underline underline-offset-1">{u.split("/").pop() ?? `File ${i + 1}`}</a>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -183,8 +179,7 @@ function MessageBubble({ msg, isThinking }: { msg: AiMessage; isThinking?: boole
 /* ─── Conversation item ─── */
 function ConvItem({ conv, active, onSelect, onRename, onPin, onDelete }: {
   conv: Conversation; active: boolean;
-  onSelect: () => void; onRename: (title: string) => void;
-  onPin: () => void; onDelete: () => void;
+  onSelect: () => void; onRename: (t: string) => void; onPin: () => void; onDelete: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -192,31 +187,28 @@ function ConvItem({ conv, active, onSelect, onRename, onPin, onDelete }: {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handler(e: MouseEvent) { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    function h(e: MouseEvent) { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
   return (
-    <div onClick={onSelect}
-      className={`group relative flex items-start gap-2 rounded-xl px-3 py-2.5 cursor-pointer transition-colors ${active ? "bg-blue-500/10 text-[var(--foreground)]" : "hover:bg-[var(--accent-soft)] text-[var(--muted)]"}`}>
-      <MessageSquare size={13} className="shrink-0 mt-0.5 opacity-50" />
+    <div onClick={onSelect} className={`group relative flex items-start gap-2 rounded-xl px-3 py-2.5 cursor-pointer transition-colors ${active ? "bg-blue-500/10" : "hover:bg-[var(--accent-soft)]"}`}>
+      <MessageSquare size={13} className="shrink-0 mt-0.5 opacity-40" />
       <div className="flex-1 min-w-0">
-        {renaming ? (
-          <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
-            onBlur={() => { setRenaming(false); onRename(draft); }}
-            onKeyDown={e => { if (e.key === "Enter") { setRenaming(false); onRename(draft); } if (e.key === "Escape") { setRenaming(false); setDraft(conv.title); } }}
-            onClick={e => e.stopPropagation()}
-            className="w-full bg-transparent text-xs outline-none border-b border-blue-500/50 text-[var(--foreground)]" />
-        ) : (
-          <p className={`text-xs font-medium truncate leading-tight ${active ? "text-[var(--foreground)]" : ""}`}>{conv.title}</p>
-        )}
-        <p className="text-[10px] truncate opacity-50 mt-0.5 leading-tight">{conv.preview || "No messages yet"}</p>
+        {renaming
+          ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
+              onBlur={() => { setRenaming(false); onRename(draft); }}
+              onKeyDown={e => { if (e.key === "Enter") { setRenaming(false); onRename(draft); } if (e.key === "Escape") { setRenaming(false); setDraft(conv.title); } }}
+              onClick={e => e.stopPropagation()}
+              className="w-full bg-transparent text-xs outline-none border-b border-blue-500/50 text-[var(--foreground)]" />
+          : <p className="text-xs font-medium truncate leading-tight text-[var(--foreground)]">{conv.title}</p>
+        }
+        <p className="text-[10px] truncate opacity-40 mt-0.5">{conv.preview || "No messages yet"}</p>
       </div>
-      {conv.pinned && <Pin size={9} className="shrink-0 mt-0.5 text-blue-400 opacity-70" />}
+      {conv.pinned && <Pin size={9} className="shrink-0 mt-0.5 text-blue-400 opacity-60" />}
       <div ref={menuRef} className="relative shrink-0" onClick={e => e.stopPropagation()}>
-        <button onClick={() => setMenuOpen(o => !o)}
-          className="opacity-0 group-hover:opacity-100 transition p-0.5 rounded hover:bg-[var(--border)]">
+        <button onClick={() => setMenuOpen(o => !o)} className="opacity-0 group-hover:opacity-100 transition p-0.5 rounded hover:bg-[var(--border)]">
           <MoreHorizontal size={12} />
         </button>
         {menuOpen && (
@@ -238,7 +230,7 @@ function DeleteModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl">
         <h3 className="text-sm font-semibold text-[var(--foreground)]">Delete conversation?</h3>
-        <p className="mt-1.5 text-xs text-[var(--muted)]">This will permanently remove the conversation and all its messages.</p>
+        <p className="mt-1.5 text-xs text-[var(--muted)]">This will permanently remove this conversation and all its messages.</p>
         <div className="mt-4 flex gap-2">
           <button onClick={onConfirm} className="flex-1 rounded-lg bg-red-500 py-2 text-xs font-semibold text-white hover:bg-red-600">Delete</button>
           <button onClick={onCancel} className="flex-1 rounded-lg border border-[var(--border)] py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)]">Cancel</button>
@@ -248,14 +240,93 @@ function DeleteModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
   );
 }
 
+/* ─── Settings modal ─── */
+function SettingsModal({ conversations, messages, onClose }: { conversations: Conversation[]; messages: AiMessage[]; onClose: () => void }) {
+  const [tab, setTab] = useState<"archive" | "storage">("archive");
+  const [storageTab, setStorageTab] = useState<"files" | "images">("files");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <h2 className="text-sm font-bold text-[var(--foreground)]">Settings</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--muted)]"><X size={14} /></button>
+        </div>
+        {/* Tab bar */}
+        <div className="flex border-b border-[var(--border)]">
+          <button onClick={() => setTab("archive")} className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition ${tab === "archive" ? "text-blue-500 border-b-2 border-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
+            <Archive size={12} /> Archive
+          </button>
+          <button onClick={() => setTab("storage")} className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition ${tab === "storage" ? "text-blue-500 border-b-2 border-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
+            <HardDrive size={12} /> Storage
+          </button>
+        </div>
+        <div className="p-4">
+          {tab === "archive" && (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-[var(--muted)]">Deleted conversations are archived here. They will be permanently removed after 30 days.</p>
+              <div className="rounded-xl border border-[var(--border)] p-3 text-center">
+                <p className="text-xs text-[var(--muted)]">No archived conversations</p>
+              </div>
+            </div>
+          )}
+          {tab === "storage" && (
+            <div className="flex flex-col gap-3">
+              {/* Storage stats */}
+              <div className="rounded-xl border border-[var(--border)] p-3 flex flex-col gap-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-[var(--muted)]">Total conversations</span>
+                  <span className="font-semibold text-[var(--foreground)]">{conversations.length}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-[var(--muted)]">Messages in current chat</span>
+                  <span className="font-semibold text-[var(--foreground)]">{messages.length}</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-[var(--border)] mt-1">
+                  <div className="h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all" style={{ width: `${Math.min(100, (conversations.length / 50) * 100)}%` }} />
+                </div>
+                <p className="text-[10px] text-[var(--muted)]">{conversations.length} / 50 conversations</p>
+              </div>
+              {/* Files / Images subtabs */}
+              <div className="flex gap-1 rounded-xl border border-[var(--border)] p-1">
+                <button onClick={() => setStorageTab("files")} className={`flex-1 rounded-lg py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition ${storageTab === "files" ? "bg-blue-500/10 text-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
+                  <Paperclip size={11} /> Files
+                </button>
+                <button onClick={() => setStorageTab("images")} className={`flex-1 rounded-lg py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition ${storageTab === "images" ? "bg-blue-500/10 text-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
+                  <ImageIcon size={11} /> Images
+                </button>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] p-4 text-center">
+                <p className="text-xs text-[var(--muted)]">{storageTab === "files" ? "No files uploaded yet" : "No images uploaded yet"}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Mini sidebar icon button with hover tooltip ─── */
+function MiniConvButton({ conv, active, onSelect }: { conv: Conversation; active: boolean; onSelect: () => void }) {
+  return (
+    <div className="relative group">
+      <button onClick={onSelect} className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${active ? "bg-blue-500/20 text-blue-500" : "text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]"}`}>
+        <MessageSquare size={14} />
+      </button>
+      <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 hidden group-hover:block">
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 shadow-xl whitespace-nowrap">
+          <p className="text-xs font-medium text-[var(--foreground)] max-w-[180px] truncate">{conv.title}</p>
+          {conv.preview && <p className="text-[10px] text-[var(--muted)] truncate max-w-[180px]">{conv.preview}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main ─── */
 export default function AiAgentClient({ initialConversations }: { initialConversations: Conversation[] }) {
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
-
-  // Fetch conversations client-side on mount (avoids server-side auth issues)
-  useEffect(() => {
-    fetch("/api/ai-conversations").then(r => r.ok ? r.json() : []).then(setConversations).catch(() => {});
-  }, []);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [difyConvId, setDifyConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([]);
@@ -263,17 +334,23 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const [isResponding, setIsResponding] = useState(false);
   const [statusPhase, setStatusPhase] = useState(0);
   const [showStatus, setShowStatus] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<"chats" | "settings">("chats");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [search, setSearch] = useState("");
   const [deleteModal, setDeleteModal] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const phaseTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load conversations on mount
+  useEffect(() => {
+    fetch("/api/ai-conversations").then(r => r.ok ? r.json() : []).then(setConversations).catch(() => {});
+  }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, showStatus]);
 
@@ -302,6 +379,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     setFiles([]);
     setError(null);
     setShowStatus(false);
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
   const refreshConversations = async () => {
@@ -339,7 +417,6 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
     const assistantId = crypto.randomUUID();
     let thoughtBuf = "";
-    let currentConvId = activeConvId;
 
     try {
       const res = await fetch("/api/ai-chat", {
@@ -373,7 +450,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
           if (!raw) continue;
           try {
             const json = JSON.parse(raw);
-            if (json.type === "conv_db_id") { currentConvId = json.convDbId; setActiveConvId(json.convDbId); }
+            if (json.type === "conv_db_id") setActiveConvId(json.convDbId);
             if (json.type === "dify_conv_id") setDifyConvId(json.difyConvId);
             if (json.type === "chunk") setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
             if (json.type === "thought") { thoughtBuf += json.thought; setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, thought: thoughtBuf } : m)); }
@@ -381,7 +458,6 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
           } catch { /* skip */ }
         }
       }
-      void currentConvId;
     } catch (e) {
       stopStatusCycle();
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -425,189 +501,128 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     { emoji: "📊", text: "What are the key steps in the Wholesale Masterclass?" },
   ];
 
-  const totalMessages = conversations.reduce((acc) => acc, 0);
-  void totalMessages;
-
   return (
     <>
-      <style>{`
-        @keyframes ring-spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        @keyframes avatar-pulse {
-          0%,100% { box-shadow: 0 0 0 0 #3b82f640; }
-          50% { box-shadow: 0 0 0 5px #3b82f620, 0 0 12px 4px #8b5cf630; }
-        }
-        .neon-ring {
-          position: relative;
-          padding: 2px;
-          background: linear-gradient(135deg,#3b82f6,#8b5cf6,#06b6d4,#3b82f6);
-          background-size: 300% 300%;
-          animation: ring-spin 4s linear infinite, gradient-shift 4s ease infinite;
-        }
-        @keyframes gradient-shift {
-          0%,100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        .neon-ring::before {
-          content: '';
-          position: absolute;
-          inset: -2px;
-          border-radius: 50%;
-          background: linear-gradient(135deg,#3b82f6,#8b5cf6,#06b6d4);
-          filter: blur(6px);
-          opacity: 0.5;
-          z-index: -1;
-          animation: gradient-shift 4s ease infinite;
-        }
-        .neon-ring-inner {
-          position: relative;
-          z-index: 1;
-          border-radius: 50%;
-        }
-        .avatar-pulse { animation: avatar-pulse 1.2s ease-in-out infinite; }
-      `}</style>
-
       {deleteModal && <DeleteModal onConfirm={() => handleDelete(deleteModal)} onCancel={() => setDeleteModal(null)} />}
+      {settingsOpen && <SettingsModal conversations={conversations} messages={messages} onClose={() => setSettingsOpen(false)} />}
 
       <div className="flex" style={{ height: "calc(100vh - 0px)", maxHeight: "100dvh" }}>
 
-        {/* ─── Sidebar ─── */}
+        {/* ─── Full sidebar ─── */}
         {sidebarOpen && (
           <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-            {/* Logo only — no text */}
+            {/* Logo only */}
             <div className="flex items-center justify-center px-3 py-4 border-b border-[var(--border)]">
-              <NeonLogo size={44} />
+              <LogoCircle size={44} />
             </div>
 
-            {/* Tab bar: Chats | Settings */}
-            <div className="flex border-b border-[var(--border)]">
-              <button onClick={() => setSidebarTab("chats")}
-                className={`flex-1 py-2.5 text-[11px] font-medium transition flex items-center justify-center gap-1.5 ${sidebarTab === "chats" ? "text-blue-500 border-b-2 border-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
-                <MessageSquare size={12} /> Chats
-              </button>
-              <button onClick={() => setSidebarTab("settings")}
-                className={`flex-1 py-2.5 text-[11px] font-medium transition flex items-center justify-center gap-1.5 ${sidebarTab === "settings" ? "text-blue-500 border-b-2 border-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
-                <Settings size={12} /> Settings
+            {/* Search */}
+            <div className="px-3 pt-3 pb-1">
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2">
+                <Search size={12} className="text-[var(--muted)] shrink-0" />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations…"
+                  className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]" />
+                {search && <button onClick={() => setSearch("")}><X size={10} className="text-[var(--muted)]" /></button>}
+              </div>
+            </div>
+
+            {/* New Chat */}
+            <div className="px-3 pt-2 pb-1">
+              <button onClick={startNew}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-blue-500/40 bg-blue-500/5 px-3 py-2.5 text-xs font-medium text-blue-500 hover:bg-blue-500/10 hover:border-blue-500/60 transition-all active:scale-[0.98]">
+                <Plus size={13} /> New conversation
               </button>
             </div>
 
-            {/* Chats tab */}
-            {sidebarTab === "chats" && (
-              <div className="flex flex-col flex-1 overflow-hidden">
-                {/* Search */}
-                <div className="px-3 pt-3 pb-1">
-                  <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2">
-                    <Search size={12} className="text-[var(--muted)] shrink-0" />
-                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations…"
-                      className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]" />
-                    {search && <button onClick={() => setSearch("")}><X size={10} className="text-[var(--muted)]" /></button>}
-                  </div>
-                </div>
+            {/* Conversations */}
+            <div className="flex-1 overflow-y-auto px-2 py-1 flex flex-col gap-0.5">
+              {pinned.length > 0 && (
+                <>
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wide">Pinned</p>
+                  {pinned.map(c => <ConvItem key={c.id} conv={c} active={activeConvId === c.id}
+                    onSelect={() => loadConversation(c.id)} onRename={t => handleRename(c.id, t)}
+                    onPin={() => handlePin(c.id)} onDelete={() => setDeleteModal(c.id)} />)}
+                </>
+              )}
+              {recent.length > 0 && (
+                <>
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wide">Recent</p>
+                  {recent.map(c => <ConvItem key={c.id} conv={c} active={activeConvId === c.id}
+                    onSelect={() => loadConversation(c.id)} onRename={t => handleRename(c.id, t)}
+                    onPin={() => handlePin(c.id)} onDelete={() => setDeleteModal(c.id)} />)}
+                </>
+              )}
+              {filtered.length === 0 && (
+                <p className="px-3 py-6 text-xs text-[var(--muted)] text-center">
+                  {conversations.length === 0 ? "No conversations yet." : "No results found."}
+                </p>
+              )}
+            </div>
 
-                {/* New Chat button */}
-                <div className="px-3 pt-2 pb-1">
-                  <button onClick={startNew}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-blue-500/40 bg-blue-500/5 px-3 py-2.5 text-xs font-medium text-blue-500 hover:bg-blue-500/10 hover:border-blue-500/60 transition-all active:scale-[0.98]">
-                    <Plus size={13} /> New conversation
-                  </button>
-                </div>
+            {/* Settings at bottom */}
+            <div className="border-t border-[var(--border)] px-3 py-2 flex items-center gap-2">
+              <button onClick={() => setSidebarOpen(false)}
+                className="p-2 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--muted)] hover:text-[var(--foreground)] transition">
+                <PanelLeftClose size={14} />
+              </button>
+              <button onClick={() => setSettingsOpen(true)}
+                className="flex items-center gap-2 flex-1 rounded-lg px-2 py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
+                <Settings size={13} /> Settings
+              </button>
+            </div>
+          </aside>
+        )}
 
-                {/* Conversations list */}
-                <div className="flex-1 overflow-y-auto px-2 py-1 flex flex-col gap-0.5">
-                  {pinned.length > 0 && (
-                    <>
-                      <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wide">Pinned</p>
-                      {pinned.map(c => <ConvItem key={c.id} conv={c} active={activeConvId === c.id}
-                        onSelect={() => loadConversation(c.id)} onRename={t => handleRename(c.id, t)}
-                        onPin={() => handlePin(c.id)} onDelete={() => setDeleteModal(c.id)} />)}
-                    </>
-                  )}
-                  {recent.length > 0 && (
-                    <>
-                      <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wide">Recent</p>
-                      {recent.map(c => <ConvItem key={c.id} conv={c} active={activeConvId === c.id}
-                        onSelect={() => loadConversation(c.id)} onRename={t => handleRename(c.id, t)}
-                        onPin={() => handlePin(c.id)} onDelete={() => setDeleteModal(c.id)} />)}
-                    </>
-                  )}
-                  {filtered.length === 0 && (
-                    <p className="px-3 py-6 text-xs text-[var(--muted)] text-center leading-relaxed">
-                      {conversations.length === 0 ? "No conversations yet. Tap New conversation to start." : "No results found."}
-                    </p>
-                  )}
+        {/* ─── Mini sidebar (collapsed) ─── */}
+        {!sidebarOpen && (
+          <aside className="flex w-12 shrink-0 flex-col items-center border-r border-[var(--border)] bg-[var(--surface)] py-3 gap-1">
+            {/* Expand */}
+            <button onClick={() => setSidebarOpen(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition mb-1">
+              <PanelLeftOpen size={15} />
+            </button>
+            {/* New chat */}
+            <div className="relative group">
+              <button onClick={startNew}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-500 hover:bg-blue-500/10 transition">
+                <Plus size={15} />
+              </button>
+              <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 hidden group-hover:block">
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 shadow-xl whitespace-nowrap">
+                  <p className="text-xs font-medium text-[var(--foreground)]">New conversation</p>
                 </div>
               </div>
-            )}
-
-            {/* Settings tab — contains Archive + Storage */}
-            {sidebarTab === "settings" && (
-              <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
-                {/* Archive section */}
-                <div className="rounded-xl border border-[var(--border)] overflow-hidden">
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-[var(--background)] border-b border-[var(--border)]">
-                    <Archive size={12} className="text-[var(--muted)]" />
-                    <p className="text-xs font-semibold text-[var(--foreground)]">Archive</p>
-                  </div>
-                  <div className="p-3 flex flex-col gap-1.5">
-                    <p className="text-[10px] text-[var(--muted)] leading-relaxed">Deleted conversations are archived here for 30 days before permanent removal.</p>
-                    <p className="text-[10px] font-medium text-[var(--foreground)]">{conversations.filter(() => false).length} archived items</p>
-                  </div>
+            </div>
+            {/* Divider */}
+            <div className="w-6 border-t border-[var(--border)] my-1" />
+            {/* Recent conversations */}
+            <div className="flex flex-col gap-1 flex-1 overflow-hidden">
+              {conversations.slice(0, 8).map(c => (
+                <MiniConvButton key={c.id} conv={c} active={activeConvId === c.id} onSelect={() => loadConversation(c.id)} />
+              ))}
+            </div>
+            {/* Settings at bottom */}
+            <div className="relative group mt-auto">
+              <button onClick={() => setSettingsOpen(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
+                <Settings size={15} />
+              </button>
+              <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 hidden group-hover:block">
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 shadow-xl whitespace-nowrap">
+                  <p className="text-xs font-medium text-[var(--foreground)]">Settings</p>
                 </div>
-
-                {/* Storage section */}
-                <div className="rounded-xl border border-[var(--border)] overflow-hidden">
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-[var(--background)] border-b border-[var(--border)]">
-                    <HardDrive size={12} className="text-[var(--muted)]" />
-                    <p className="text-xs font-semibold text-[var(--foreground)]">Storage</p>
-                  </div>
-                  <div className="p-3 flex flex-col gap-2">
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-[var(--muted)]">Conversations</span>
-                      <span className="font-medium text-[var(--foreground)]">{conversations.length}</span>
-                    </div>
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-[var(--muted)]">Current messages</span>
-                      <span className="font-medium text-[var(--foreground)]">{messages.length}</span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-[var(--border)] mt-1">
-                      <div className="h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500" style={{ width: `${Math.min(100, (conversations.length / 50) * 100)}%` }} />
-                    </div>
-                    <p className="text-[10px] text-[var(--muted)]">{conversations.length} / 50 conversations used</p>
-                  </div>
-                </div>
-
-                {/* Files section */}
-                <div className="rounded-xl border border-[var(--border)] overflow-hidden">
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-[var(--background)] border-b border-[var(--border)]">
-                    <Paperclip size={12} className="text-[var(--muted)]" />
-                    <p className="text-xs font-semibold text-[var(--foreground)]">Files & Images</p>
-                  </div>
-                  <div className="p-3">
-                    <p className="text-[10px] text-[var(--muted)]">Uploaded files and images will appear here, organized by conversation.</p>
-                  </div>
-                </div>
-
-                <button onClick={async () => { for (const c of conversations) { await handleDelete(c.id); } }}
-                  className="mt-1 text-[10px] text-red-500 hover:underline text-left px-1">Clear all conversations</button>
               </div>
-            )}
+            </div>
           </aside>
         )}
 
         {/* ─── Main area ─── */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Header — logo only, no text, no "New chat" button */}
-          <div className="shrink-0 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5">
-            <button onClick={() => setSidebarOpen(o => !o)}
-              className="p-1.5 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--muted)] hover:text-[var(--foreground)] transition">
-              {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-            </button>
-            <NeonLogo size={34} />
-            <div className="min-w-0">
-              <p className="text-[10px] text-[var(--muted)]">{isResponding ? "Thinking…" : activeConvId ? "Conversation active" : "Your AI sourcing co-pilot"}</p>
-            </div>
+          {/* Header — "AMZ Navigator" gradient text, no logo, no subtitle */}
+          <div className="shrink-0 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+            <h1 className="text-base font-bold bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-400 bg-clip-text text-transparent tracking-tight">
+              AMZ Navigator
+            </h1>
           </div>
 
           {/* Messages */}
@@ -615,13 +630,9 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
             <div className="mx-auto max-w-2xl px-4 py-6">
               {messages.length === 0 && !isResponding ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
-                  <div className="relative flex items-center justify-center">
-                    <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-3xl scale-150" />
-                    <NeonLogo size={96} />
-                  </div>
+                  <LogoCircle size={88} />
                   <div>
-                    <h2 className="text-2xl font-bold text-[var(--foreground)]">AMZ Navigator</h2>
-                    <p className="mt-2 text-sm text-[var(--muted)] max-w-sm leading-relaxed">Your AI-powered co-pilot for Amazon wholesale sourcing, brand partnerships, and supplier outreach.</p>
+                    <h2 className="text-2xl font-bold text-[var(--foreground)]">{greeting}</h2>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
                     {STARTERS.map(s => (
@@ -685,8 +696,8 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                   <Send size={14} />
                 </button>
               </div>
-              <p className="mt-1.5 text-center text-[10px] text-[var(--muted)]/50">
-                OperationAMZ can make mistakes. Check important info.
+              <p className="mt-1.5 text-center text-[10px] text-[var(--muted)]/60">
+                AMZ Navigator is AI and can make mistakes. Please double-check responses.
               </p>
             </div>
           </div>
