@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/currentUser";
 import { sendEmail } from "@/lib/email";
 import { renderEmailHtml, injectTracking, EmailDoc } from "@/lib/email-builder";
 
-const BASE_URL = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://amzos.netlify.app";
+const BASE_URL = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://amz-os.vercel.app";
 
 export async function createCampaign(formData: FormData) {
   const user = await getCurrentUser();
