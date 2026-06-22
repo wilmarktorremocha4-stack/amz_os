@@ -251,6 +251,11 @@ function DeleteModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
 /* ─── Main ─── */
 export default function AiAgentClient({ initialConversations }: { initialConversations: Conversation[] }) {
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
+
+  // Fetch conversations client-side on mount (avoids server-side auth issues)
+  useEffect(() => {
+    fetch("/api/ai-conversations").then(r => r.ok ? r.json() : []).then(setConversations).catch(() => {});
+  }, []);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [difyConvId, setDifyConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([]);
