@@ -5,18 +5,20 @@ import Image from "next/image";
 import {
   Send, Search, MoreHorizontal, Pin, Pencil, Trash2, X,
   Plus, PanelLeftClose, PanelLeftOpen, Copy, Check,
-  Paperclip, Settings, Archive, HardDrive, ImageIcon, Clock,
+  Paperclip, Settings, Archive, HardDrive, ImageIcon, Clock, Mic,
 } from "lucide-react";
 
 const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a399f8f7b00529580ab8d3d.png";
 
 const GREETINGS = [
-  "How can I help you today?",
-  "What's on the agenda today?",
-  "Ready to find your next winning brand?",
-  "What would you like to source today?",
-  "Let's find your next opportunity.",
-  "What can I help you with today?",
+  "Hello! Grab a coffee and let's start the conversation ☕",
+  "Hey there! What's on your mind today?",
+  "Good to see you! How can I help?",
+  "Hi! I'm here whenever you're ready.",
+  "Welcome back! What are we tackling today?",
+  "Hey! Ask me anything — I'm all ears.",
+  "What's up? Let's figure this out together.",
+  "Hello! I'm ready whenever you are.",
 ];
 
 const ALL_STARTERS = [
@@ -57,19 +59,13 @@ function applyPinned(convs: Conversation[]): Conversation[] {
 const STYLE = `
 @keyframes avatar-think {
   0%,100% {
-    filter: drop-shadow(0 0 5px #1e3a8a) drop-shadow(0 0 10px #1d4ed8);
+    filter: drop-shadow(0 0 8px rgba(59,130,246,0.5)) drop-shadow(0 0 18px rgba(59,130,246,0.3));
   }
   50% {
-    filter: drop-shadow(0 0 12px #1d4ed8) drop-shadow(0 0 24px #3b82f6) drop-shadow(0 0 36px rgba(59,130,246,0.4));
+    filter: drop-shadow(0 0 16px rgba(96,165,250,0.8)) drop-shadow(0 0 40px rgba(59,130,246,0.5)) drop-shadow(0 0 60px rgba(147,197,253,0.3));
   }
 }
 .avatar-think { animation: avatar-think 2.4s ease-in-out infinite; }
-.logo-glow {
-  filter: drop-shadow(0 0 6px #1e3a8a) drop-shadow(0 0 14px #1d4ed8);
-}
-.logo-glow-sm {
-  filter: drop-shadow(0 0 4px #1e3a8a) drop-shadow(0 0 8px #1d4ed8);
-}
 .neon-btn {
   position: relative;
   background: transparent;
@@ -111,25 +107,25 @@ type Conversation = {
 type UploadedFile = {
   name: string;
   upload_file_id: string;
-  type: string; // "image" | "document" | "audio" | "video"
+  type: string;
+  analysis?: string;
 };
 
 /* ─── Logo component ─── */
 function AgentLogo({ size = 40, thinking = false }: { size?: number; thinking?: boolean }) {
   return (
-    <div className={thinking ? "avatar-think" : "logo-glow"} style={{ display: "inline-block", lineHeight: 0 }}>
+    <div className={thinking ? "avatar-think" : ""} style={{ display: "inline-block", lineHeight: 0 }}>
       <Image src={AGENT_IMG} alt="AMZ Navigator" width={size} height={size}
         style={{ width: size, height: size, objectFit: "contain" }} unoptimized />
     </div>
   );
 }
 
-/* ─── Neon section label (PINNED / RECENT) ─── */
+/* ─── Simple section label (PINNED / RECENT) ─── */
 function NeonLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="neon-btn mx-3 my-2 rounded-lg px-3 py-1.5 text-center"
-      style={{ background: "rgba(29,78,216,0.06)" }}>
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", background: "linear-gradient(90deg,#1d4ed8,#60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+    <div className="mx-3 mt-3 mb-1">
+      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.1em", background: "linear-gradient(90deg,#1d4ed8,#60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
         {children}
       </span>
     </div>
@@ -457,7 +453,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     }
   };
 
-  /* ─── File upload to Dify ─── */
+  /* ─── File analysis via OpenAI ─── */
   const handleFileChange = async (newFiles: File[]) => {
     setFiles(prev => [...prev, ...newFiles]);
     setUploading(true);
@@ -465,19 +461,46 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     for (const f of newFiles) {
       const form = new FormData();
       form.append("file", f);
-      const res = await fetch("/api/ai-upload", { method: "POST", body: form });
+      const res = await fetch("/api/ai-file-analyze", { method: "POST", body: form });
       if (res.ok) {
-        const data = await res.json() as { id: string; mime_type?: string };
-        const mime = data.mime_type ?? f.type ?? "";
-        const type = mime.startsWith("image/") ? "image"
-          : mime.startsWith("audio/") ? "audio"
-          : mime.startsWith("video/") ? "video"
-          : "document";
-        results.push({ name: f.name, upload_file_id: data.id, type });
+        const data = await res.json() as { analysis?: string };
+        results.push({ name: f.name, upload_file_id: "", type: "analysis", analysis: data.analysis ?? "" });
+      } else {
+        results.push({ name: f.name, upload_file_id: "", type: "analysis", analysis: `(Could not analyze ${f.name})` });
       }
     }
     setUploadedFiles(prev => [...prev, ...results]);
     setUploading(false);
+  };
+
+  /* ─── Speech to text ─── */
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<{ stop(): void } | null>(null);
+  const toggleMic = () => {
+    if (typeof window === "undefined") return;
+    type SR = { new(): { continuous: boolean; interimResults: boolean; lang: string; onresult: ((e: { results: { [i: number]: { [i: number]: { transcript: string } } } }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; start(): void; stop(): void; }; };
+    const w = window as unknown as Record<string, unknown>;
+    const SRClass = w["SpeechRecognition"] as SR | undefined || w["webkitSpeechRecognition"] as SR | undefined;
+    if (!SRClass) { alert("Speech recognition is not supported in this browser."); return; }
+    if (isListening && recognitionRef.current) {
+      (recognitionRef.current as unknown as { stop(): void }).stop();
+      setIsListening(false);
+      return;
+    }
+    const rec = new SRClass();
+    recognitionRef.current = rec as unknown as { stop(): void };
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    rec.onresult = (e) => {
+      const transcript = Object.values(e.results).map((r) => r[0].transcript).join("");
+      setInput(transcript);
+      autoResize();
+    };
+    rec.onend = () => setIsListening(false);
+    rec.onerror = () => setIsListening(false);
+    rec.start();
+    setIsListening(true);
   };
 
   const removeFile = (i: number) => {
@@ -490,11 +513,16 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     const text = input.trim();
     if (!text || isResponding) return;
 
-    const difyFiles = uploadedFiles.map(f => ({
-      type: f.type,
-      transfer_method: "local_file",
-      upload_file_id: f.upload_file_id,
-    }));
+    // Build query: prepend file analyses as context
+    let queryWithContext = text;
+    if (uploadedFiles.length > 0) {
+      const contextParts = uploadedFiles
+        .filter(f => f.analysis)
+        .map(f => `[File: ${f.name}]\n${f.analysis}`);
+      if (contextParts.length > 0) {
+        queryWithContext = `${contextParts.join("\n\n")}\n\nUser question: ${text}`;
+      }
+    }
 
     const userMsg: AiMessage = { id: crypto.randomUUID(), role: "user", content: text, createdAt: Date.now(), fileUrls: uploadedFiles.map(f => f.name) };
     setMessages(prev => [...prev, userMsg]);
@@ -511,7 +539,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: text, difyConversationId: difyConvId, files: difyFiles }),
+        body: JSON.stringify({ query: queryWithContext, difyConversationId: difyConvId }),
       });
 
       if (!res.ok) {
@@ -605,14 +633,16 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         {/* ─── Full sidebar ─── */}
         {sidebarOpen && (
           <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-            {/* Top: collapse + logo */}
-            <div className="flex items-center gap-2 px-3 py-3 border-b border-[var(--border)]">
-              <button onClick={() => setSidebarOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--muted)] hover:text-[var(--foreground)] transition shrink-0">
-                <PanelLeftClose size={15} />
-              </button>
-              <div className="flex-1 flex justify-center">
-                <AgentLogo size={48} />
+            {/* Top: dark bg with logo centered + collapse btn */}
+            <div className="border-b border-[var(--border)]" style={{ background: "#071628" }}>
+              <div className="flex items-center px-2 pt-2">
+                <button onClick={() => setSidebarOpen(false)}
+                  className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition shrink-0">
+                  <PanelLeftClose size={15} />
+                </button>
+              </div>
+              <div className="flex justify-center pb-4 pt-1">
+                <AgentLogo size={56} />
               </div>
             </div>
 
@@ -700,9 +730,9 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         {/* ─── Main area ─── */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Header */}
-          <div className="shrink-0 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <div className="shrink-0 flex items-center gap-3 border-b border-[var(--border)] px-4 py-3" style={{ background: "#071628" }}>
             <h1 className="text-base font-bold tracking-tight"
-              style={{ background: "linear-gradient(90deg,#1d4ed8 0%,#3b82f6 55%,#60a5fa 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              style={{ background: "linear-gradient(90deg,#3b82f6 0%,#60a5fa 55%,#93c5fd 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               AMZ Navigator
             </h1>
           </div>
@@ -712,7 +742,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
             <div className="mx-auto max-w-2xl px-4 py-6">
               {messages.length === 0 && !isResponding ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
-                  <AgentLogo size={96} />
+                  <AgentLogo size={120} />
                   <h2 className="text-2xl font-bold text-[var(--foreground)]">{greeting}</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
                     {starters.map(s => (
@@ -760,9 +790,9 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
               {files.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {files.map((f, i) => (
-                    <span key={i} className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${uploadedFiles[i] ? "bg-blue-500/10 border-blue-500/20 text-blue-400" : "bg-yellow-500/10 border-yellow-500/20 text-yellow-600"}`}>
+                    <span key={i} className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${uploadedFiles[i] ? "bg-blue-500/10 border-blue-500/20 text-blue-400" : "bg-yellow-500/10 border-yellow-500/20 text-yellow-500"}`}>
                       <Paperclip size={9} /> {f.name}
-                      {uploading && !uploadedFiles[i] && <span className="ml-0.5 opacity-60">↑</span>}
+                      {uploading && !uploadedFiles[i] && <span className="ml-0.5 animate-pulse">↑</span>}
                       <button onClick={() => removeFile(i)}><X size={9} /></button>
                     </span>
                   ))}
@@ -777,10 +807,15 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                   onChange={e => { if (e.target.files) handleFileChange(Array.from(e.target.files)); e.target.value = ""; }} />
                 <textarea ref={textareaRef} value={input} onChange={e => { setInput(e.target.value); autoResize(); }}
                   onKeyDown={handleKeyDown}
-                  placeholder={isResponding ? "AMZ Navigator is thinking…" : "Ask anything about Amazon sourcing…"}
+                  placeholder={isListening ? "Listening…" : isResponding ? "AMZ Navigator is thinking…" : "Talk to AMZ Navigator"}
                   rows={1} disabled={isResponding}
                   className="flex-1 resize-none bg-transparent text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none leading-relaxed"
                   style={{ maxHeight: 140 }} />
+                <button onClick={toggleMic} disabled={isResponding}
+                  className={`shrink-0 p-1.5 rounded-lg transition ${isListening ? "text-red-500 animate-pulse" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)]"}`}
+                  title="Speech to text">
+                  <Mic size={14} />
+                </button>
                 <button onClick={send} disabled={!input.trim() || isResponding || uploading}
                   className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-xl transition-all ${input.trim() && !isResponding && !uploading ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400" : "bg-[var(--accent-soft)] text-[var(--muted)] opacity-50"}`}>
                   <Send size={14} />
