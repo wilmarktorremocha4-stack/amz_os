@@ -57,6 +57,7 @@ model User {
   emailSequences     EmailSequence[]
   brandScans         BrandScan[]
   workflows          Workflow[]
+  aiConversations    AiConversation[]
 }
 
 // --- CRM: Wholesale supplier/brand pipeline ---
@@ -527,4 +528,20 @@ model WorkflowEnrollment {
   errorMessage String?
   history      Json      @default("[]")
   @@unique([workflowId, supplierId])
+}
+
+model AiConversation {
+  id                 String    @id @default(cuid())
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String
+  difyConversationId String?
+  title              String    @default("New Chat")
+  messages           Json      @default("[]")
+  fileUrls           Json      @default("[]")
+  pinned             Boolean   @default(false)
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([userId, createdAt])
 }
