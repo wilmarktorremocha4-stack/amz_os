@@ -5,10 +5,13 @@ import Image from "next/image";
 import {
   Send, Search, MoreHorizontal, Pin, Pencil, Trash2, X,
   Plus, PanelLeftClose, PanelLeftOpen, Copy, Check,
-  Paperclip, Settings, Archive, HardDrive, ImageIcon, Clock, Mic, RotateCcw, FileText,
+  Paperclip, Settings, HardDrive, ImageIcon, Clock, Mic, RotateCcw, FileText,
+  Archive, Download, FileSpreadsheet, BookOpen,
 } from "lucide-react";
 
 const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a399f8f7b00529580ab8d3d.png";
+
+const DAILY_MSG_LIMIT = 50; // configurable
 
 const GREETINGS = [
   "Hello! Grab a coffee and let's start the conversation ☕",
@@ -66,35 +69,78 @@ function saveArchived(items: ArchivedConv[]) {
   localStorage.setItem("ai-archived", JSON.stringify(items));
 }
 
+type StoredFileRecord = { name: string; type: string; size: number; uploadedAt: string; convId?: string };
+function getStoredFiles(): StoredFileRecord[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem("ai-stored-files") ?? "[]") as StoredFileRecord[]; } catch { return []; }
+}
+function addStoredFile(f: StoredFileRecord) {
+  if (typeof window === "undefined") return;
+  const existing = getStoredFiles();
+  localStorage.setItem("ai-stored-files", JSON.stringify([f, ...existing].slice(0, 100)));
+}
+
+/* ─── Usage counter (daily) ─── */
+function getTodayKey() {
+  return new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local timezone
+}
+function getUsageCount(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = JSON.parse(localStorage.getItem("ai-usage") ?? "{}") as Record<string, number>;
+    return raw[getTodayKey()] ?? 0;
+  } catch { return 0; }
+}
+function incrementUsage(): number {
+  if (typeof window === "undefined") return 0;
+  const raw = JSON.parse(localStorage.getItem("ai-usage") ?? "{}") as Record<string, number>;
+  const today = getTodayKey();
+  raw[today] = (raw[today] ?? 0) + 1;
+  localStorage.setItem("ai-usage", JSON.stringify(raw));
+  return raw[today];
+}
+function getMidnightReset(): string {
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const h = midnight.getHours() === 0 ? 12 : midnight.getHours() > 12 ? midnight.getHours() - 12 : midnight.getHours();
+  const ampm = new Date(midnight).setHours(0, 0, 0, 0) < new Date(midnight).getTime() ? "AM" : "PM";
+  // Format: "12:00 AM"
+  const mm = String(midnight.getMinutes()).padStart(2, "0");
+  const hh = String(midnight.getHours() === 0 ? 12 : midnight.getHours() > 12 ? midnight.getHours() - 12 : midnight.getHours()).padStart(2, "0");
+  const ap = midnight.getHours() < 12 ? "AM" : "PM";
+  void h; void ampm;
+  return `${hh}:${mm} ${ap}`;
+}
+
 /* ─── CSS ─── */
 const STYLE = `
-@keyframes avatar-think {
-  0%,100% {
-    filter: drop-shadow(0 0 10px rgba(96,165,250,0.6)) drop-shadow(0 0 24px rgba(59,130,246,0.35));
-  }
-  50% {
-    filter: drop-shadow(0 0 22px rgba(147,197,253,0.9)) drop-shadow(0 0 50px rgba(96,165,250,0.6)) drop-shadow(0 0 80px rgba(59,130,246,0.3));
-  }
+/* ── Radar ring animation (concentric rings, brand blue) ── */
+.avatar-wrap { position: relative; display: inline-block; }
+.avatar-wrap .ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(59,130,246,0);
+  pointer-events: none;
 }
-.avatar-think { animation: avatar-think 2.4s ease-in-out infinite; }
+.avatar-think .ring-1 { animation: ring-out 2.4s ease-out infinite 0s; }
+.avatar-think .ring-2 { animation: ring-out 2.4s ease-out infinite 0.6s; }
+.avatar-think .ring-3 { animation: ring-out 2.4s ease-out infinite 1.2s; }
+@keyframes ring-out {
+  0%   { transform: scale(1);   border-color: rgba(59,130,246,0.7); }
+  60%  { transform: scale(1.7); border-color: rgba(96,165,250,0.3); }
+  100% { transform: scale(2.2); border-color: rgba(147,197,253,0); }
+}
 .neon-btn {
-  position: relative;
-  background: transparent;
-  border: none;
-  outline: none;
-  cursor: pointer;
+  position: relative; background: transparent; border: none; outline: none; cursor: pointer;
 }
 .neon-btn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1.5px;
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px;
   background: linear-gradient(90deg, #1d4ed8, #2563eb, #60a5fa);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  -webkit-mask-composite: xor; mask-composite: exclude;
   box-shadow: 0 0 8px rgba(37,99,235,0.45), 0 0 16px rgba(37,99,235,0.2);
 }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -109,26 +155,20 @@ type AiMessage = {
   fileUrls?: string[];
 };
 
-type Conversation = {
-  id: string;
-  title: string;
-  pinned: boolean;
-  updatedAt: string;
-  preview: string;
-};
+type Conversation = { id: string; title: string; pinned: boolean; updatedAt: string; preview: string; };
+type PendingFile = { file: File; status: "uploading" | "ready" | "error"; analysis?: string; blobUrl?: string; };
 
-type PendingFile = {
-  file: File;
-  status: "uploading" | "ready" | "error";
-  analysis?: string;
-};
-
-/* ─── Logo ─── */
+/* ─── Logo with radar rings ─── */
 function AgentLogo({ size = 40, thinking = false }: { size?: number; thinking?: boolean }) {
   return (
-    <div className={thinking ? "avatar-think" : ""} style={{ display: "inline-block", lineHeight: 0 }}>
+    <div className={`avatar-wrap ${thinking ? "avatar-think" : ""}`} style={{ display: "inline-block", lineHeight: 0, width: size, height: size }}>
+      {thinking && <>
+        <span className="ring ring-1" />
+        <span className="ring ring-2" />
+        <span className="ring ring-3" />
+      </>}
       <Image src={AGENT_IMG} alt="AMZ Navigator" width={size} height={size}
-        style={{ width: size, height: size, objectFit: "contain" }} unoptimized />
+        style={{ width: size, height: size, objectFit: "contain", position: "relative", zIndex: 1 }} unoptimized />
     </div>
   );
 }
@@ -144,10 +184,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ─── Neon New Conversation button ─── */
 function NeonNewBtn({ onClick }: { onClick: () => void }) {
   return (
-    <button onClick={onClick} className="neon-btn mx-3 mt-2 mb-1 w-[calc(100%-24px)] rounded-xl py-2.5 flex items-center justify-center gap-2 hover:bg-blue-500/5 active:scale-[0.98] transition-all"
+    <button onClick={onClick} className="neon-btn mx-3 mt-1.5 mb-1 w-[calc(100%-24px)] rounded-xl py-2.5 flex items-center justify-center gap-2 hover:bg-blue-500/5 active:scale-[0.98] transition-all"
       style={{ background: "rgba(29,78,216,0.04)" }}>
       <Plus size={13} style={{ color: "#3b82f6" }} />
       <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", background: "linear-gradient(90deg,#1d4ed8,#60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
@@ -204,21 +243,149 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function MessageBubble({ msg, isThinking }: { msg: AiMessage; isThinking?: boolean }) {
+/* ─── Export helpers ─── */
+async function exportContent(content: string, format: "pdf" | "docx" | "xlsx", title: string) {
+  if (format === "pdf") {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxW = pageW - margin * 2;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text(title, margin, 20);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated by AMZ Navigator • ${new Date().toLocaleDateString()}`, margin, 28);
+
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(0.5);
+    doc.line(margin, 31, pageW - margin, 31);
+
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(11);
+
+    let y = 40;
+    const lines = content.split("\n");
+    for (const line of lines) {
+      if (y > 270) { doc.addPage(); y = 20; }
+      if (!line.trim()) { y += 4; continue; }
+      const clean = line.replace(/^\*+\s*/, "").replace(/\*\*/g, "");
+      if (line.startsWith("## ") || line.startsWith("# ")) {
+        doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+        const wrapped = doc.splitTextToSize(clean.replace(/^#+\s*/, ""), maxW);
+        doc.text(wrapped, margin, y); y += wrapped.length * 7 + 3;
+        doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+      } else if (line.startsWith("### ")) {
+        doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+        const wrapped = doc.splitTextToSize(clean.replace(/^#+\s*/, ""), maxW);
+        doc.text(wrapped, margin, y); y += wrapped.length * 6 + 2;
+        doc.setFont("helvetica", "normal");
+      } else {
+        const wrapped = doc.splitTextToSize(clean, maxW);
+        doc.text(wrapped, margin, y); y += wrapped.length * 5.5 + 1;
+      }
+    }
+    doc.save(`${title.replace(/\s+/g, "_")}.pdf`);
+    return;
+  }
+
+  if (format === "docx") {
+    const { Document, Paragraph, TextRun, HeadingLevel, Packer } = await import("docx");
+    const children: InstanceType<typeof Paragraph>[] = [];
+    children.push(new Paragraph({ text: title, heading: HeadingLevel.HEADING_1 }));
+    children.push(new Paragraph({ children: [new TextRun({ text: `Generated by AMZ Navigator • ${new Date().toLocaleDateString()}`, color: "666666", size: 18 })] }));
+    children.push(new Paragraph({ text: "" }));
+
+    for (const line of content.split("\n")) {
+      const clean = line.replace(/\*\*/g, "");
+      if (!line.trim()) { children.push(new Paragraph({ text: "" })); continue; }
+      if (line.startsWith("## ") || line.startsWith("# ")) {
+        children.push(new Paragraph({ text: clean.replace(/^#+\s*/, ""), heading: HeadingLevel.HEADING_2 }));
+      } else if (line.startsWith("### ")) {
+        children.push(new Paragraph({ text: clean.replace(/^#+\s*/, ""), heading: HeadingLevel.HEADING_3 }));
+      } else {
+        children.push(new Paragraph({ children: [new TextRun({ text: clean })] }));
+      }
+    }
+    const doc = new Document({ sections: [{ properties: {}, children }] });
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `${title.replace(/\s+/g, "_")}.docx`; a.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  if (format === "xlsx") {
+    const XLSX = await import("xlsx");
+    const rows: string[][] = [[title], [`Generated by AMZ Navigator • ${new Date().toLocaleDateString()}`], []];
+    for (const line of content.split("\n")) {
+      rows.push([line.replace(/\*\*/g, "").replace(/^#+\s*/, "")]);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "AMZ Navigator");
+    XLSX.writeFile(wb, `${title.replace(/\s+/g, "_")}.xlsx`);
+    return;
+  }
+}
+
+/* ─── Export modal ─── */
+function ExportModal({ content, onClose }: { content: string; onClose: () => void }) {
+  const [loading, setLoading] = useState<string | null>(null);
+  const title = `AMZ Navigator Export ${new Date().toLocaleDateString()}`;
+
+  const doExport = async (fmt: "pdf" | "docx" | "xlsx") => {
+    setLoading(fmt);
+    try { await exportContent(content, fmt, title); } catch (e) { alert(`Export failed: ${e instanceof Error ? e.message : e}`); }
+    setLoading(null);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-[var(--foreground)]">Export conversation</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--muted)]"><X size={13} /></button>
+        </div>
+        <p className="text-xs text-[var(--muted)] mb-4">Choose a format to download this conversation.</p>
+        <div className="flex flex-col gap-2">
+          {([["pdf","PDF Document","rounded-xl bg-red-500/10 border-red-400/20 text-red-600"],
+             ["docx","Word Document (.docx)","rounded-xl bg-blue-500/10 border-blue-400/20 text-blue-600"],
+             ["xlsx","Spreadsheet (.xlsx)","rounded-xl bg-green-500/10 border-green-400/20 text-green-600"]] as const).map(([fmt, label, cls]) => (
+            <button key={fmt} onClick={() => doExport(fmt)} disabled={!!loading}
+              className={`flex items-center gap-3 px-3 py-2.5 border text-xs font-semibold transition hover:opacity-80 disabled:opacity-50 ${cls}`}>
+              {loading === fmt
+                ? <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent spin" />
+                : fmt === "pdf" ? <BookOpen size={14} /> : fmt === "docx" ? <FileText size={14} /> : <FileSpreadsheet size={14} />}
+              {label}
+              {loading === fmt && <span className="ml-auto text-[10px] opacity-60">Generating…</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Message bubble ─── */
+function MessageBubble({ msg, isThinking, onExport }: { msg: AiMessage; isThinking?: boolean; onExport?: (content: string) => void }) {
   const isUser = msg.role === "user";
   return (
     <div className={`group flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"} items-start`}>
       {isUser
         ? <div className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-400 text-white text-xs font-bold border border-blue-500/40">U</div>
-        : <AgentLogo size={48} thinking={isThinking} />
+        : <AgentLogo size={46} thinking={isThinking} />
       }
       <div className={`max-w-[78%] flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
         {!isUser && <span className="text-[11px] font-semibold text-blue-400 px-1">AMZ Navigator</span>}
-        {/* Attached files (user side) */}
         {isUser && msg.fileUrls && msg.fileUrls.length > 0 && (
           <div className="flex flex-wrap gap-1.5 justify-end mb-0.5">
             {msg.fileUrls.map((name, i) => (
-              <span key={i} className="flex items-center gap-1.5 rounded-xl bg-blue-500/15 border border-blue-400/30 px-2.5 py-1 text-[11px] text-blue-300">
+              <span key={i} className="flex items-center gap-1.5 rounded-xl bg-blue-500/15 border border-blue-400/30 px-2.5 py-1 text-[11px] text-blue-600 font-medium">
                 <FileText size={11} /> {name}
               </span>
             ))}
@@ -231,7 +398,18 @@ function MessageBubble({ msg, isThinking }: { msg: AiMessage; isThinking?: boole
             ? <span className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</span>
             : <MarkdownContent content={msg.content || "…"} />}
         </div>
-        {!isUser && msg.content && <CopyButton text={msg.content} />}
+        {!isUser && msg.content && (
+          <div className="flex gap-1">
+            <CopyButton text={msg.content} />
+            {onExport && (
+              <button onClick={() => onExport(msg.content)}
+                className="opacity-0 group-hover:opacity-100 transition mt-1 shrink-0 p-1.5 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--muted)] hover:text-[var(--foreground)]"
+                title="Export as file">
+                <Download size={12} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -289,7 +467,7 @@ function DeleteModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl">
         <h3 className="text-sm font-semibold text-[var(--foreground)]">Delete conversation?</h3>
-        <p className="mt-1.5 text-xs text-[var(--muted)]">This will move the conversation to Archive. You can restore it from Settings → Archive.</p>
+        <p className="mt-1.5 text-xs text-[var(--muted)]">This will move it to Archive. You can restore it from Settings → Archive.</p>
         <div className="mt-4 flex gap-2">
           <button onClick={onConfirm} className="flex-1 rounded-lg bg-red-500 py-2 text-xs font-semibold text-white hover:bg-red-600">Delete</button>
           <button onClick={onCancel} className="flex-1 rounded-lg border border-[var(--border)] py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)]">Cancel</button>
@@ -300,15 +478,15 @@ function DeleteModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
 }
 
 /* ─── Settings modal ─── */
-function SettingsModal({ conversations, messages, archived, onRestore, onClose }: {
-  conversations: Conversation[];
-  messages: AiMessage[];
-  archived: ArchivedConv[];
-  onRestore: (id: string) => void;
-  onClose: () => void;
+function SettingsModal({ conversations, messages, archived, storedFiles, onRestore, onClose }: {
+  conversations: Conversation[]; messages: AiMessage[];
+  archived: ArchivedConv[]; storedFiles: StoredFileRecord[];
+  onRestore: (id: string) => void; onClose: () => void;
 }) {
   const [tab, setTab] = useState<"archive" | "storage">("archive");
   const [storageTab, setStorageTab] = useState<"files" | "images">("files");
+  const imgFiles = storedFiles.filter(f => f.type.startsWith("image/"));
+  const docFiles = storedFiles.filter(f => !f.type.startsWith("image/"));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
@@ -327,7 +505,7 @@ function SettingsModal({ conversations, messages, archived, onRestore, onClose }
         <div className="p-4">
           {tab === "archive" && (
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-[var(--muted)]">Deleted conversations are archived here. Feel free to restore any conversation below.</p>
+              <p className="text-xs text-[var(--muted)]">Deleted conversations are archived here. Feel free to restore any time.</p>
               {archived.length === 0
                 ? <div className="rounded-xl border border-[var(--border)] p-4 text-center"><p className="text-xs text-[var(--muted)]">No archived conversations</p></div>
                 : <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
@@ -350,14 +528,8 @@ function SettingsModal({ conversations, messages, archived, onRestore, onClose }
           {tab === "storage" && (
             <div className="flex flex-col gap-3">
               <div className="rounded-xl border border-[var(--border)] p-3 flex flex-col gap-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-[var(--muted)]">Total conversations</span>
-                  <span className="font-semibold">{conversations.length}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-[var(--muted)]">Messages in current chat</span>
-                  <span className="font-semibold">{messages.length}</span>
-                </div>
+                <div className="flex justify-between text-xs"><span className="text-[var(--muted)]">Total conversations</span><span className="font-semibold">{conversations.length}</span></div>
+                <div className="flex justify-between text-xs"><span className="text-[var(--muted)]">Messages in current chat</span><span className="font-semibold">{messages.length}</span></div>
                 <div className="h-1.5 w-full rounded-full bg-[var(--border)] mt-1">
                   <div className="h-1.5 rounded-full bg-gradient-to-r from-blue-600 to-blue-400" style={{ width: `${Math.min(100, (conversations.length / 50) * 100)}%` }} />
                 </div>
@@ -365,14 +537,25 @@ function SettingsModal({ conversations, messages, archived, onRestore, onClose }
               </div>
               <div className="flex gap-1 rounded-xl border border-[var(--border)] p-1">
                 {(["files", "images"] as const).map(t => (
-                  <button key={t} onClick={() => setStorageTab(t)} className={`flex-1 rounded-lg py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition capitalize ${storageTab === t ? "bg-blue-500/10 text-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
-                    {t === "files" ? <Paperclip size={11} /> : <ImageIcon size={11} />} {t}
+                  <button key={t} onClick={() => setStorageTab(t)} className={`flex-1 rounded-lg py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition ${storageTab === t ? "bg-blue-500/10 text-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
+                    {t === "files" ? <Paperclip size={11} /> : <ImageIcon size={11} />} {t === "files" ? `Files (${docFiles.length})` : `Images (${imgFiles.length})`}
                   </button>
                 ))}
               </div>
-              <div className="rounded-xl border border-[var(--border)] p-4 text-center">
-                <p className="text-xs text-[var(--muted)]">{storageTab === "files" ? "No files uploaded yet" : "No images uploaded yet"}</p>
-              </div>
+              {(storageTab === "files" ? docFiles : imgFiles).length === 0
+                ? <div className="rounded-xl border border-[var(--border)] p-4 text-center"><p className="text-xs text-[var(--muted)]">{storageTab === "files" ? "No files uploaded yet" : "No images uploaded yet"}</p></div>
+                : <div className="flex flex-col gap-1 max-h-52 overflow-y-auto">
+                    {(storageTab === "files" ? docFiles : imgFiles).map((f, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2">
+                        <FileText size={12} className="shrink-0 text-[var(--muted)]" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate text-[var(--foreground)]">{f.name}</p>
+                          <p className="text-[10px] text-[var(--muted)]">{(f.size / 1024).toFixed(1)} KB • {new Date(f.uploadedAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+              }
             </div>
           )}
         </div>
@@ -385,8 +568,7 @@ function SettingsModal({ conversations, messages, archived, onRestore, onClose }
 function MiniBtn({ onClick, tooltip, children, blue }: { onClick: () => void; tooltip: string; children: React.ReactNode; blue?: boolean }) {
   return (
     <div className="relative group">
-      <button onClick={onClick}
-        className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${blue ? "text-blue-500 hover:bg-blue-500/10" : "text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]"}`}>
+      <button onClick={onClick} className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${blue ? "text-blue-500 hover:bg-blue-500/10" : "text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]"}`}>
         {children}
       </button>
       <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 z-50 hidden group-hover:block">
@@ -398,13 +580,10 @@ function MiniBtn({ onClick, tooltip, children, blue }: { onClick: () => void; to
   );
 }
 
-/* ─── Mini recent chats popup ─── */
 function MiniRecentPanel({ conversations, activeConvId, onSelect }: { conversations: Conversation[]; activeConvId: string | null; onSelect: (id: string) => void }) {
   return (
     <div className="absolute left-full top-0 ml-2.5 z-50 w-60 rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl overflow-hidden">
-      <div className="px-3 py-2 border-b border-[var(--border)]">
-        <p className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest">Recent Chats</p>
-      </div>
+      <div className="px-3 py-2 border-b border-[var(--border)]"><p className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest">Recent Chats</p></div>
       <div className="max-h-72 overflow-y-auto py-1">
         {conversations.length === 0
           ? <p className="px-3 py-3 text-xs text-[var(--muted)] text-center">No conversations yet</p>
@@ -420,10 +599,31 @@ function MiniRecentPanel({ conversations, activeConvId, onSelect }: { conversati
   );
 }
 
+/* ─── Usage bar ─── */
+function UsageBar({ count }: { count: number }) {
+  const pct = Math.min(100, Math.round((count / DAILY_MSG_LIMIT) * 100));
+  const resetTime = getMidnightReset();
+  const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
+  const color = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#3b82f6";
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-[10px] text-[var(--muted)]">
+        <span className="font-medium">Daily usage</span>
+        <span>Resets {resetTime}{tz ? ` (${tz.split("/").pop()?.replace(/_/g, " ")})` : ""} · {pct}%</span>
+      </div>
+      <div className="h-1 w-full rounded-full bg-[var(--border)] overflow-hidden">
+        <div className="h-1 rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <p className="text-[9px] text-[var(--muted)]/60 text-right">{count} / {DAILY_MSG_LIMIT} messages today</p>
+    </div>
+  );
+}
+
 /* ─── Main ─── */
 export default function AiAgentClient({ initialConversations }: { initialConversations: Conversation[] }) {
   const [conversations, setConversations] = useState<Conversation[]>(() => applyPinned(initialConversations));
   const [archived, setArchived] = useState<ArchivedConv[]>(() => getArchived());
+  const [storedFiles, setStoredFiles] = useState<StoredFileRecord[]>(() => getStoredFiles());
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [difyConvId, setDifyConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([]);
@@ -434,21 +634,23 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const [search, setSearch] = useState("");
   const [deleteModal, setDeleteModal] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [exportContent2, setExportContent] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
   const [starters, setStarters] = useState(() => shufflePick(ALL_STARTERS, 4));
   const [recentHover, setRecentHover] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [usageCount, setUsageCount] = useState(0);
   const recentHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<{ stop(): void } | null>(null);
-
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setUsageCount(getUsageCount());
     fetch("/api/ai-conversations")
       .then(r => r.ok ? r.json() : [])
       .then((convs: Conversation[]) => setConversations(applyPinned(convs)))
@@ -465,8 +667,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   };
 
   const loadConversation = async (convId: string) => {
-    setActiveConvId(convId);
-    setDifyConvId(convId);
+    setActiveConvId(convId); setDifyConvId(convId);
     if (msgCache[convId]) { setMessages(msgCache[convId]); return; }
     const res = await fetch(`/api/ai-conversations/${convId}`);
     if (res.ok) {
@@ -478,12 +679,8 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   };
 
   const startNew = useCallback(() => {
-    setActiveConvId(null);
-    setDifyConvId(null);
-    setMessages([]);
-    setInput("");
-    setPendingFiles([]);
-    setError(null);
+    setActiveConvId(null); setDifyConvId(null); setMessages([]);
+    setInput(""); setPendingFiles([]); setError(null);
     setStarters(shufflePick(ALL_STARTERS, 4));
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   }, []);
@@ -493,36 +690,35 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     if (res.ok) setConversations(applyPinned(await res.json()));
   };
 
-  /* ─── File analysis via OpenAI ─── */
   const handleFileChange = async (newFiles: File[]) => {
-    const newPending: PendingFile[] = newFiles.map(f => ({ file: f, status: "uploading" }));
+    const newPending: PendingFile[] = newFiles.map(f => ({ file: f, status: "uploading", blobUrl: URL.createObjectURL(f) }));
     setPendingFiles(prev => [...prev, ...newPending]);
 
-    for (let i = 0; i < newFiles.length; i++) {
-      const f = newFiles[i];
+    for (const f of newFiles) {
+      const rec: StoredFileRecord = { name: f.name, type: f.type, size: f.size, uploadedAt: new Date().toISOString(), convId: activeConvId ?? undefined };
+      addStoredFile(rec);
+      setStoredFiles(getStoredFiles());
+
       const form = new FormData();
       form.append("file", f);
       try {
         const res = await fetch("/api/ai-file-analyze", { method: "POST", body: form });
         const data = res.ok ? await res.json() as { analysis?: string } : null;
         setPendingFiles(prev => prev.map(p =>
-          p.file === f
-            ? { ...p, status: data?.analysis ? "ready" : "error", analysis: data?.analysis ?? `Could not analyze ${f.name}` }
-            : p
+          p.file === f ? { ...p, status: data?.analysis ? "ready" : "error", analysis: data?.analysis ?? `Could not analyze ${f.name}` } : p
         ));
       } catch {
-        setPendingFiles(prev => prev.map(p => p.file === f ? { ...p, status: "error", analysis: `Error analyzing ${f.name}` } : p));
+        setPendingFiles(prev => prev.map(p => p.file === f ? { ...p, status: "error" } : p));
       }
     }
   };
 
-  /* ─── Speech to text ─── */
   const toggleMic = () => {
     if (typeof window === "undefined") return;
     type SR = { new(): { continuous: boolean; interimResults: boolean; lang: string; onresult: ((e: { results: { [i: number]: { [i: number]: { transcript: string } } } }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; start(): void; stop(): void; }; };
     const w = window as unknown as Record<string, unknown>;
     const SRClass = w["SpeechRecognition"] as SR | undefined || w["webkitSpeechRecognition"] as SR | undefined;
-    if (!SRClass) { alert("Speech recognition is not supported in this browser."); return; }
+    if (!SRClass) { alert("Speech recognition not supported in this browser."); return; }
     if (isListening && recognitionRef.current) { recognitionRef.current.stop(); setIsListening(false); return; }
     const rec = new SRClass();
     recognitionRef.current = rec as unknown as { stop(): void };
@@ -533,16 +729,17 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     rec.start(); setIsListening(true);
   };
 
-  const removeFile = (i: number) => setPendingFiles(prev => prev.filter((_, j) => j !== i));
+  const removeFile = (i: number) => {
+    const f = pendingFiles[i];
+    if (f?.blobUrl) URL.revokeObjectURL(f.blobUrl);
+    setPendingFiles(prev => prev.filter((_, j) => j !== i));
+  };
 
-  /* ─── Send ─── */
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || isResponding) return;
-    const allReady = pendingFiles.every(f => f.status !== "uploading");
-    if (!allReady) return;
+    if (!text || isResponding || usageCount >= DAILY_MSG_LIMIT) return;
+    if (pendingFiles.some(f => f.status === "uploading")) return;
 
-    // Inject file analyses as context
     let queryWithContext = text;
     const readyFiles = pendingFiles.filter(f => f.analysis);
     if (readyFiles.length > 0) {
@@ -550,16 +747,22 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
       queryWithContext = `${ctx}\n\nUser: ${text}`;
     }
 
+    // Check if user wants export
+    const exportIntent = /\b(convert|export|download|save|generate).*(pdf|doc|word|excel|spreadsheet|xlsx|file|report)\b/i.test(text)
+      || /\b(pdf|doc|word|excel|spreadsheet|xlsx)\b/i.test(text);
+
     const fileNames = pendingFiles.map(f => f.file.name);
     const userMsg: AiMessage = { id: crypto.randomUUID(), role: "user", content: text, createdAt: Date.now(), fileUrls: fileNames.length > 0 ? fileNames : undefined };
     setMessages(prev => [...prev, userMsg]);
-    setInput("");
-    setPendingFiles([]);
-    setIsResponding(true);
-    setError(null);
+    setInput(""); setPendingFiles([]); setIsResponding(true); setError(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
+    const newCount = incrementUsage();
+    setUsageCount(newCount);
+
     const assistantId = crypto.randomUUID();
+    let fullContent = "";
+
     try {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
@@ -579,19 +782,24 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
+        const lines = buf.split("\n"); buf = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim();
-          if (!raw) continue;
+          const raw = line.slice(6).trim(); if (!raw) continue;
           try {
             const json = JSON.parse(raw);
             if (json.type === "dify_conv_id") { setDifyConvId(json.difyConvId); setActiveConvId(json.difyConvId); }
-            if (json.type === "chunk") setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
+            if (json.type === "chunk") {
+              fullContent += json.chunk;
+              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
+            }
             if (json.type === "done") await refreshConversations();
           } catch { /* skip */ }
         }
+      }
+      // Auto-prompt export if response is long and user asked for file
+      if (exportIntent && fullContent.length > 200) {
+        setTimeout(() => setExportContent(fullContent), 500);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -599,7 +807,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     } finally {
       setIsResponding(false);
     }
-  }, [input, isResponding, difyConvId, pendingFiles]);
+  }, [input, isResponding, difyConvId, pendingFiles, usageCount]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
@@ -611,8 +819,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   };
 
   const handlePin = (convId: string) => {
-    const conv = conversations.find(c => c.id === convId);
-    if (!conv) return;
+    const conv = conversations.find(c => c.id === convId); if (!conv) return;
     const ids = getPinnedIds();
     const newIds = conv.pinned ? ids.filter(id => id !== convId) : [...ids, convId];
     savePinnedIds(newIds);
@@ -620,65 +827,54 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   };
 
   const handleDelete = (convId: string) => {
-    // Archive instead of permanently deleting from Dify
     const conv = conversations.find(c => c.id === convId);
     if (conv) {
       const newArchived = [{ id: convId, title: conv.title, deletedAt: new Date().toISOString() }, ...archived];
-      saveArchived(newArchived);
-      setArchived(newArchived);
+      saveArchived(newArchived); setArchived(newArchived);
     }
     setConversations(prev => prev.filter(c => c.id !== convId));
-    const ids = getPinnedIds().filter(id => id !== convId);
-    savePinnedIds(ids);
+    savePinnedIds(getPinnedIds().filter(id => id !== convId));
     if (activeConvId === convId) startNew();
     setDeleteModal(null);
   };
 
   const handleRestore = async (convId: string) => {
     const newArchived = archived.filter(a => a.id !== convId);
-    saveArchived(newArchived);
-    setArchived(newArchived);
-    // Refresh to get it back from Dify
+    saveArchived(newArchived); setArchived(newArchived);
     await refreshConversations();
   };
 
   const q = search.toLowerCase();
-  const filtered = conversations.filter(c => {
-    if (!q) return true;
-    if (c.title.toLowerCase().includes(q)) return true;
-    if (c.preview.toLowerCase().includes(q)) return true;
-    return (msgCache[c.id] ?? []).some(m => m.content.toLowerCase().includes(q));
-  }).filter(c => !archived.some(a => a.id === c.id)); // hide archived from list
+  const filtered = conversations
+    .filter(c => !archived.some(a => a.id === c.id))
+    .filter(c => {
+      if (!q) return true;
+      if (c.title.toLowerCase().includes(q)) return true;
+      if (c.preview.toLowerCase().includes(q)) return true;
+      return (msgCache[c.id] ?? []).some(m => m.content.toLowerCase().includes(q));
+    });
   const pinned = filtered.filter(c => c.pinned);
   const recent = filtered.filter(c => !c.pinned);
-
   const uploading = pendingFiles.some(f => f.status === "uploading");
 
   return (
     <>
       <style>{STYLE}</style>
       {deleteModal && <DeleteModal onConfirm={() => handleDelete(deleteModal)} onCancel={() => setDeleteModal(null)} />}
-      {settingsOpen && <SettingsModal conversations={conversations} messages={messages} archived={archived} onRestore={handleRestore} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsModal conversations={conversations} messages={messages} archived={archived} storedFiles={storedFiles} onRestore={handleRestore} onClose={() => setSettingsOpen(false)} />}
+      {exportContent2 && <ExportModal content={exportContent2} onClose={() => setExportContent(null)} />}
 
-      <div className="flex" style={{ height: "100vh", maxHeight: "100dvh", background: "#e8edf2" }}>
+      <div className="flex" style={{ height: "100vh", maxHeight: "100dvh" }}>
 
         {/* ─── Full sidebar ─── */}
         {sidebarOpen && (
           <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-            {/* Top: collapse + big logo */}
-            <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-[var(--border)]">
-              <button onClick={() => setSidebarOpen(false)}
-                className="p-1.5 rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition shrink-0">
+            {/* Collapse + search inline at top */}
+            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+              <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition shrink-0">
                 <PanelLeftClose size={15} />
               </button>
-              <div className="flex-1 flex justify-center">
-                <AgentLogo size={64} />
-              </div>
-            </div>
-
-            {/* Search */}
-            <div className="px-3 pt-3 pb-1">
-              <div className="neon-btn rounded-xl w-full">
+              <div className="neon-btn rounded-xl flex-1">
                 <div className="flex items-center gap-2 rounded-xl bg-[var(--background)] px-3 py-2">
                   <Search size={12} className="text-[var(--muted)] shrink-0" />
                   <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations…"
@@ -688,10 +884,8 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
               </div>
             </div>
 
-            {/* New Conversation */}
             <NeonNewBtn onClick={startNew} />
 
-            {/* Conversations */}
             <div className="flex-1 overflow-y-auto py-1 flex flex-col">
               {pinned.length > 0 && (
                 <>
@@ -709,15 +903,11 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                     onPin={() => handlePin(c.id)} onDelete={() => setDeleteModal(c.id)} />)}
                 </>
               )}
-              {filtered.length === 0 && search && (
-                <p className="px-3 py-6 text-xs text-[var(--muted)] text-center">No results found.</p>
-              )}
+              {filtered.length === 0 && search && <p className="px-3 py-6 text-xs text-[var(--muted)] text-center">No results found.</p>}
             </div>
 
-            {/* Settings */}
             <div className="border-t border-[var(--border)] px-3 py-2">
-              <button onClick={() => setSettingsOpen(true)}
-                className="flex items-center gap-2 w-full rounded-lg px-2 py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
+              <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-2 w-full rounded-lg px-2 py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
                 <Settings size={13} /> Settings
               </button>
             </div>
@@ -742,8 +932,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         )}
 
         {/* ─── Main area ─── */}
-        <div className="flex flex-1 flex-col overflow-hidden" style={{ background: "#e8edf2" }}>
-          {/* Header */}
+        <div className="flex flex-1 flex-col overflow-hidden" style={{ background: "#dde3ea" }}>
           <div className="shrink-0 flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 bg-[var(--surface)]">
             <h1 className="text-base font-bold tracking-tight"
               style={{ background: "linear-gradient(90deg,#1d4ed8 0%,#3b82f6 55%,#60a5fa 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
@@ -751,7 +940,6 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
             </h1>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-2xl px-4 py-6">
               {messages.length === 0 && !isResponding ? (
@@ -772,20 +960,19 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                 <div className="flex flex-col gap-5">
                   {messages.map((msg, i) => (
                     <MessageBubble key={msg.id} msg={msg}
-                      isThinking={isResponding && i === messages.length - 1 && msg.role === "assistant"} />
+                      isThinking={isResponding && i === messages.length - 1 && msg.role === "assistant"}
+                      onExport={msg.role === "assistant" && msg.content ? (c) => setExportContent(c) : undefined} />
                   ))}
                   {isResponding && messages.length > 0 && messages[messages.length - 1].role === "user" && (
                     <div className="flex gap-3 items-start">
-                      <AgentLogo size={48} thinking />
+                      <AgentLogo size={46} thinking />
                       <div className="flex flex-col gap-1">
                         <span className="text-[11px] font-semibold text-blue-400 px-1">AMZ Navigator</span>
                         <div className="rounded-2xl rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                          <span className="inline-flex gap-1">
-                            {[0,1,2].map(i => (
-                              <span key={i} className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-bounce"
-                                style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }} />
-                            ))}
-                          </span>
+                          {pendingFiles.length > 0
+                            ? <span className="text-xs text-blue-400 flex items-center gap-2"><span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent spin" />Analyzing file…</span>
+                            : <span className="inline-flex gap-1">{[0,1,2].map(i => <span key={i} className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }} />)}</span>
+                          }
                         </div>
                       </div>
                     </div>
@@ -797,10 +984,9 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
             <div ref={bottomRef} />
           </div>
 
-          {/* Input */}
-          <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          {/* Input area */}
+          <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-4 pt-3 pb-2">
             <div className="mx-auto max-w-2xl">
-              {/* File chips with per-file loading state */}
               {pendingFiles.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
                   {pendingFiles.map((pf, i) => (
@@ -808,16 +994,10 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                       ${pf.status === "uploading" ? "bg-yellow-500/10 border-yellow-400/30 text-yellow-600"
                         : pf.status === "ready" ? "bg-blue-500/10 border-blue-400/30 text-blue-500"
                         : "bg-red-500/10 border-red-400/30 text-red-500"}`}>
-                      {pf.status === "uploading"
-                        ? <span className="w-3 h-3 rounded-full border-2 border-yellow-400 border-t-transparent spin inline-block" />
-                        : pf.status === "ready"
-                        ? <Check size={11} />
-                        : <X size={11} />
-                      }
+                      {pf.status === "uploading" ? <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent spin" /> : pf.status === "ready" ? <Check size={11} /> : <X size={11} />}
                       <FileText size={10} />
                       <span className="max-w-[140px] truncate">{pf.file.name}</span>
-                      {pf.status === "uploading" && <span className="opacity-60 text-[9px]">Analyzing…</span>}
-                      {pf.status === "ready" && <span className="opacity-60 text-[9px]">Ready</span>}
+                      <span className="opacity-50 text-[9px]">{pf.status === "uploading" ? "Analyzing…" : pf.status === "ready" ? "Ready" : "Error"}</span>
                       <button onClick={() => removeFile(i)} className="ml-0.5 opacity-60 hover:opacity-100"><X size={9} /></button>
                     </span>
                   ))}
@@ -840,12 +1020,16 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                   className={`shrink-0 p-1.5 rounded-lg transition ${isListening ? "text-red-500 animate-pulse" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)]"}`}>
                   <Mic size={14} />
                 </button>
-                <button onClick={send} disabled={!input.trim() || isResponding || uploading}
-                  className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-xl transition-all ${input.trim() && !isResponding && !uploading ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400" : "bg-[var(--accent-soft)] text-[var(--muted)] opacity-50"}`}>
+                <button onClick={send} disabled={!input.trim() || isResponding || uploading || usageCount >= DAILY_MSG_LIMIT}
+                  className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-xl transition-all ${input.trim() && !isResponding && !uploading && usageCount < DAILY_MSG_LIMIT ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400" : "bg-[var(--accent-soft)] text-[var(--muted)] opacity-50"}`}>
                   <Send size={14} />
                 </button>
               </div>
-              <p className="mt-1.5 text-center text-[10px] text-[var(--muted)]/60">
+              {/* Usage bar */}
+              <div className="mt-2">
+                <UsageBar count={usageCount} />
+              </div>
+              <p className="mt-1 text-center text-[10px] text-[var(--muted)]/50">
                 AMZ Navigator is AI and can make mistakes. Please double-check responses.
               </p>
             </div>
