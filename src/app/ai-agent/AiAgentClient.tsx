@@ -5,7 +5,7 @@ import Image from "next/image";
 import {
   Send, Search, MoreHorizontal, Pin, Pencil, Trash2, X,
   Plus, PanelLeftClose, PanelLeftOpen, Copy, Check,
-  Paperclip, Settings, Archive, HardDrive, ImageIcon, Clock, Mic,
+  Paperclip, Settings, Archive, HardDrive, ImageIcon, Clock, Mic, RotateCcw, FileText,
 } from "lucide-react";
 
 const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a399f8f7b00529580ab8d3d.png";
@@ -19,6 +19,8 @@ const GREETINGS = [
   "Hey! Ask me anything — I'm all ears.",
   "What's up? Let's figure this out together.",
   "Hello! I'm ready whenever you are.",
+  "Hey! Happy to help with whatever you need.",
+  "Good to have you here. What can I do for you?",
 ];
 
 const ALL_STARTERS = [
@@ -37,11 +39,10 @@ const ALL_STARTERS = [
 ];
 
 function shufflePick<T>(arr: T[], n: number): T[] {
-  const a = [...arr].sort(() => Math.random() - 0.5);
-  return a.slice(0, n);
+  return [...arr].sort(() => Math.random() - 0.5).slice(0, n);
 }
 
-/* ─── Pinned state via localStorage ─── */
+/* ─── localStorage helpers ─── */
 function getPinnedIds(): string[] {
   if (typeof window === "undefined") return [];
   try { return JSON.parse(localStorage.getItem("ai-pinned-ids") ?? "[]") as string[]; } catch { return []; }
@@ -55,14 +56,24 @@ function applyPinned(convs: Conversation[]): Conversation[] {
   return convs.map(c => ({ ...c, pinned: ids.includes(c.id) }));
 }
 
+type ArchivedConv = { id: string; title: string; deletedAt: string };
+function getArchived(): ArchivedConv[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem("ai-archived") ?? "[]") as ArchivedConv[]; } catch { return []; }
+}
+function saveArchived(items: ArchivedConv[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("ai-archived", JSON.stringify(items));
+}
+
 /* ─── CSS ─── */
 const STYLE = `
 @keyframes avatar-think {
   0%,100% {
-    filter: drop-shadow(0 0 8px rgba(59,130,246,0.5)) drop-shadow(0 0 18px rgba(59,130,246,0.3));
+    filter: drop-shadow(0 0 10px rgba(96,165,250,0.6)) drop-shadow(0 0 24px rgba(59,130,246,0.35));
   }
   50% {
-    filter: drop-shadow(0 0 16px rgba(96,165,250,0.8)) drop-shadow(0 0 40px rgba(59,130,246,0.5)) drop-shadow(0 0 60px rgba(147,197,253,0.3));
+    filter: drop-shadow(0 0 22px rgba(147,197,253,0.9)) drop-shadow(0 0 50px rgba(96,165,250,0.6)) drop-shadow(0 0 80px rgba(59,130,246,0.3));
   }
 }
 .avatar-think { animation: avatar-think 2.4s ease-in-out infinite; }
@@ -84,8 +95,10 @@ const STYLE = `
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  box-shadow: 0 0 8px rgba(37,99,235,0.5), 0 0 16px rgba(37,99,235,0.25);
+  box-shadow: 0 0 8px rgba(37,99,235,0.45), 0 0 16px rgba(37,99,235,0.2);
 }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.8s linear infinite; }
 `;
 
 type AiMessage = {
@@ -104,14 +117,13 @@ type Conversation = {
   preview: string;
 };
 
-type UploadedFile = {
-  name: string;
-  upload_file_id: string;
-  type: string;
+type PendingFile = {
+  file: File;
+  status: "uploading" | "ready" | "error";
   analysis?: string;
 };
 
-/* ─── Logo component ─── */
+/* ─── Logo ─── */
 function AgentLogo({ size = 40, thinking = false }: { size?: number; thinking?: boolean }) {
   return (
     <div className={thinking ? "avatar-think" : ""} style={{ display: "inline-block", lineHeight: 0 }}>
@@ -121,8 +133,8 @@ function AgentLogo({ size = 40, thinking = false }: { size?: number; thinking?: 
   );
 }
 
-/* ─── Simple section label (PINNED / RECENT) ─── */
-function NeonLabel({ children }: { children: React.ReactNode }) {
+/* ─── Section label ─── */
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-3 mt-3 mb-1">
       <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.1em", background: "linear-gradient(90deg,#1d4ed8,#60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
@@ -135,7 +147,7 @@ function NeonLabel({ children }: { children: React.ReactNode }) {
 /* ─── Neon New Conversation button ─── */
 function NeonNewBtn({ onClick }: { onClick: () => void }) {
   return (
-    <button onClick={onClick} className="neon-btn mx-3 mt-2 mb-1 w-[calc(100%-24px)] rounded-xl py-2.5 flex items-center justify-center gap-2 transition-all hover:bg-blue-500/5 active:scale-[0.98]"
+    <button onClick={onClick} className="neon-btn mx-3 mt-2 mb-1 w-[calc(100%-24px)] rounded-xl py-2.5 flex items-center justify-center gap-2 hover:bg-blue-500/5 active:scale-[0.98] transition-all"
       style={{ background: "rgba(29,78,216,0.04)" }}>
       <Plus size={13} style={{ color: "#3b82f6" }} />
       <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", background: "linear-gradient(90deg,#1d4ed8,#60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
@@ -198,10 +210,20 @@ function MessageBubble({ msg, isThinking }: { msg: AiMessage; isThinking?: boole
     <div className={`group flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"} items-start`}>
       {isUser
         ? <div className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-400 text-white text-xs font-bold border border-blue-500/40">U</div>
-        : <AgentLogo size={38} thinking={isThinking} />
+        : <AgentLogo size={48} thinking={isThinking} />
       }
-      <div className={`max-w-[78%] flex flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
+      <div className={`max-w-[78%] flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
         {!isUser && <span className="text-[11px] font-semibold text-blue-400 px-1">AMZ Navigator</span>}
+        {/* Attached files (user side) */}
+        {isUser && msg.fileUrls && msg.fileUrls.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 justify-end mb-0.5">
+            {msg.fileUrls.map((name, i) => (
+              <span key={i} className="flex items-center gap-1.5 rounded-xl bg-blue-500/15 border border-blue-400/30 px-2.5 py-1 text-[11px] text-blue-300">
+                <FileText size={11} /> {name}
+              </span>
+            ))}
+          </div>
+        )}
         <div className={`rounded-2xl px-4 py-3 ${isUser
           ? "rounded-tr-sm bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20"
           : "rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] shadow-sm"}`}>
@@ -267,7 +289,7 @@ function DeleteModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl">
         <h3 className="text-sm font-semibold text-[var(--foreground)]">Delete conversation?</h3>
-        <p className="mt-1.5 text-xs text-[var(--muted)]">This will permanently remove this conversation and all its messages.</p>
+        <p className="mt-1.5 text-xs text-[var(--muted)]">This will move the conversation to Archive. You can restore it from Settings → Archive.</p>
         <div className="mt-4 flex gap-2">
           <button onClick={onConfirm} className="flex-1 rounded-lg bg-red-500 py-2 text-xs font-semibold text-white hover:bg-red-600">Delete</button>
           <button onClick={onCancel} className="flex-1 rounded-lg border border-[var(--border)] py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)]">Cancel</button>
@@ -278,9 +300,16 @@ function DeleteModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
 }
 
 /* ─── Settings modal ─── */
-function SettingsModal({ conversations, messages, onClose }: { conversations: Conversation[]; messages: AiMessage[]; onClose: () => void }) {
+function SettingsModal({ conversations, messages, archived, onRestore, onClose }: {
+  conversations: Conversation[];
+  messages: AiMessage[];
+  archived: ArchivedConv[];
+  onRestore: (id: string) => void;
+  onClose: () => void;
+}) {
   const [tab, setTab] = useState<"archive" | "storage">("archive");
   const [storageTab, setStorageTab] = useState<"files" | "images">("files");
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -298,10 +327,24 @@ function SettingsModal({ conversations, messages, onClose }: { conversations: Co
         <div className="p-4">
           {tab === "archive" && (
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-[var(--muted)]">Deleted conversations are archived here and removed after 30 days.</p>
-              <div className="rounded-xl border border-[var(--border)] p-3 text-center">
-                <p className="text-xs text-[var(--muted)]">No archived conversations</p>
-              </div>
+              <p className="text-xs text-[var(--muted)]">Deleted conversations are archived here. Feel free to restore any conversation below.</p>
+              {archived.length === 0
+                ? <div className="rounded-xl border border-[var(--border)] p-4 text-center"><p className="text-xs text-[var(--muted)]">No archived conversations</p></div>
+                : <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+                    {archived.map(a => (
+                      <div key={a.id} className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold truncate text-[var(--foreground)]">{a.title}</p>
+                          <p className="text-[10px] text-[var(--muted)]">Deleted {new Date(a.deletedAt).toLocaleDateString()}</p>
+                        </div>
+                        <button onClick={() => onRestore(a.id)}
+                          className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-500/10 border border-blue-500/20 px-2.5 py-1.5 text-[11px] font-semibold text-blue-500 hover:bg-blue-500/20 transition">
+                          <RotateCcw size={11} /> Restore
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+              }
             </div>
           )}
           {tab === "storage" && (
@@ -380,6 +423,7 @@ function MiniRecentPanel({ conversations, activeConvId, onSelect }: { conversati
 /* ─── Main ─── */
 export default function AiAgentClient({ initialConversations }: { initialConversations: Conversation[] }) {
   const [conversations, setConversations] = useState<Conversation[]>(() => applyPinned(initialConversations));
+  const [archived, setArchived] = useState<ArchivedConv[]>(() => getArchived());
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [difyConvId, setDifyConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([]);
@@ -390,14 +434,14 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const [search, setSearch] = useState("");
   const [deleteModal, setDeleteModal] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
   const [starters, setStarters] = useState(() => shufflePick(ALL_STARTERS, 4));
   const [recentHover, setRecentHover] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const recentHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recognitionRef = useRef<{ stop(): void } | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -422,7 +466,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
   const loadConversation = async (convId: string) => {
     setActiveConvId(convId);
-    setDifyConvId(convId); // Dify conv ID = convId for native conversations
+    setDifyConvId(convId);
     if (msgCache[convId]) { setMessages(msgCache[convId]); return; }
     const res = await fetch(`/api/ai-conversations/${convId}`);
     if (res.ok) {
@@ -438,8 +482,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     setDifyConvId(null);
     setMessages([]);
     setInput("");
-    setFiles([]);
-    setUploadedFiles([]);
+    setPendingFiles([]);
     setError(null);
     setStarters(shufflePick(ALL_STARTERS, 4));
     if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -447,132 +490,105 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
   const refreshConversations = async () => {
     const res = await fetch("/api/ai-conversations");
-    if (res.ok) {
-      const convs: Conversation[] = await res.json();
-      setConversations(applyPinned(convs));
-    }
+    if (res.ok) setConversations(applyPinned(await res.json()));
   };
 
   /* ─── File analysis via OpenAI ─── */
   const handleFileChange = async (newFiles: File[]) => {
-    setFiles(prev => [...prev, ...newFiles]);
-    setUploading(true);
-    const results: UploadedFile[] = [];
-    for (const f of newFiles) {
+    const newPending: PendingFile[] = newFiles.map(f => ({ file: f, status: "uploading" }));
+    setPendingFiles(prev => [...prev, ...newPending]);
+
+    for (let i = 0; i < newFiles.length; i++) {
+      const f = newFiles[i];
       const form = new FormData();
       form.append("file", f);
-      const res = await fetch("/api/ai-file-analyze", { method: "POST", body: form });
-      if (res.ok) {
-        const data = await res.json() as { analysis?: string };
-        results.push({ name: f.name, upload_file_id: "", type: "analysis", analysis: data.analysis ?? "" });
-      } else {
-        results.push({ name: f.name, upload_file_id: "", type: "analysis", analysis: `(Could not analyze ${f.name})` });
+      try {
+        const res = await fetch("/api/ai-file-analyze", { method: "POST", body: form });
+        const data = res.ok ? await res.json() as { analysis?: string } : null;
+        setPendingFiles(prev => prev.map(p =>
+          p.file === f
+            ? { ...p, status: data?.analysis ? "ready" : "error", analysis: data?.analysis ?? `Could not analyze ${f.name}` }
+            : p
+        ));
+      } catch {
+        setPendingFiles(prev => prev.map(p => p.file === f ? { ...p, status: "error", analysis: `Error analyzing ${f.name}` } : p));
       }
     }
-    setUploadedFiles(prev => [...prev, ...results]);
-    setUploading(false);
   };
 
   /* ─── Speech to text ─── */
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<{ stop(): void } | null>(null);
   const toggleMic = () => {
     if (typeof window === "undefined") return;
     type SR = { new(): { continuous: boolean; interimResults: boolean; lang: string; onresult: ((e: { results: { [i: number]: { [i: number]: { transcript: string } } } }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; start(): void; stop(): void; }; };
     const w = window as unknown as Record<string, unknown>;
     const SRClass = w["SpeechRecognition"] as SR | undefined || w["webkitSpeechRecognition"] as SR | undefined;
     if (!SRClass) { alert("Speech recognition is not supported in this browser."); return; }
-    if (isListening && recognitionRef.current) {
-      (recognitionRef.current as unknown as { stop(): void }).stop();
-      setIsListening(false);
-      return;
-    }
+    if (isListening && recognitionRef.current) { recognitionRef.current.stop(); setIsListening(false); return; }
     const rec = new SRClass();
     recognitionRef.current = rec as unknown as { stop(): void };
-    rec.continuous = false;
-    rec.interimResults = true;
-    rec.lang = "en-US";
-    rec.onresult = (e) => {
-      const transcript = Object.values(e.results).map((r) => r[0].transcript).join("");
-      setInput(transcript);
-      autoResize();
-    };
+    rec.continuous = false; rec.interimResults = true; rec.lang = "en-US";
+    rec.onresult = (e) => { const t = Object.values(e.results).map(r => r[0].transcript).join(""); setInput(t); autoResize(); };
     rec.onend = () => setIsListening(false);
     rec.onerror = () => setIsListening(false);
-    rec.start();
-    setIsListening(true);
+    rec.start(); setIsListening(true);
   };
 
-  const removeFile = (i: number) => {
-    setFiles(prev => prev.filter((_, j) => j !== i));
-    setUploadedFiles(prev => prev.filter((_, j) => j !== i));
-  };
+  const removeFile = (i: number) => setPendingFiles(prev => prev.filter((_, j) => j !== i));
 
   /* ─── Send ─── */
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || isResponding) return;
+    const allReady = pendingFiles.every(f => f.status !== "uploading");
+    if (!allReady) return;
 
-    // Build query: prepend file analyses as context
+    // Inject file analyses as context
     let queryWithContext = text;
-    if (uploadedFiles.length > 0) {
-      const contextParts = uploadedFiles
-        .filter(f => f.analysis)
-        .map(f => `[File: ${f.name}]\n${f.analysis}`);
-      if (contextParts.length > 0) {
-        queryWithContext = `${contextParts.join("\n\n")}\n\nUser question: ${text}`;
-      }
+    const readyFiles = pendingFiles.filter(f => f.analysis);
+    if (readyFiles.length > 0) {
+      const ctx = readyFiles.map(f => `[Attached file: ${f.file.name}]\n${f.analysis}`).join("\n\n");
+      queryWithContext = `${ctx}\n\nUser: ${text}`;
     }
 
-    const userMsg: AiMessage = { id: crypto.randomUUID(), role: "user", content: text, createdAt: Date.now(), fileUrls: uploadedFiles.map(f => f.name) };
+    const fileNames = pendingFiles.map(f => f.file.name);
+    const userMsg: AiMessage = { id: crypto.randomUUID(), role: "user", content: text, createdAt: Date.now(), fileUrls: fileNames.length > 0 ? fileNames : undefined };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
-    setFiles([]);
-    setUploadedFiles([]);
+    setPendingFiles([]);
     setIsResponding(true);
     setError(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     const assistantId = crypto.randomUUID();
-
     try {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: queryWithContext, difyConversationId: difyConvId }),
       });
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(err.error ?? `HTTP ${res.status}`);
       }
-
       setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", createdAt: Date.now() }]);
 
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buf = "";
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
         const lines = buf.split("\n");
         buf = lines.pop() ?? "";
-
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const raw = line.slice(6).trim();
           if (!raw) continue;
           try {
             const json = JSON.parse(raw);
-            if (json.type === "dify_conv_id") {
-              setDifyConvId(json.difyConvId);
-              setActiveConvId(json.difyConvId);
-            }
-            if (json.type === "chunk") {
-              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
-            }
+            if (json.type === "dify_conv_id") { setDifyConvId(json.difyConvId); setActiveConvId(json.difyConvId); }
+            if (json.type === "chunk") setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
             if (json.type === "done") await refreshConversations();
           } catch { /* skip */ }
         }
@@ -583,7 +599,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     } finally {
       setIsResponding(false);
     }
-  }, [input, isResponding, difyConvId, uploadedFiles]);
+  }, [input, isResponding, difyConvId, pendingFiles]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
@@ -603,13 +619,27 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     setConversations(prev => prev.map(c => c.id === convId ? { ...c, pinned: !c.pinned } : c));
   };
 
-  const handleDelete = async (convId: string) => {
-    await fetch(`/api/ai-conversations/${convId}`, { method: "DELETE" });
+  const handleDelete = (convId: string) => {
+    // Archive instead of permanently deleting from Dify
+    const conv = conversations.find(c => c.id === convId);
+    if (conv) {
+      const newArchived = [{ id: convId, title: conv.title, deletedAt: new Date().toISOString() }, ...archived];
+      saveArchived(newArchived);
+      setArchived(newArchived);
+    }
+    setConversations(prev => prev.filter(c => c.id !== convId));
     const ids = getPinnedIds().filter(id => id !== convId);
     savePinnedIds(ids);
-    setConversations(prev => prev.filter(c => c.id !== convId));
     if (activeConvId === convId) startNew();
     setDeleteModal(null);
+  };
+
+  const handleRestore = async (convId: string) => {
+    const newArchived = archived.filter(a => a.id !== convId);
+    saveArchived(newArchived);
+    setArchived(newArchived);
+    // Refresh to get it back from Dify
+    await refreshConversations();
   };
 
   const q = search.toLowerCase();
@@ -618,35 +648,35 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     if (c.title.toLowerCase().includes(q)) return true;
     if (c.preview.toLowerCase().includes(q)) return true;
     return (msgCache[c.id] ?? []).some(m => m.content.toLowerCase().includes(q));
-  });
+  }).filter(c => !archived.some(a => a.id === c.id)); // hide archived from list
   const pinned = filtered.filter(c => c.pinned);
   const recent = filtered.filter(c => !c.pinned);
+
+  const uploading = pendingFiles.some(f => f.status === "uploading");
 
   return (
     <>
       <style>{STYLE}</style>
       {deleteModal && <DeleteModal onConfirm={() => handleDelete(deleteModal)} onCancel={() => setDeleteModal(null)} />}
-      {settingsOpen && <SettingsModal conversations={conversations} messages={messages} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsModal conversations={conversations} messages={messages} archived={archived} onRestore={handleRestore} onClose={() => setSettingsOpen(false)} />}
 
-      <div className="flex" style={{ height: "calc(100vh)", maxHeight: "100dvh" }}>
+      <div className="flex" style={{ height: "100vh", maxHeight: "100dvh", background: "#e8edf2" }}>
 
         {/* ─── Full sidebar ─── */}
         {sidebarOpen && (
           <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-            {/* Top: dark bg with logo centered + collapse btn */}
-            <div className="border-b border-[var(--border)]" style={{ background: "#071628" }}>
-              <div className="flex items-center px-2 pt-2">
-                <button onClick={() => setSidebarOpen(false)}
-                  className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition shrink-0">
-                  <PanelLeftClose size={15} />
-                </button>
-              </div>
-              <div className="flex justify-center pb-4 pt-1">
-                <AgentLogo size={56} />
+            {/* Top: collapse + big logo */}
+            <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-[var(--border)]">
+              <button onClick={() => setSidebarOpen(false)}
+                className="p-1.5 rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition shrink-0">
+                <PanelLeftClose size={15} />
+              </button>
+              <div className="flex-1 flex justify-center">
+                <AgentLogo size={64} />
               </div>
             </div>
 
-            {/* Search — neon outline */}
+            {/* Search */}
             <div className="px-3 pt-3 pb-1">
               <div className="neon-btn rounded-xl w-full">
                 <div className="flex items-center gap-2 rounded-xl bg-[var(--background)] px-3 py-2">
@@ -661,11 +691,11 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
             {/* New Conversation */}
             <NeonNewBtn onClick={startNew} />
 
-            {/* Conversations — scrollable */}
+            {/* Conversations */}
             <div className="flex-1 overflow-y-auto py-1 flex flex-col">
               {pinned.length > 0 && (
                 <>
-                  <NeonLabel>PINNED</NeonLabel>
+                  <SectionLabel>PINNED</SectionLabel>
                   {pinned.map(c => <ConvItem key={c.id} conv={c} active={activeConvId === c.id}
                     onSelect={() => loadConversation(c.id)} onRename={t => handleRename(c.id, t)}
                     onPin={() => handlePin(c.id)} onDelete={() => setDeleteModal(c.id)} />)}
@@ -673,7 +703,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
               )}
               {recent.length > 0 && (
                 <>
-                  <NeonLabel>RECENT</NeonLabel>
+                  <SectionLabel>RECENT</SectionLabel>
                   {recent.map(c => <ConvItem key={c.id} conv={c} active={activeConvId === c.id}
                     onSelect={() => loadConversation(c.id)} onRename={t => handleRename(c.id, t)}
                     onPin={() => handlePin(c.id)} onDelete={() => setDeleteModal(c.id)} />)}
@@ -697,42 +727,26 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         {/* ─── Mini sidebar ─── */}
         {!sidebarOpen && (
           <aside className="flex w-12 shrink-0 flex-col items-center border-r border-[var(--border)] bg-[var(--surface)] py-2 gap-1">
-            <MiniBtn onClick={() => setSidebarOpen(true)} tooltip="Expand sidebar">
-              <PanelLeftOpen size={16} />
-            </MiniBtn>
+            <MiniBtn onClick={() => setSidebarOpen(true)} tooltip="Expand sidebar"><PanelLeftOpen size={16} /></MiniBtn>
             <div className="w-6 border-t border-[var(--border)] my-1" />
-            <MiniBtn onClick={startNew} tooltip="New conversation" blue>
-              <Plus size={16} />
-            </MiniBtn>
-            {/* Clock — hover popup */}
+            <MiniBtn onClick={startNew} tooltip="New conversation" blue><Plus size={16} /></MiniBtn>
             <div className="relative"
               onMouseEnter={() => { if (recentHoverRef.current) clearTimeout(recentHoverRef.current); setRecentHover(true); }}
               onMouseLeave={() => { recentHoverRef.current = setTimeout(() => setRecentHover(false), 250); }}>
-              <button className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
-                <Clock size={16} />
-              </button>
-              {recentHover && (
-                <MiniRecentPanel conversations={conversations} activeConvId={activeConvId}
-                  onSelect={id => { loadConversation(id); setRecentHover(false); }} />
-              )}
+              <button className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition"><Clock size={16} /></button>
+              {recentHover && <MiniRecentPanel conversations={conversations} activeConvId={activeConvId} onSelect={id => { loadConversation(id); setRecentHover(false); }} />}
             </div>
-            <MiniBtn onClick={() => { setSidebarOpen(true); setTimeout(() => searchRef.current?.focus(), 100); }} tooltip="Search chats">
-              <Search size={16} />
-            </MiniBtn>
-            <div className="mt-auto">
-              <MiniBtn onClick={() => setSettingsOpen(true)} tooltip="Settings">
-                <Settings size={16} />
-              </MiniBtn>
-            </div>
+            <MiniBtn onClick={() => { setSidebarOpen(true); setTimeout(() => searchRef.current?.focus(), 100); }} tooltip="Search chats"><Search size={16} /></MiniBtn>
+            <div className="mt-auto"><MiniBtn onClick={() => setSettingsOpen(true)} tooltip="Settings"><Settings size={16} /></MiniBtn></div>
           </aside>
         )}
 
         {/* ─── Main area ─── */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden" style={{ background: "#e8edf2" }}>
           {/* Header */}
-          <div className="shrink-0 flex items-center gap-3 border-b border-[var(--border)] px-4 py-3" style={{ background: "#071628" }}>
+          <div className="shrink-0 flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 bg-[var(--surface)]">
             <h1 className="text-base font-bold tracking-tight"
-              style={{ background: "linear-gradient(90deg,#3b82f6 0%,#60a5fa 55%,#93c5fd 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              style={{ background: "linear-gradient(90deg,#1d4ed8 0%,#3b82f6 55%,#60a5fa 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               AMZ Navigator
             </h1>
           </div>
@@ -760,10 +774,9 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                     <MessageBubble key={msg.id} msg={msg}
                       isThinking={isResponding && i === messages.length - 1 && msg.role === "assistant"} />
                   ))}
-                  {/* Typing indicator while waiting for first chunk */}
                   {isResponding && messages.length > 0 && messages[messages.length - 1].role === "user" && (
                     <div className="flex gap-3 items-start">
-                      <AgentLogo size={38} thinking />
+                      <AgentLogo size={48} thinking />
                       <div className="flex flex-col gap-1">
                         <span className="text-[11px] font-semibold text-blue-400 px-1">AMZ Navigator</span>
                         <div className="rounded-2xl rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
@@ -787,21 +800,33 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
           {/* Input */}
           <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3">
             <div className="mx-auto max-w-2xl">
-              {files.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {files.map((f, i) => (
-                    <span key={i} className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${uploadedFiles[i] ? "bg-blue-500/10 border-blue-500/20 text-blue-400" : "bg-yellow-500/10 border-yellow-500/20 text-yellow-500"}`}>
-                      <Paperclip size={9} /> {f.name}
-                      {uploading && !uploadedFiles[i] && <span className="ml-0.5 animate-pulse">↑</span>}
-                      <button onClick={() => removeFile(i)}><X size={9} /></button>
+              {/* File chips with per-file loading state */}
+              {pendingFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {pendingFiles.map((pf, i) => (
+                    <span key={i} className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-medium transition-all
+                      ${pf.status === "uploading" ? "bg-yellow-500/10 border-yellow-400/30 text-yellow-600"
+                        : pf.status === "ready" ? "bg-blue-500/10 border-blue-400/30 text-blue-500"
+                        : "bg-red-500/10 border-red-400/30 text-red-500"}`}>
+                      {pf.status === "uploading"
+                        ? <span className="w-3 h-3 rounded-full border-2 border-yellow-400 border-t-transparent spin inline-block" />
+                        : pf.status === "ready"
+                        ? <Check size={11} />
+                        : <X size={11} />
+                      }
+                      <FileText size={10} />
+                      <span className="max-w-[140px] truncate">{pf.file.name}</span>
+                      {pf.status === "uploading" && <span className="opacity-60 text-[9px]">Analyzing…</span>}
+                      {pf.status === "ready" && <span className="opacity-60 text-[9px]">Ready</span>}
+                      <button onClick={() => removeFile(i)} className="ml-0.5 opacity-60 hover:opacity-100"><X size={9} /></button>
                     </span>
                   ))}
                 </div>
               )}
               <div className={`flex items-end gap-2 rounded-2xl border bg-[var(--background)] px-3 py-2.5 transition-all ${isResponding ? "border-[var(--border)] opacity-70" : "border-[var(--border)] focus-within:border-blue-500/50 focus-within:shadow-[0_0_0_3px_rgb(59_130_246/0.08)]"}`}>
-                <button onClick={() => fileInputRef.current?.click()} disabled={isResponding || uploading}
+                <button onClick={() => fileInputRef.current?.click()} disabled={isResponding}
                   className="shrink-0 p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
-                  <Paperclip size={14} className={uploading ? "animate-pulse text-blue-400" : ""} />
+                  <Paperclip size={14} />
                 </button>
                 <input ref={fileInputRef} type="file" multiple className="hidden"
                   onChange={e => { if (e.target.files) handleFileChange(Array.from(e.target.files)); e.target.value = ""; }} />
@@ -812,8 +837,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                   className="flex-1 resize-none bg-transparent text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none leading-relaxed"
                   style={{ maxHeight: 140 }} />
                 <button onClick={toggleMic} disabled={isResponding}
-                  className={`shrink-0 p-1.5 rounded-lg transition ${isListening ? "text-red-500 animate-pulse" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)]"}`}
-                  title="Speech to text">
+                  className={`shrink-0 p-1.5 rounded-lg transition ${isListening ? "text-red-500 animate-pulse" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)]"}`}>
                   <Mic size={14} />
                 </button>
                 <button onClick={send} disabled={!input.trim() || isResponding || uploading}
