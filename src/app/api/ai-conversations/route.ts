@@ -1,22 +1,33 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/currentUser";
-import { prisma } from "@/lib/prisma";
+
+const DIFY_API_URL = process.env.DIFY_API_URL ?? "https://api.dify.ai/v1";
+function getDifyKey() {
+  return process.env.DIFY_API_KEY ?? process.env.NEXT_PUBLIC_UDIFY_APP_KEY ?? process.env.NEXT_PUBLIC_APP_KEY ?? "";
+}
 
 export async function GET() {
   try {
     const user = await getCurrentUser();
-    const convs = await prisma.aiConversation.findMany({
-      where: { userId: user.id, deletedAt: null },
-      orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
-      select: { id: true, title: true, pinned: true, updatedAt: true, messages: true },
+    const key = getDifyKey();
+    if (!key) return NextResponse.json([]);
+
+    const res = await fetch(`${DIFY_API_URL}/conversations?user=${encodeURIComponent(user.id)}&limit=50&sort_by=-updated_at`, {
+      headers: { Authorization: `Bearer ${key}` },
+      next: { revalidate: 0 },
     });
-    const result = convs.map((c) => {
-      const msgs = c.messages as { role: string; content: string }[];
-      const last = [...msgs].reverse().find((m) => m.role === "assistant");
-      return { id: c.id, title: c.title, pinned: c.pinned, updatedAt: c.updatedAt, preview: last?.content?.slice(0, 100) ?? "" };
-    });
-    return NextResponse.json(result);
+    if (!res.ok) return NextResponse.json([]);
+
+    const data = await res.json();
+    const convs = (data.data ?? []).map((c: { id: string; name: string; updated_at: number }) => ({
+      id: c.id,
+      title: c.name || "New Chat",
+      pinned: false,
+      updatedAt: new Date(c.updated_at * 1000).toISOString(),
+      preview: "",
+    }));
+    return NextResponse.json(convs);
   } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json([]);
   }
 }
