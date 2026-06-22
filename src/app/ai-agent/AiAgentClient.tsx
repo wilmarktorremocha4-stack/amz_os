@@ -3,13 +3,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import {
-  Send, Brain, Search, BookOpen, Lightbulb, ChevronDown, ChevronUp,
+  Send, Brain, Search, BookOpen, Lightbulb,
   MoreHorizontal, Pin, Pencil, Trash2, X, Plus, PanelLeftClose, PanelLeftOpen,
-  Copy, Check, Paperclip, Settings, Archive, MessageSquare, HardDrive, ImageIcon,
+  Copy, Check, Paperclip, Settings, Archive, HardDrive, ImageIcon, Clock,
 } from "lucide-react";
 
-const AVATAR = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/68de916c065f281e19a858a2.png";
-const LOGO_URL = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a39790e610e9ace505dccdb.png";
+const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a399f8f7b00529580ab8d3d.png";
 
 const GREETINGS = [
   "How can I help you today?",
@@ -24,7 +23,6 @@ type AiMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  thought?: string;
   createdAt: number;
   fileUrls?: string[];
 };
@@ -37,22 +35,49 @@ type Conversation = {
   preview: string;
 };
 
-/* ─── Static logo circle — no animation ─── */
-function LogoCircle({ size = 40 }: { size?: number }) {
+/* ─── CSS keyframe for thinking avatar ─── */
+const STYLE = `
+@keyframes avatar-thinking {
+  0%,100% { box-shadow: 0 0 0 2px #1d4ed8, 0 0 10px 3px rgba(29,78,216,0.3); }
+  50%      { box-shadow: 0 0 0 3px #60a5fa, 0 0 20px 7px rgba(96,165,250,0.35); }
+}
+.avatar-thinking { animation: avatar-thinking 2s ease-in-out infinite; }
+`;
+
+/* ─── Logo — raw image, no background ─── */
+function AgentLogo({ size = 40, pulse = false }: { size?: number; pulse?: boolean }) {
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", padding: 2, background: "linear-gradient(135deg,#3b82f6,#8b5cf6,#06b6d4)", flexShrink: 0 }}>
-      <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: "linear-gradient(135deg,#1e3a5f,#0f172a)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Image src={LOGO_URL} alt="AMZ" width={Math.round(size * 0.65)} height={Math.round(size * 0.65)} style={{ width: Math.round(size * 0.65), height: Math.round(size * 0.65), objectFit: "contain" }} unoptimized />
+    <div className={`shrink-0 rounded-full overflow-hidden ${pulse ? "avatar-thinking" : ""}`}
+      style={{ width: size, height: size }}>
+      <Image src={AGENT_IMG} alt="AMZ Navigator" width={size} height={size}
+        style={{ width: size, height: size, objectFit: "cover" }} unoptimized />
+    </div>
+  );
+}
+
+/* ─── Gradient section label (like Gemini search bar) ─── */
+function GradientLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: "inline-block", padding: 1, borderRadius: 8, background: "linear-gradient(90deg,#1d4ed8,#3b82f6,#60a5fa)", margin: "6px 8px 4px" }}>
+      <div style={{ borderRadius: 7, background: "var(--surface)", padding: "2px 10px" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", background: "linear-gradient(90deg,#1d4ed8,#60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+          {children}
+        </span>
       </div>
     </div>
   );
 }
 
-/* ─── AI avatar — pulses only when thinking ─── */
-function AiAvatar({ pulsing }: { pulsing: boolean }) {
+/* ─── Gradient outline button (New Conversation) ─── */
+function GradientOutlineButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <div className={`shrink-0 h-8 w-8 rounded-full overflow-hidden border-2 border-blue-500/40 bg-[#0f172a] ${pulsing ? "animate-pulse" : ""}`}>
-      <Image src={AVATAR} alt="AMZ Navigator" width={32} height={32} className="w-full h-full rounded-full object-cover" unoptimized />
+    <div style={{ padding: 1, borderRadius: 12, background: "linear-gradient(90deg,#1d4ed8,#3b82f6,#60a5fa)" }}
+      className="mx-3 mt-1.5 mb-1">
+      <button onClick={onClick}
+        className="flex w-full items-center justify-center gap-2 rounded-[11px] bg-[var(--surface)] px-3 py-2.5 text-xs font-semibold hover:bg-blue-500/5 transition-all active:scale-[0.98]"
+        style={{ color: "#3b82f6" }}>
+        {children}
+      </button>
     </div>
   );
 }
@@ -70,7 +95,7 @@ function StatusBar({ phase }: { phase: number }) {
   const done = STATUS_PHASES.slice(0, phase);
   const cur = STATUS_PHASES[phase];
   return (
-    <div className="flex flex-col gap-1.5 rounded-2xl rounded-tl-sm border border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-purple-500/5 px-4 py-3 text-xs">
+    <div className="flex flex-col gap-1.5 rounded-2xl rounded-tl-sm border border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-blue-600/5 px-4 py-3 text-xs">
       {done.map((s, i) => (
         <div key={i} className="flex items-center gap-2 text-emerald-500/80">
           <span className="shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15">{s.icon}</span>
@@ -131,19 +156,6 @@ function MarkdownContent({ content }: { content: string }) {
   return <div className="flex flex-col gap-1 text-sm leading-relaxed">{out}</div>;
 }
 
-function ThoughtBlock({ thought }: { thought: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-2 rounded-xl border border-blue-500/20 bg-blue-500/5 text-xs">
-      <button onClick={() => setOpen(o => !o)} className="flex w-full items-center gap-1.5 px-3 py-2 text-blue-400 hover:text-blue-300 transition">
-        <Brain size={11} /><span className="font-medium">Agent reasoning</span>
-        {open ? <ChevronUp size={11} className="ml-auto" /> : <ChevronDown size={11} className="ml-auto" />}
-      </button>
-      {open && <div className="border-t border-blue-500/10 px-3 py-2 text-[var(--muted)] whitespace-pre-wrap leading-relaxed">{thought}</div>}
-    </div>
-  );
-}
-
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -159,18 +171,17 @@ function MessageBubble({ msg, isThinking }: { msg: AiMessage; isThinking?: boole
   return (
     <div className={`group flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"} items-start`}>
       {isUser
-        ? <div className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-400 text-white text-xs font-bold border border-blue-500/40 shadow-lg shadow-blue-500/20">U</div>
-        : <AiAvatar pulsing={!!isThinking} />
+        ? <div className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-400 text-white text-xs font-bold border border-blue-500/40">U</div>
+        : <AgentLogo size={32} pulse={isThinking} />
       }
       <div className={`max-w-[78%] flex flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
         {!isUser && <span className="text-[11px] font-semibold text-blue-400 px-1">AMZ Navigator</span>}
-        <div className={`relative rounded-2xl px-4 py-3 ${isUser
+        <div className={`rounded-2xl px-4 py-3 ${isUser
           ? "rounded-tr-sm bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20"
           : "rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] shadow-sm"}`}>
           {isUser ? <span className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</span> : <MarkdownContent content={msg.content || "…"} />}
         </div>
         {!isUser && msg.content && <CopyButton text={msg.content} />}
-        {msg.thought && <ThoughtBlock thought={msg.thought} />}
       </div>
     </div>
   );
@@ -193,20 +204,18 @@ function ConvItem({ conv, active, onSelect, onRename, onPin, onDelete }: {
   }, []);
 
   return (
-    <div onClick={onSelect} className={`group relative flex items-start gap-2 rounded-xl px-3 py-2.5 cursor-pointer transition-colors ${active ? "bg-blue-500/10" : "hover:bg-[var(--accent-soft)]"}`}>
-      <MessageSquare size={13} className="shrink-0 mt-0.5 opacity-40" />
+    <div onClick={onSelect} className={`group relative flex items-center gap-2 rounded-xl px-3 py-2 cursor-pointer transition-colors ${active ? "bg-blue-500/10" : "hover:bg-[var(--accent-soft)]"}`}>
       <div className="flex-1 min-w-0">
         {renaming
           ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
               onBlur={() => { setRenaming(false); onRename(draft); }}
               onKeyDown={e => { if (e.key === "Enter") { setRenaming(false); onRename(draft); } if (e.key === "Escape") { setRenaming(false); setDraft(conv.title); } }}
               onClick={e => e.stopPropagation()}
-              className="w-full bg-transparent text-xs outline-none border-b border-blue-500/50 text-[var(--foreground)]" />
-          : <p className="text-xs font-medium truncate leading-tight text-[var(--foreground)]">{conv.title}</p>
+              className="w-full bg-transparent text-sm outline-none border-b border-blue-500/50 text-[var(--foreground)]" />
+          : <p className="text-[13px] font-semibold truncate leading-tight text-[var(--foreground)]">{conv.title}</p>
         }
-        <p className="text-[10px] truncate opacity-40 mt-0.5">{conv.preview || "No messages yet"}</p>
       </div>
-      {conv.pinned && <Pin size={9} className="shrink-0 mt-0.5 text-blue-400 opacity-60" />}
+      {conv.pinned && <Pin size={9} className="shrink-0 text-blue-400 opacity-60" />}
       <div ref={menuRef} className="relative shrink-0" onClick={e => e.stopPropagation()}>
         <button onClick={() => setMenuOpen(o => !o)} className="opacity-0 group-hover:opacity-100 transition p-0.5 rounded hover:bg-[var(--border)]">
           <MoreHorizontal size={12} />
@@ -252,7 +261,6 @@ function SettingsModal({ conversations, messages, onClose }: { conversations: Co
           <h2 className="text-sm font-bold text-[var(--foreground)]">Settings</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--muted)]"><X size={14} /></button>
         </div>
-        {/* Tab bar */}
         <div className="flex border-b border-[var(--border)]">
           <button onClick={() => setTab("archive")} className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition ${tab === "archive" ? "text-blue-500 border-b-2 border-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
             <Archive size={12} /> Archive
@@ -272,7 +280,6 @@ function SettingsModal({ conversations, messages, onClose }: { conversations: Co
           )}
           {tab === "storage" && (
             <div className="flex flex-col gap-3">
-              {/* Storage stats */}
               <div className="rounded-xl border border-[var(--border)] p-3 flex flex-col gap-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-[var(--muted)]">Total conversations</span>
@@ -283,11 +290,10 @@ function SettingsModal({ conversations, messages, onClose }: { conversations: Co
                   <span className="font-semibold text-[var(--foreground)]">{messages.length}</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-[var(--border)] mt-1">
-                  <div className="h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all" style={{ width: `${Math.min(100, (conversations.length / 50) * 100)}%` }} />
+                  <div className="h-1.5 rounded-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all" style={{ width: `${Math.min(100, (conversations.length / 50) * 100)}%` }} />
                 </div>
                 <p className="text-[10px] text-[var(--muted)]">{conversations.length} / 50 conversations</p>
               </div>
-              {/* Files / Images subtabs */}
               <div className="flex gap-1 rounded-xl border border-[var(--border)] p-1">
                 <button onClick={() => setStorageTab("files")} className={`flex-1 rounded-lg py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition ${storageTab === "files" ? "bg-blue-500/10 text-blue-500" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
                   <Paperclip size={11} /> Files
@@ -307,18 +313,40 @@ function SettingsModal({ conversations, messages, onClose }: { conversations: Co
   );
 }
 
-/* ─── Mini sidebar icon button with hover tooltip ─── */
-function MiniConvButton({ conv, active, onSelect }: { conv: Conversation; active: boolean; onSelect: () => void }) {
+/* ─── Mini tooltip wrapper ─── */
+function MiniBtn({ onClick, tooltip, children, blue }: { onClick: () => void; tooltip: string; children: React.ReactNode; blue?: boolean }) {
   return (
     <div className="relative group">
-      <button onClick={onSelect} className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${active ? "bg-blue-500/20 text-blue-500" : "text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]"}`}>
-        <MessageSquare size={14} />
+      <button onClick={onClick}
+        className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${blue ? "text-blue-500 hover:bg-blue-500/10" : "text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]"}`}>
+        {children}
       </button>
-      <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 hidden group-hover:block">
+      <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 z-50 hidden group-hover:block">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 shadow-xl whitespace-nowrap">
-          <p className="text-xs font-medium text-[var(--foreground)] max-w-[180px] truncate">{conv.title}</p>
-          {conv.preview && <p className="text-[10px] text-[var(--muted)] truncate max-w-[180px]">{conv.preview}</p>}
+          <p className="text-xs font-medium text-[var(--foreground)]">{tooltip}</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Mini recent chats popup (hover) ─── */
+function MiniRecentPanel({ conversations, activeConvId, onSelect }: { conversations: Conversation[]; activeConvId: string | null; onSelect: (id: string) => void }) {
+  return (
+    <div className="absolute left-full top-0 ml-2.5 z-50 w-56 rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl overflow-hidden">
+      <div className="px-3 py-2 border-b border-[var(--border)]">
+        <p className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest">Recent Chats</p>
+      </div>
+      <div className="max-h-72 overflow-y-auto py-1">
+        {conversations.length === 0
+          ? <p className="px-3 py-3 text-xs text-[var(--muted)] text-center">No conversations yet</p>
+          : conversations.map(c => (
+            <button key={c.id} onClick={() => onSelect(c.id)}
+              className={`w-full text-left px-3 py-2 text-xs font-medium truncate transition hover:bg-[var(--accent-soft)] ${activeConvId === c.id ? "text-blue-400" : "text-[var(--foreground)]"}`}>
+              {c.title}
+            </button>
+          ))
+        }
       </div>
     </div>
   );
@@ -330,6 +358,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [difyConvId, setDifyConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [msgCache, setMsgCache] = useState<Record<string, AiMessage[]>>({});
   const [input, setInput] = useState("");
   const [isResponding, setIsResponding] = useState(false);
   const [statusPhase, setStatusPhase] = useState(0);
@@ -341,13 +370,15 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
+  const [recentHover, setRecentHover] = useState(false);
+  const recentHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const phaseTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  // Load conversations on mount
   useEffect(() => {
     fetch("/api/ai-conversations").then(r => r.ok ? r.json() : []).then(setConversations).catch(() => {});
   }, []);
@@ -363,10 +394,16 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
   const loadConversation = async (convId: string) => {
     setActiveConvId(convId);
+    if (msgCache[convId]) {
+      setMessages(msgCache[convId]);
+      return;
+    }
     const res = await fetch(`/api/ai-conversations/${convId}`);
     if (res.ok) {
       const data = await res.json();
-      setMessages((data.messages ?? []) as AiMessage[]);
+      const msgs = (data.messages ?? []) as AiMessage[];
+      setMessages(msgs);
+      setMsgCache(prev => ({ ...prev, [convId]: msgs }));
       setDifyConvId(data.difyConversationId ?? null);
     }
   };
@@ -416,13 +453,12 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     startStatusCycle();
 
     const assistantId = crypto.randomUUID();
-    let thoughtBuf = "";
 
     try {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: text, conversationDbId: activeConvId, difyConversationId: difyConvId, fileUrls: [] }),
+        body: JSON.stringify({ query: text, difyConversationId: difyConvId, fileUrls: [] }),
       });
 
       if (!res.ok) {
@@ -450,10 +486,8 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
           if (!raw) continue;
           try {
             const json = JSON.parse(raw);
-            if (json.type === "conv_db_id") setActiveConvId(json.convDbId);
-            if (json.type === "dify_conv_id") setDifyConvId(json.difyConvId);
+            if (json.type === "dify_conv_id") { setDifyConvId(json.difyConvId); setActiveConvId(json.difyConvId); }
             if (json.type === "chunk") setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
-            if (json.type === "thought") { thoughtBuf += json.thought; setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, thought: thoughtBuf } : m)); }
             if (json.type === "done") await refreshConversations();
           } catch { /* skip */ }
         }
@@ -465,7 +499,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     } finally {
       setIsResponding(false);
     }
-  }, [input, isResponding, activeConvId, difyConvId]);
+  }, [input, isResponding, difyConvId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
@@ -490,7 +524,15 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     setDeleteModal(null);
   };
 
-  const filtered = conversations.filter(c => c.title.toLowerCase().includes(search.toLowerCase()));
+  // Search across title, preview, and any cached message content
+  const q = search.toLowerCase();
+  const filtered = conversations.filter(c => {
+    if (!q) return true;
+    if (c.title.toLowerCase().includes(q)) return true;
+    if (c.preview.toLowerCase().includes(q)) return true;
+    const cached = msgCache[c.id] ?? [];
+    return cached.some(m => m.content.toLowerCase().includes(q));
+  });
   const pinned = filtered.filter(c => c.pinned);
   const recent = filtered.filter(c => !c.pinned);
 
@@ -503,6 +545,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
   return (
     <>
+      <style>{STYLE}</style>
       {deleteModal && <DeleteModal onConfirm={() => handleDelete(deleteModal)} onCancel={() => setDeleteModal(null)} />}
       {settingsOpen && <SettingsModal conversations={conversations} messages={messages} onClose={() => setSettingsOpen(false)} />}
 
@@ -511,34 +554,39 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         {/* ─── Full sidebar ─── */}
         {sidebarOpen && (
           <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-            {/* Logo only */}
-            <div className="flex items-center justify-center px-3 py-4 border-b border-[var(--border)]">
-              <LogoCircle size={44} />
+            {/* Top: Logo + collapse button */}
+            <div className="flex items-center gap-2 px-3 py-3 border-b border-[var(--border)]">
+              <button onClick={() => setSidebarOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--muted)] hover:text-[var(--foreground)] transition shrink-0">
+                <PanelLeftClose size={15} />
+              </button>
+              <div className="flex-1 flex justify-center">
+                <AgentLogo size={36} />
+              </div>
             </div>
 
             {/* Search */}
             <div className="px-3 pt-3 pb-1">
-              <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2">
-                <Search size={12} className="text-[var(--muted)] shrink-0" />
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations…"
-                  className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]" />
-                {search && <button onClick={() => setSearch("")}><X size={10} className="text-[var(--muted)]" /></button>}
+              <div style={{ padding: 1, borderRadius: 12, background: "linear-gradient(90deg,#1d4ed8,#3b82f6,#60a5fa)" }}>
+                <div className="flex items-center gap-2 rounded-[11px] bg-[var(--background)] px-3 py-2">
+                  <Search size={12} className="text-[var(--muted)] shrink-0" />
+                  <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations…"
+                    className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]" />
+                  {search && <button onClick={() => setSearch("")}><X size={10} className="text-[var(--muted)]" /></button>}
+                </div>
               </div>
             </div>
 
-            {/* New Chat */}
-            <div className="px-3 pt-2 pb-1">
-              <button onClick={startNew}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-blue-500/40 bg-blue-500/5 px-3 py-2.5 text-xs font-medium text-blue-500 hover:bg-blue-500/10 hover:border-blue-500/60 transition-all active:scale-[0.98]">
-                <Plus size={13} /> New conversation
-              </button>
-            </div>
+            {/* New Conversation */}
+            <GradientOutlineButton onClick={startNew}>
+              <Plus size={13} /> New Conversation
+            </GradientOutlineButton>
 
-            {/* Conversations */}
-            <div className="flex-1 overflow-y-auto px-2 py-1 flex flex-col gap-0.5">
+            {/* Conversations — scrollable */}
+            <div className="flex-1 overflow-y-auto py-1 flex flex-col">
               {pinned.length > 0 && (
                 <>
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wide">Pinned</p>
+                  <GradientLabel>PINNED</GradientLabel>
                   {pinned.map(c => <ConvItem key={c.id} conv={c} active={activeConvId === c.id}
                     onSelect={() => loadConversation(c.id)} onRename={t => handleRename(c.id, t)}
                     onPin={() => handlePin(c.id)} onDelete={() => setDeleteModal(c.id)} />)}
@@ -546,7 +594,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
               )}
               {recent.length > 0 && (
                 <>
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[var(--muted)] uppercase tracking-wide">Recent</p>
+                  <GradientLabel>RECENT</GradientLabel>
                   {recent.map(c => <ConvItem key={c.id} conv={c} active={activeConvId === c.id}
                     onSelect={() => loadConversation(c.id)} onRename={t => handleRename(c.id, t)}
                     onPin={() => handlePin(c.id)} onDelete={() => setDeleteModal(c.id)} />)}
@@ -560,67 +608,67 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
             </div>
 
             {/* Settings at bottom */}
-            <div className="border-t border-[var(--border)] px-3 py-2 flex items-center gap-2">
-              <button onClick={() => setSidebarOpen(false)}
-                className="p-2 rounded-lg hover:bg-[var(--accent-soft)] text-[var(--muted)] hover:text-[var(--foreground)] transition">
-                <PanelLeftClose size={14} />
-              </button>
+            <div className="border-t border-[var(--border)] px-3 py-2">
               <button onClick={() => setSettingsOpen(true)}
-                className="flex items-center gap-2 flex-1 rounded-lg px-2 py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
+                className="flex items-center gap-2 w-full rounded-lg px-2 py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
                 <Settings size={13} /> Settings
               </button>
             </div>
           </aside>
         )}
 
-        {/* ─── Mini sidebar (collapsed) ─── */}
+        {/* ─── Mini sidebar (collapsed): collapse at top, then 3 icons, settings at bottom ─── */}
         {!sidebarOpen && (
-          <aside className="flex w-12 shrink-0 flex-col items-center border-r border-[var(--border)] bg-[var(--surface)] py-3 gap-1">
-            {/* Expand */}
-            <button onClick={() => setSidebarOpen(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition mb-1">
-              <PanelLeftOpen size={15} />
-            </button>
-            {/* New chat */}
-            <div className="relative group">
-              <button onClick={startNew}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-500 hover:bg-blue-500/10 transition">
-                <Plus size={15} />
-              </button>
-              <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 hidden group-hover:block">
-                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 shadow-xl whitespace-nowrap">
-                  <p className="text-xs font-medium text-[var(--foreground)]">New conversation</p>
-                </div>
-              </div>
-            </div>
-            {/* Divider */}
+          <aside className="flex w-12 shrink-0 flex-col items-center border-r border-[var(--border)] bg-[var(--surface)] py-2 gap-1">
+            {/* Expand (top-left) */}
+            <MiniBtn onClick={() => setSidebarOpen(true)} tooltip="Expand sidebar">
+              <PanelLeftOpen size={16} />
+            </MiniBtn>
+
             <div className="w-6 border-t border-[var(--border)] my-1" />
-            {/* Recent conversations */}
-            <div className="flex flex-col gap-1 flex-1 overflow-hidden">
-              {conversations.slice(0, 8).map(c => (
-                <MiniConvButton key={c.id} conv={c} active={activeConvId === c.id} onSelect={() => loadConversation(c.id)} />
-              ))}
-            </div>
-            {/* Settings at bottom */}
-            <div className="relative group mt-auto">
-              <button onClick={() => setSettingsOpen(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
-                <Settings size={15} />
+
+            {/* New conversation */}
+            <MiniBtn onClick={startNew} tooltip="New conversation" blue>
+              <Plus size={16} />
+            </MiniBtn>
+
+            {/* Recent chats — hover shows popup */}
+            <div className="relative"
+              onMouseEnter={() => { if (recentHoverRef.current) clearTimeout(recentHoverRef.current); setRecentHover(true); }}
+              onMouseLeave={() => { recentHoverRef.current = setTimeout(() => setRecentHover(false), 200); }}>
+              <button
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
+                <Clock size={16} />
               </button>
-              <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 hidden group-hover:block">
-                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 shadow-xl whitespace-nowrap">
-                  <p className="text-xs font-medium text-[var(--foreground)]">Settings</p>
-                </div>
-              </div>
+              {recentHover && (
+                <MiniRecentPanel
+                  conversations={conversations}
+                  activeConvId={activeConvId}
+                  onSelect={(id) => { loadConversation(id); setRecentHover(false); }}
+                />
+              )}
+            </div>
+
+            {/* Search — opens sidebar and focuses search */}
+            <MiniBtn onClick={() => { setSidebarOpen(true); setTimeout(() => searchRef.current?.focus(), 100); }} tooltip="Search chats">
+              <Search size={16} />
+            </MiniBtn>
+
+            {/* Settings at bottom */}
+            <div className="mt-auto">
+              <MiniBtn onClick={() => setSettingsOpen(true)} tooltip="Settings">
+                <Settings size={16} />
+              </MiniBtn>
             </div>
           </aside>
         )}
 
         {/* ─── Main area ─── */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Header — "AMZ Navigator" gradient text, no logo, no subtitle */}
+          {/* Header */}
           <div className="shrink-0 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-            <h1 className="text-base font-bold bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-400 bg-clip-text text-transparent tracking-tight">
+            <h1 className="text-base font-bold tracking-tight"
+              style={{ background: "linear-gradient(90deg,#1d4ed8 0%,#3b82f6 50%,#60a5fa 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               AMZ Navigator
             </h1>
           </div>
@@ -630,10 +678,8 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
             <div className="mx-auto max-w-2xl px-4 py-6">
               {messages.length === 0 && !isResponding ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
-                  <LogoCircle size={88} />
-                  <div>
-                    <h2 className="text-2xl font-bold text-[var(--foreground)]">{greeting}</h2>
-                  </div>
+                  <AgentLogo size={88} />
+                  <h2 className="text-2xl font-bold text-[var(--foreground)]">{greeting}</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
                     {STARTERS.map(s => (
                       <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus(); }}
@@ -651,7 +697,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                   ))}
                   {showStatus && isResponding && (
                     <div className="flex gap-3 items-start">
-                      <AiAvatar pulsing />
+                      <AgentLogo size={32} pulse />
                       <div className="flex-1">
                         <span className="text-[11px] font-semibold text-blue-400 px-1 mb-1 block">AMZ Navigator</span>
                         <StatusBar phase={statusPhase} />
