@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/currentUser";
-import { prisma } from "@/lib/prisma";
 
-const DIFY_API_URL = process.env.DIFY_API_URL ?? "https://api.dify.ai/v1";
+const DIFY_BASE = process.env.DIFY_API_URL ?? "https://api.dify.ai/v1";
 
 function getDifyKey() {
   return (
@@ -14,47 +13,23 @@ function getDifyKey() {
   );
 }
 
-async function appendMessage(convId: string, msg: Record<string, unknown>) {
-  const conv = await prisma.aiConversation.findUnique({ where: { id: convId }, select: { messages: true } });
-  const existing = (conv?.messages as unknown[]) ?? [];
-  await prisma.aiConversation.update({
-    where: { id: convId },
-    data: { messages: [...existing, msg] as never, updatedAt: new Date() },
-  });
-}
-
 export async function POST(req: NextRequest) {
   let user: Awaited<ReturnType<typeof getCurrentUser>>;
   try { user = await getCurrentUser(); } catch { return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); }
 
-  const body = await req.json();
-  const { query, conversationDbId, difyConversationId } = body as {
+  const body = await req.json() as {
     query: string;
-    conversationDbId?: string;
     difyConversationId?: string;
-    fileUrls?: string[];
+    files?: { type: string; transfer_method: string; upload_file_id: string }[];
   };
 
+  const { query, difyConversationId, files } = body;
   if (!query?.trim()) return NextResponse.json({ error: "Empty query" }, { status: 400 });
 
   const DIFY_KEY = getDifyKey();
   if (!DIFY_KEY) return NextResponse.json({ error: "Dify API key not configured. Set DIFY_API_KEY in Vercel environment variables." }, { status: 503 });
 
-  // Create or reuse conversation record
-  let convId = conversationDbId;
-  if (!convId) {
-    const conv = await prisma.aiConversation.create({
-      data: { userId: user.id, title: query.slice(0, 60) },
-    });
-    convId = conv.id;
-  }
-
-  // Save user message by reading + appending
-  const userMsg = { id: crypto.randomUUID(), role: "user", content: query, createdAt: Date.now(), fileUrls: [] };
-  await appendMessage(convId, userMsg);
-
-  // Call Dify
-  const difyRes = await fetch(`${DIFY_API_URL}/chat-messages`, {
+  const difyRes = await fetch(`${DIFY_BASE}/chat-messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${DIFY_KEY}` },
     body: JSON.stringify({
@@ -63,6 +38,7 @@ export async function POST(req: NextRequest) {
       response_mode: "streaming",
       conversation_id: difyConversationId ?? "",
       user: user.id,
+      files: files ?? [],
     }),
   });
 
@@ -71,16 +47,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Dify error ${difyRes.status}: ${err}` }, { status: 502 });
   }
 
-  let fullContent = "";
-  let thought = "";
   let newDifyConvId = difyConversationId ?? "";
-  const finalConvId = convId;
-
   const encoder = new TextEncoder();
+
   const readable = new ReadableStream({
     async start(controller) {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "conv_db_id", convDbId: finalConvId })}\n\n`));
-
       const reader = difyRes.body!.getReader();
       const decoder = new TextDecoder();
       let buf = "";
@@ -101,27 +72,19 @@ export async function POST(req: NextRequest) {
               const json = JSON.parse(raw);
               if (json.event === "message" || json.event === "agent_message") {
                 const chunk: string = json.answer ?? "";
-                fullContent += chunk;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "chunk", chunk })}\n\n`));
-              }
-              if (json.event === "agent_thought" && json.thought) {
-                thought += json.thought;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "thought", thought: json.thought })}\n\n`));
+                if (chunk) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "chunk", chunk })}\n\n`));
               }
               if (json.conversation_id && !newDifyConvId) {
                 newDifyConvId = json.conversation_id;
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "dify_conv_id", difyConvId: newDifyConvId })}\n\n`));
               }
+              if (json.event === "message_end") {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+              }
             } catch { /* skip */ }
           }
         }
       } finally {
-        // Save assistant message
-        const assistantMsg = { id: crypto.randomUUID(), role: "assistant", content: fullContent, thought: thought || undefined, createdAt: Date.now() };
-        await appendMessage(finalConvId, assistantMsg);
-        if (newDifyConvId) {
-          await prisma.aiConversation.update({ where: { id: finalConvId }, data: { difyConversationId: newDifyConvId } });
-        }
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
         controller.close();
       }
@@ -129,6 +92,6 @@ export async function POST(req: NextRequest) {
   });
 
   return new Response(readable, {
-    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Conv-Db-Id": finalConvId },
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
   });
 }
