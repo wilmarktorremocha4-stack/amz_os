@@ -111,17 +111,13 @@ function formatResetAt(resetAt: string | null): string {
 
 /* ─── Research routing ─── */
 const URL_REGEX = /https?:\/\/[^\s<>"']+/gi;
-const AMAZON_KEYWORDS = /\b(amazon|fba|wholesale|asin|bsr|buy.?box|seller.?central|sourcing|supplier|inventory|restocking|keepa|jungle.?scout|helium|product.?listing|storefront|brand.?gating|1p|3p|private.?label|arbitrage|resell|reprice|shipment|freight|prep.?center|reorder|roi.?calculator|margin.?calculator)\b/i;
 
-function shouldUseResearch(text: string, hasPendingFiles: boolean): { use: boolean; urls: string[] } {
-  // Never route to research if user has attached files — use Dify for file context
-  if (hasPendingFiles) return { use: false, urls: [] };
-  const urls = text.match(URL_REGEX) ?? [];
-  if (urls.length > 0) return { use: true, urls };
-  const isAmazon = AMAZON_KEYWORDS.test(text);
-  const researchSignals = /\b(research|analyze|analysis|competitor|brand|company|startup|market|industry|trend|review|website|site|product|compare|versus|vs\.?|strategy|marketing|campaign|social media|instagram|tiktok|twitter|youtube|influencer|reddit|news|article|report|study|data|stats|statistics|price|pricing|revenue|funding|vc|investor)\b/i.test(text);
-  if (!isAmazon && researchSignals) return { use: true, urls: [] };
-  return { use: false, urls: [] };
+function shouldUseResearch(text: string, hasPendingFiles: boolean): { use: boolean } {
+  if (hasPendingFiles) return { use: false };
+  // Only trigger research when user explicitly pastes a URL
+  const hasUrl = URL_REGEX.test(text);
+  URL_REGEX.lastIndex = 0; // reset stateful regex
+  return { use: hasUrl };
 }
 
 /* ─── CSS ─── */
@@ -839,6 +835,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
     // Detect whether to use deep research (URL pasted or non-Amazon topic)
     const { use: useResearch } = shouldUseResearch(text, pendingFiles.length > 0);
+
     if (useResearch) setIsResearching(true);
 
     try {
