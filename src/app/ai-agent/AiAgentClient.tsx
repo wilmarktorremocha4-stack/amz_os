@@ -655,12 +655,11 @@ function UsageRing({ used, limit, resetAt }: { used: number; limit: number; rese
         style={{ width: 22, height: 22 }}
       >
         <svg width="22" height="22" viewBox="0 0 24 24" style={{ transform: "rotate(-90deg)" }}>
-          <circle cx="12" cy="12" r={r} fill="none" stroke="var(--border)" strokeWidth="2.5" />
-          {pct > 0 && (
-            <circle cx="12" cy="12" r={r} fill="none" stroke={color} strokeWidth="2.5"
-              strokeDasharray={circ} strokeDashoffset={dash} strokeLinecap="round"
-              style={{ transition: "stroke-dashoffset 0.5s ease" }} />
-          )}
+          <circle cx="12" cy="12" r={r} fill="none" stroke="#d1d5db" strokeWidth="2.5" />
+          <circle cx="12" cy="12" r={r} fill="none" stroke={color} strokeWidth="2.5"
+            strokeDasharray={circ} strokeDashoffset={pct > 0 ? dash : circ}
+            strokeLinecap="round"
+            style={{ transition: "stroke-dashoffset 0.5s ease", opacity: pct > 0 ? 1 : 0 }} />
         </svg>
       </button>
       {open && (
@@ -1155,11 +1154,13 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                   <Send size={14} />
                 </button>
               </div>
-              <div className="flex items-center justify-between mt-1.5">
-                <p className="text-[11px] text-[var(--muted)]/60">
+              <div className="relative flex items-center justify-center mt-1.5">
+                <p className="text-[11px] text-[var(--muted)]/60 text-center">
                   AMZ Navigator is AI and can make mistakes. Please double-check responses.
                 </p>
-                <UsageRing used={usage.used} limit={usage.limit} resetAt={usage.resetAt} />
+                <div className="absolute right-0">
+                  <UsageRing used={usage.used} limit={usage.limit} resetAt={usage.resetAt} />
+                </div>
               </div>
             </div>
           </div>
