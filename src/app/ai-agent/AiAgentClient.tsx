@@ -9,7 +9,7 @@ import {
   Archive, Download, FileSpreadsheet, BookOpen,
 } from "lucide-react";
 
-const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a399f8f7b00529580ab8d3d.png";
+const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a380e1e1c5d711b35ce5f63.png";
 
 const DAILY_MSG_LIMIT = 50; // configurable
 
@@ -115,22 +115,24 @@ function getMidnightReset(): string {
 
 /* ─── CSS ─── */
 const STYLE = `
-/* ── Radar ring animation (concentric rings, brand blue) ── */
+/* ── Corona/eclipse animation ── */
 .avatar-wrap { position: relative; display: inline-block; }
-.avatar-wrap .ring {
-  position: absolute;
-  inset: -6px;
+.avatar-img {
   border-radius: 50%;
-  border: 2px solid rgba(59,130,246,0);
-  pointer-events: none;
+  object-fit: cover;
+  display: block;
+  position: relative;
+  z-index: 1;
 }
-.avatar-think .ring-1 { animation: ring-out 2.4s ease-out infinite 0s; }
-.avatar-think .ring-2 { animation: ring-out 2.4s ease-out infinite 0.6s; }
-.avatar-think .ring-3 { animation: ring-out 2.4s ease-out infinite 1.2s; }
-@keyframes ring-out {
-  0%   { transform: scale(1);   border-color: rgba(59,130,246,0.7); }
-  60%  { transform: scale(1.7); border-color: rgba(96,165,250,0.3); }
-  100% { transform: scale(2.2); border-color: rgba(147,197,253,0); }
+.avatar-think .avatar-img {
+  animation: corona-pulse 2s ease-in-out infinite;
+}
+@keyframes corona-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px #1d4ed8, 0 0 12px 5px rgba(59,130,246,0.75), 0 0 26px 10px rgba(96,165,250,0.45), 0 0 48px 18px rgba(147,197,253,0.2); }
+  50%       { box-shadow: 0 0 0 4px #3b82f6, 0 0 18px 8px rgba(96,165,250,0.95), 0 0 38px 16px rgba(59,130,246,0.55), 0 0 64px 26px rgba(147,197,253,0.3); }
+}
+.avatar-idle .avatar-img {
+  box-shadow: 0 0 0 2px #1d4ed8, 0 0 8px 3px rgba(59,130,246,0.4);
 }
 .neon-btn {
   position: relative; background: transparent; border: none; outline: none; cursor: pointer;
@@ -158,17 +160,12 @@ type AiMessage = {
 type Conversation = { id: string; title: string; pinned: boolean; updatedAt: string; preview: string; };
 type PendingFile = { file: File; status: "uploading" | "ready" | "error"; analysis?: string; blobUrl?: string; };
 
-/* ─── Logo with radar rings ─── */
+/* ─── Logo with corona animation ─── */
 function AgentLogo({ size = 40, thinking = false }: { size?: number; thinking?: boolean }) {
   return (
-    <div className={`avatar-wrap ${thinking ? "avatar-think" : ""}`} style={{ display: "inline-block", lineHeight: 0, width: size, height: size }}>
-      {thinking && <>
-        <span className="ring ring-1" />
-        <span className="ring ring-2" />
-        <span className="ring ring-3" />
-      </>}
-      <Image src={AGENT_IMG} alt="AMZ Navigator" width={size} height={size}
-        style={{ width: size, height: size, objectFit: "contain", position: "relative", zIndex: 1 }} unoptimized />
+    <div className={`avatar-wrap ${thinking ? "avatar-think" : "avatar-idle"}`} style={{ display: "inline-block", lineHeight: 0, width: size, height: size }}>
+      <Image src={AGENT_IMG} alt="AMZ Navigator" width={size} height={size} className="avatar-img"
+        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover" }} unoptimized />
     </div>
   );
 }
