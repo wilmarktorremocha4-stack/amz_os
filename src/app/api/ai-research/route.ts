@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       try {
         const stream = await client.responses.create({
-          model: "gpt-4o-mini-search-preview",
+          model: "gpt-4o-search-preview",
           tools: [{ type: "web_search_preview", search_context_size: "high" }],
           instructions: SYSTEM_PROMPT,
           input: query,

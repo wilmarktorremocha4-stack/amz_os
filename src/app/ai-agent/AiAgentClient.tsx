@@ -9,7 +9,7 @@ import {
   Archive, Download, FileSpreadsheet, BookOpen, Globe,
 } from "lucide-react";
 
-const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a399f8f7b00529580ab8d3d.png";
+const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a380e1e1c5d711b35ce5f63.png";
 
 const TOKEN_LIMIT = 100_000; // per 5-hour window
 const WINDOW_HOURS = 5;
@@ -113,12 +113,12 @@ function formatResetAt(resetAt: string | null): string {
 const URL_REGEX = /https?:\/\/[^\s<>"']+/gi;
 const AMAZON_KEYWORDS = /\b(amazon|fba|wholesale|asin|bsr|buy.?box|seller.?central|sourcing|supplier|inventory|restocking|keepa|jungle.?scout|helium|product.?listing|storefront|brand.?gating|1p|3p|private.?label|arbitrage|resell|reprice|shipment|freight|prep.?center|reorder|roi.?calculator|margin.?calculator)\b/i;
 
-function shouldUseResearch(text: string): { use: boolean; urls: string[] } {
+function shouldUseResearch(text: string, hasPendingFiles: boolean): { use: boolean; urls: string[] } {
+  // Never route to research if user has attached files — use Dify for file context
+  if (hasPendingFiles) return { use: false, urls: [] };
   const urls = text.match(URL_REGEX) ?? [];
   if (urls.length > 0) return { use: true, urls };
-  // If the query clearly isn't about Amazon/ecommerce, route to deep research
   const isAmazon = AMAZON_KEYWORDS.test(text);
-  // Research mode for non-Amazon topics that suggest external research
   const researchSignals = /\b(research|analyze|analysis|competitor|brand|company|startup|market|industry|trend|review|website|site|product|compare|versus|vs\.?|strategy|marketing|campaign|social media|instagram|tiktok|twitter|youtube|influencer|reddit|news|article|report|study|data|stats|statistics|price|pricing|revenue|funding|vc|investor)\b/i.test(text);
   if (!isAmazon && researchSignals) return { use: true, urls: [] };
   return { use: false, urls: [] };
@@ -126,31 +126,65 @@ function shouldUseResearch(text: string): { use: boolean; urls: string[] } {
 
 /* ─── CSS ─── */
 const STYLE = `
-/* ── Corona / eclipse glow (brand blue) ── */
+/* ── Eclipse corona animation (blue gradient) ── */
 .avatar-wrap {
   position: relative;
   display: inline-block;
   border-radius: 50%;
   line-height: 0;
 }
-.avatar-think {
+.avatar-wrap img {
   border-radius: 50%;
-  animation: corona-pulse 2s ease-in-out infinite;
+  display: block;
 }
-@keyframes corona-pulse {
+
+/* Rotating gradient corona ring */
+.avatar-think::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    #0f172a 0deg,
+    #1e3a8a 40deg,
+    #1d4ed8 90deg,
+    #3b82f6 140deg,
+    #93c5fd 180deg,
+    #60a5fa 220deg,
+    #1d4ed8 270deg,
+    #1e3a8a 320deg,
+    #0f172a 360deg
+  );
+  animation: corona-spin 4s linear infinite;
+  z-index: 0;
+}
+/* Mask to make it look like a ring not a filled circle */
+.avatar-think::after {
+  content: '';
+  position: absolute;
+  inset: 0px;
+  border-radius: 50%;
+  background: transparent;
+  z-index: 1;
+}
+.avatar-think img {
+  position: relative;
+  z-index: 2;
+}
+/* Outer glow pulse */
+.avatar-think {
+  animation: corona-glow 2s ease-in-out infinite;
+}
+@keyframes corona-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes corona-glow {
   0%, 100% {
-    box-shadow:
-      0 0 0 2px rgba(59,130,246,0.85),
-      0 0 10px 4px rgba(37,99,235,0.65),
-      0 0 22px 8px rgba(96,165,250,0.35),
-      0 0 38px 14px rgba(147,197,253,0.15);
+    filter: drop-shadow(0 0 8px rgba(59,130,246,0.7)) drop-shadow(0 0 20px rgba(29,78,216,0.4));
   }
   50% {
-    box-shadow:
-      0 0 0 3px rgba(96,165,250,1.0),
-      0 0 16px 7px rgba(59,130,246,0.8),
-      0 0 32px 14px rgba(96,165,250,0.5),
-      0 0 55px 22px rgba(147,197,253,0.25);
+    filter: drop-shadow(0 0 14px rgba(96,165,250,0.95)) drop-shadow(0 0 32px rgba(59,130,246,0.6)) drop-shadow(0 0 50px rgba(147,197,253,0.3));
   }
 }
 .neon-btn {
@@ -180,12 +214,21 @@ type AiMessage = {
 type Conversation = { id: string; title: string; pinned: boolean; updatedAt: string; preview: string; };
 type PendingFile = { file: File; status: "uploading" | "ready" | "error"; analysis?: string; blobUrl?: string; };
 
-/* ─── Logo with corona glow ─── */
+/* ─── Logo with eclipse corona animation ─── */
 function AgentLogo({ size = 40, thinking = false }: { size?: number; thinking?: boolean }) {
+  const pad = thinking ? 5 : 0;
+  const total = size + pad * 2;
   return (
-    <div className={`avatar-wrap ${thinking ? "avatar-think" : ""}`} style={{ width: size, height: size, borderRadius: "50%" }}>
+    <div className={`avatar-wrap ${thinking ? "avatar-think" : ""}`}
+      style={{ width: total, height: total, flexShrink: 0 }}>
       <Image src={AGENT_IMG} alt="AMZ Navigator" width={size} height={size}
-        style={{ width: size, height: size, objectFit: "contain", borderRadius: "50%" }} unoptimized />
+        style={{
+          width: size, height: size,
+          objectFit: "cover",
+          borderRadius: "50%",
+          display: "block",
+          margin: thinking ? `${pad}px` : 0,
+        }} unoptimized />
     </div>
   );
 }
@@ -832,7 +875,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     let fullContent = "";
 
     // Detect whether to use deep research (URL pasted or non-Amazon topic)
-    const { use: useResearch } = shouldUseResearch(text);
+    const { use: useResearch } = shouldUseResearch(text, pendingFiles.length > 0);
     if (useResearch) setIsResearching(true);
 
     try {
