@@ -551,6 +551,7 @@ model AiUsageLog {
   id        String   @id @default(cuid())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
+  tokens    Int      @default(1)
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
