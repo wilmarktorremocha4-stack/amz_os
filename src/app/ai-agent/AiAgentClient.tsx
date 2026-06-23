@@ -6,7 +6,7 @@ import {
   Send, Search, MoreHorizontal, Pin, Pencil, Trash2, X,
   Plus, PanelLeftClose, PanelLeftOpen, Copy, Check,
   Paperclip, Settings, HardDrive, ImageIcon, Clock, Mic, RotateCcw, FileText,
-  Archive, Download, FileSpreadsheet, BookOpen,
+  Archive, Download, FileSpreadsheet, BookOpen, Globe,
 } from "lucide-react";
 
 const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a399f8f7b00529580ab8d3d.png";
@@ -107,6 +107,21 @@ async function logTokens(tokens: number): Promise<UsageState | null> {
 function formatResetAt(resetAt: string | null): string {
   if (!resetAt) return "";
   return new Date(resetAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/* ─── Research routing ─── */
+const URL_REGEX = /https?:\/\/[^\s<>"']+/gi;
+const AMAZON_KEYWORDS = /\b(amazon|fba|wholesale|asin|bsr|buy.?box|seller.?central|sourcing|supplier|inventory|restocking|keepa|jungle.?scout|helium|product.?listing|storefront|brand.?gating|1p|3p|private.?label|arbitrage|resell|reprice|shipment|freight|prep.?center|reorder|roi.?calculator|margin.?calculator)\b/i;
+
+function shouldUseResearch(text: string): { use: boolean; urls: string[] } {
+  const urls = text.match(URL_REGEX) ?? [];
+  if (urls.length > 0) return { use: true, urls };
+  // If the query clearly isn't about Amazon/ecommerce, route to deep research
+  const isAmazon = AMAZON_KEYWORDS.test(text);
+  // Research mode for non-Amazon topics that suggest external research
+  const researchSignals = /\b(research|analyze|analysis|competitor|brand|company|startup|market|industry|trend|review|website|site|product|compare|versus|vs\.?|strategy|marketing|campaign|social media|instagram|tiktok|twitter|youtube|influencer|reddit|news|article|report|study|data|stats|statistics|price|pricing|revenue|funding|vc|investor)\b/i.test(text);
+  if (!isAmazon && researchSignals) return { use: true, urls: [] };
+  return { use: false, urls: [] };
 }
 
 /* ─── CSS ─── */
@@ -690,6 +705,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const [starters, setStarters] = useState(() => shufflePick(ALL_STARTERS, 4));
   const [recentHover, setRecentHover] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isResearching, setIsResearching] = useState(false);
   const [usage, setUsage] = useState<UsageState>({ used: 0, limit: TOKEN_LIMIT, resetAt: null });
   const recentHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<{ stop(): void } | null>(null);
@@ -816,47 +832,92 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     const assistantId = crypto.randomUUID();
     let fullContent = "";
 
-    try {
-      const res = await fetch("/api/ai-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: queryWithContext, difyConversationId: difyConvId }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Unknown error" }));
-        throw new Error(err.error ?? `HTTP ${res.status}`);
-      }
-      setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", createdAt: Date.now() }]);
+    // Detect whether to use deep research (URL pasted or non-Amazon topic)
+    const { use: useResearch } = shouldUseResearch(text);
+    if (useResearch) setIsResearching(true);
 
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n"); buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim(); if (!raw) continue;
-          try {
-            const json = JSON.parse(raw);
-            if (json.type === "dify_conv_id") { setDifyConvId(json.difyConvId); setActiveConvId(json.difyConvId); }
-            if (json.type === "chunk") {
-              fullContent += json.chunk;
-              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
-            }
-            if (json.type === "done") {
-              await refreshConversations();
-              const tokens: number = json.tokens ?? 0;
-              if (tokens > 0) {
-                logTokens(tokens).then(u => { if (u) setUsage(u); }).catch(() => {});
+    try {
+      if (useResearch) {
+        // ── Deep research via OpenAI web search ──
+        const res = await fetch("/api/ai-research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: text }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Research failed" }));
+          throw new Error(err.error ?? `HTTP ${res.status}`);
+        }
+        setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", createdAt: Date.now() }]);
+
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n"); buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.slice(6).trim(); if (!raw) continue;
+            try {
+              const json = JSON.parse(raw);
+              if (json.type === "chunk") {
+                fullContent += json.chunk;
+                setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
               }
+              if (json.type === "error") throw new Error(json.message);
+              if (json.type === "done") {
+                const tokens: number = json.tokens ?? 0;
+                if (tokens > 0) logTokens(tokens).then(u => { if (u) setUsage(u); }).catch(() => {});
+              }
+            } catch (err) {
+              if (err instanceof Error && err.message !== "skip") throw err;
             }
-          } catch { /* skip */ }
+          }
+        }
+      } else {
+        // ── Standard Dify chat ──
+        const res = await fetch("/api/ai-chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: queryWithContext, difyConversationId: difyConvId }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Unknown error" }));
+          throw new Error(err.error ?? `HTTP ${res.status}`);
+        }
+        setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", createdAt: Date.now() }]);
+
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n"); buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.slice(6).trim(); if (!raw) continue;
+            try {
+              const json = JSON.parse(raw);
+              if (json.type === "dify_conv_id") { setDifyConvId(json.difyConvId); setActiveConvId(json.difyConvId); }
+              if (json.type === "chunk") {
+                fullContent += json.chunk;
+                setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
+              }
+              if (json.type === "done") {
+                await refreshConversations();
+                const tokens: number = json.tokens ?? 0;
+                if (tokens > 0) logTokens(tokens).then(u => { if (u) setUsage(u); }).catch(() => {});
+              }
+            } catch { /* skip */ }
+          }
         }
       }
-      // Auto-prompt export if response is long and user asked for file
+
       if (exportIntent && fullContent.length > 200) {
         setTimeout(() => setExportContent(fullContent), 500);
       }
@@ -865,9 +926,10 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
       setMessages(prev => prev.filter(m => m.id !== assistantId));
     } finally {
       setIsResponding(false);
+      setIsResearching(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input, isResponding, difyConvId, pendingFiles, usage.used, usage.limit]);
+  }, [input, isResponding, difyConvId, pendingFiles, usage.used, usage.limit, isResearching]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
@@ -1028,9 +1090,16 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                     <div className="flex gap-3 items-start">
                       <AgentLogo size={46} thinking />
                       <div className="flex flex-col gap-1">
-                        <span className="text-[11px] font-semibold text-blue-400 px-1">AMZ Navigator</span>
+                        <span className="text-[11px] font-semibold text-blue-400 px-1">
+                          {isResearching ? "Deep Research" : "AMZ Navigator"}
+                        </span>
                         <div className="rounded-2xl rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                          {pendingFiles.length > 0
+                          {isResearching
+                            ? <span className="text-xs text-emerald-500 flex items-center gap-2">
+                                <Globe size={12} className="animate-spin" style={{ animationDuration: "2s" }} />
+                                Searching the web and researching…
+                              </span>
+                            : pendingFiles.length > 0
                             ? <span className="text-xs text-blue-400 flex items-center gap-2"><span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent spin" />Analyzing file…</span>
                             : <span className="inline-flex gap-1">{[0,1,2].map(i => <span key={i} className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }} />)}</span>
                           }
