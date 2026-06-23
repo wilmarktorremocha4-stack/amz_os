@@ -897,6 +897,9 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         const reader = res.body!.getReader();
         const decoder = new TextDecoder();
         let buf = "";
+        let doneTokens = 0;
+
+        // Pure streaming loop — no awaits inside except reader.read()
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -906,20 +909,26 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
             if (!line.startsWith("data: ")) continue;
             const raw = line.slice(6).trim(); if (!raw) continue;
             try {
-              const json = JSON.parse(raw);
-              if (json.type === "dify_conv_id") { setDifyConvId(json.difyConvId); setActiveConvId(json.difyConvId); }
+              const json = JSON.parse(raw) as Record<string, unknown>;
+              if (json.type === "dify_conv_id") {
+                setDifyConvId(json.difyConvId as string);
+                setActiveConvId(json.difyConvId as string);
+              }
               if (json.type === "chunk") {
-                fullContent += json.chunk;
-                setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
+                const chunk = json.chunk as string;
+                fullContent += chunk;
+                setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + chunk } : m));
               }
               if (json.type === "done") {
-                await refreshConversations();
-                const tokens: number = json.tokens ?? 0;
-                if (tokens > 0) logTokens(tokens).then(u => { if (u) setUsage(u); }).catch(() => {});
+                doneTokens = (json.tokens as number) ?? 0;
               }
             } catch { /* skip */ }
           }
         }
+
+        // Side effects after stream closes — never block the stream loop
+        refreshConversations().catch(() => {});
+        if (doneTokens > 0) logTokens(doneTokens).then(u => { if (u) setUsage(u); }).catch(() => {});
       }
 
       if (exportIntent && fullContent.length > 200) {
