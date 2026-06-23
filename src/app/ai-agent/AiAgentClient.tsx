@@ -6,13 +6,12 @@ import {
   Send, Search, MoreHorizontal, Pin, Pencil, Trash2, X,
   Plus, PanelLeftClose, PanelLeftOpen, Copy, Check,
   Paperclip, Settings, HardDrive, ImageIcon, Clock, Mic, RotateCcw, FileText,
-  Archive, Download, FileSpreadsheet, BookOpen, Globe,
+  Archive, Download, FileSpreadsheet, BookOpen,
 } from "lucide-react";
 
-const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a380e1e1c5d711b35ce5f63.png";
+const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a399f8f7b00529580ab8d3d.png";
 
-const TOKEN_LIMIT = 100_000; // per 5-hour window
-const WINDOW_HOURS = 5;
+const DAILY_MSG_LIMIT = 50; // configurable
 
 const GREETINGS = [
   "Hello! Grab a coffee and let's start the conversation ☕",
@@ -81,77 +80,57 @@ function addStoredFile(f: StoredFileRecord) {
   localStorage.setItem("ai-stored-files", JSON.stringify([f, ...existing].slice(0, 100)));
 }
 
-/* ─── Usage helpers (server-side, 5-hour rolling window, token-based) ─── */
-type UsageState = { used: number; limit: number; resetAt: string | null };
-
-async function fetchUsage(): Promise<UsageState> {
+/* ─── Usage counter (daily) ─── */
+function getTodayKey() {
+  return new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local timezone
+}
+function getUsageCount(): number {
+  if (typeof window === "undefined") return 0;
   try {
-    const res = await fetch("/api/ai-usage");
-    if (res.ok) return await res.json() as UsageState;
-  } catch { /* ignore */ }
-  return { used: 0, limit: TOKEN_LIMIT, resetAt: null };
+    const raw = JSON.parse(localStorage.getItem("ai-usage") ?? "{}") as Record<string, number>;
+    return raw[getTodayKey()] ?? 0;
+  } catch { return 0; }
 }
-
-async function logTokens(tokens: number): Promise<UsageState | null> {
-  try {
-    const res = await fetch("/api/ai-usage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tokens }),
-    });
-    if (res.ok || res.status === 429) return await res.json() as UsageState;
-  } catch { /* ignore */ }
-  return null;
+function incrementUsage(): number {
+  if (typeof window === "undefined") return 0;
+  const raw = JSON.parse(localStorage.getItem("ai-usage") ?? "{}") as Record<string, number>;
+  const today = getTodayKey();
+  raw[today] = (raw[today] ?? 0) + 1;
+  localStorage.setItem("ai-usage", JSON.stringify(raw));
+  return raw[today];
 }
-
-function formatResetAt(resetAt: string | null): string {
-  if (!resetAt) return "";
-  return new Date(resetAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-/* ─── Research routing ─── */
-const URL_REGEX = /https?:\/\/[^\s<>"']+/gi;
-
-function shouldUseResearch(text: string, hasPendingFiles: boolean): { use: boolean } {
-  if (hasPendingFiles) return { use: false };
-  // Only trigger research when user explicitly pastes a URL
-  const hasUrl = URL_REGEX.test(text);
-  URL_REGEX.lastIndex = 0; // reset stateful regex
-  return { use: hasUrl };
+function getMidnightReset(): string {
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const h = midnight.getHours() === 0 ? 12 : midnight.getHours() > 12 ? midnight.getHours() - 12 : midnight.getHours();
+  const ampm = new Date(midnight).setHours(0, 0, 0, 0) < new Date(midnight).getTime() ? "AM" : "PM";
+  // Format: "12:00 AM"
+  const mm = String(midnight.getMinutes()).padStart(2, "0");
+  const hh = String(midnight.getHours() === 0 ? 12 : midnight.getHours() > 12 ? midnight.getHours() - 12 : midnight.getHours()).padStart(2, "0");
+  const ap = midnight.getHours() < 12 ? "AM" : "PM";
+  void h; void ampm;
+  return `${hh}:${mm} ${ap}`;
 }
 
 /* ─── CSS ─── */
 const STYLE = `
-/* ── Eclipse corona animation (blue ring + outer glow) ── */
-.avatar-wrap {
-  position: relative;
-  display: inline-block;
+/* ── Radar ring animation (concentric rings, brand blue) ── */
+.avatar-wrap { position: relative; display: inline-block; }
+.avatar-wrap .ring {
+  position: absolute;
+  inset: -6px;
   border-radius: 50%;
-  line-height: 0;
+  border: 2px solid rgba(59,130,246,0);
+  pointer-events: none;
 }
-.avatar-wrap img {
-  border-radius: 50%;
-  display: block;
-}
-.avatar-think {
-  border-radius: 50%;
-  animation: corona-pulse 2.2s ease-in-out infinite;
-}
-@keyframes corona-pulse {
-  0%, 100% {
-    box-shadow:
-      0 0 0 3px #1d4ed8,
-      0 0 12px 5px rgba(59,130,246,0.75),
-      0 0 26px 10px rgba(96,165,250,0.45),
-      0 0 48px 18px rgba(147,197,253,0.2);
-  }
-  50% {
-    box-shadow:
-      0 0 0 4px #3b82f6,
-      0 0 18px 8px rgba(96,165,250,0.95),
-      0 0 38px 16px rgba(59,130,246,0.55),
-      0 0 64px 26px rgba(147,197,253,0.3);
-  }
+.avatar-think .ring-1 { animation: ring-out 2.4s ease-out infinite 0s; }
+.avatar-think .ring-2 { animation: ring-out 2.4s ease-out infinite 0.6s; }
+.avatar-think .ring-3 { animation: ring-out 2.4s ease-out infinite 1.2s; }
+@keyframes ring-out {
+  0%   { transform: scale(1);   border-color: rgba(59,130,246,0.7); }
+  60%  { transform: scale(1.7); border-color: rgba(96,165,250,0.3); }
+  100% { transform: scale(2.2); border-color: rgba(147,197,253,0); }
 }
 .neon-btn {
   position: relative; background: transparent; border: none; outline: none; cursor: pointer;
@@ -174,20 +153,22 @@ type AiMessage = {
   content: string;
   createdAt: number;
   fileUrls?: string[];
-  fileBlobUrls?: string[];
 };
 
 type Conversation = { id: string; title: string; pinned: boolean; updatedAt: string; preview: string; };
 type PendingFile = { file: File; status: "uploading" | "ready" | "error"; analysis?: string; blobUrl?: string; };
 
-/* ─── Logo with eclipse corona animation ─── */
+/* ─── Logo with radar rings ─── */
 function AgentLogo({ size = 40, thinking = false }: { size?: number; thinking?: boolean }) {
   return (
-    <div className={`avatar-wrap ${thinking ? "avatar-think" : ""}`}
-      style={{ width: size, height: size, flexShrink: 0 }}>
+    <div className={`avatar-wrap ${thinking ? "avatar-think" : ""}`} style={{ display: "inline-block", lineHeight: 0, width: size, height: size }}>
+      {thinking && <>
+        <span className="ring ring-1" />
+        <span className="ring ring-2" />
+        <span className="ring ring-3" />
+      </>}
       <Image src={AGENT_IMG} alt="AMZ Navigator" width={size} height={size}
-        style={{ width: size, height: size, objectFit: "cover", borderRadius: "50%", display: "block" }}
-        unoptimized />
+        style={{ width: size, height: size, objectFit: "contain", position: "relative", zIndex: 1 }} unoptimized />
     </div>
   );
 }
@@ -216,14 +197,6 @@ function NeonNewBtn({ onClick }: { onClick: () => void }) {
 }
 
 /* ─── Markdown ─── */
-function resolveDifyUrl(href: string): string {
-  if (href.startsWith("sandbox:/")) {
-    const path = href.replace("sandbox:/", "").replace(/^\/+/, "");
-    return `/api/ai-dify-file?path=${encodeURIComponent(path)}`;
-  }
-  return href;
-}
-
 function MdLine({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g);
   return (
@@ -231,11 +204,7 @@ function MdLine({ text }: { text: string }) {
       {parts.map((p, i) => {
         if (p.startsWith("**") && p.endsWith("**")) return <strong key={i}>{p.slice(2, -2)}</strong>;
         const m = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-        if (m) {
-          const href = resolveDifyUrl(m[2]);
-          return <a key={i} href={href} target="_blank" rel="noopener noreferrer" download={href.startsWith("/api/ai-dify-file") ? "" : undefined}
-            className="underline underline-offset-2 text-blue-500 opacity-90 hover:opacity-100">{m[1]}</a>;
-        }
+        if (m) return <a key={i} href={m[2]} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 opacity-80 hover:opacity-100">{m[1]}</a>;
         return <span key={i}>{p}</span>;
       })}
     </>
@@ -415,17 +384,11 @@ function MessageBubble({ msg, isThinking, onExport }: { msg: AiMessage; isThinki
         {!isUser && <span className="text-[11px] font-semibold text-blue-400 px-1">AMZ Navigator</span>}
         {isUser && msg.fileUrls && msg.fileUrls.length > 0 && (
           <div className="flex flex-wrap gap-1.5 justify-end mb-0.5">
-            {msg.fileUrls.map((name, i) => {
-              const blobUrl = msg.fileBlobUrls?.[i];
-              const chip = (
-                <span className="flex items-center gap-1.5 rounded-xl bg-blue-500/15 border border-blue-400/30 px-2.5 py-1 text-[11px] text-blue-600 font-medium transition hover:bg-blue-500/25 cursor-pointer">
-                  <FileText size={11} /> {name}
-                </span>
-              );
-              return blobUrl
-                ? <a key={i} href={blobUrl} target="_blank" rel="noopener noreferrer" download={name}>{chip}</a>
-                : <span key={i}>{chip}</span>;
-            })}
+            {msg.fileUrls.map((name, i) => (
+              <span key={i} className="flex items-center gap-1.5 rounded-xl bg-blue-500/15 border border-blue-400/30 px-2.5 py-1 text-[11px] text-blue-600 font-medium">
+                <FileText size={11} /> {name}
+              </span>
+            ))}
           </div>
         )}
         <div className={`rounded-2xl px-4 py-3 ${isUser
@@ -636,50 +599,22 @@ function MiniRecentPanel({ conversations, activeConvId, onSelect }: { conversati
   );
 }
 
-/* ─── Usage ring ─── */
-function UsageRing({ used, limit, resetAt }: { used: number; limit: number; resetAt: string | null }) {
-  const [open, setOpen] = useState(false);
-  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
-  const color = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#3b82f6";
+/* ─── Usage bar ─── */
+function UsageBar({ count }: { count: number }) {
+  const pct = Math.min(100, Math.round((count / DAILY_MSG_LIMIT) * 100));
+  const resetTime = getMidnightReset();
   const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
-  const resetTime = formatResetAt(resetAt);
-  const r = 9;
-  const circ = 2 * Math.PI * r;
-  const dash = circ * (1 - pct / 100);
-
+  const color = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#3b82f6";
   return (
-    <div className="relative flex items-center gap-1.5">
-      <span className="text-[10px] text-[var(--muted)] font-medium">Usage</span>
-      <button
-        onClick={() => setOpen(o => !o)}
-        title="Token usage"
-        className="flex items-center justify-center transition-all hover:opacity-80 shrink-0"
-        style={{ width: 22, height: 22 }}
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" style={{ transform: "rotate(-90deg)" }}>
-          <circle cx="12" cy="12" r={r} fill="none" stroke="#d1d5db" strokeWidth="2.5" />
-          <circle cx="12" cy="12" r={r} fill="none" stroke={color} strokeWidth="2.5"
-            strokeDasharray={circ} strokeDashoffset={pct > 0 ? dash : circ}
-            strokeLinecap="round"
-            style={{ transition: "stroke-dashoffset 0.5s ease", opacity: pct > 0 ? 1 : 0 }} />
-        </svg>
-      </button>
-      {open && (
-        <div
-          className="absolute bottom-8 right-0 z-50 w-52 rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl p-3"
-          onMouseLeave={() => setOpen(false)}
-        >
-          <p className="text-[11px] font-bold text-[var(--foreground)] mb-0.5">{used.toLocaleString()} / {limit.toLocaleString()} tokens</p>
-          <p className="text-[10px] text-[var(--muted)] mb-2">Rolling {WINDOW_HOURS}-hour window</p>
-          <div className="h-1.5 w-full rounded-full bg-[var(--border)] overflow-hidden mb-2">
-            <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
-          </div>
-          {resetTime && (
-            <p className="text-[10px] text-[var(--muted)]">Resets at {resetTime}{tz ? ` · ${tz.split("/").pop()?.replace(/_/g, " ")}` : ""}</p>
-          )}
-          <p className="text-[10px] text-[var(--muted)] mt-0.5">{Math.round(pct)}% used</p>
-        </div>
-      )}
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-[10px] text-[var(--muted)]">
+        <span className="font-medium">Daily usage</span>
+        <span>Resets {resetTime}{tz ? ` (${tz.split("/").pop()?.replace(/_/g, " ")})` : ""} · {pct}%</span>
+      </div>
+      <div className="h-1 w-full rounded-full bg-[var(--border)] overflow-hidden">
+        <div className="h-1 rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <p className="text-[9px] text-[var(--muted)]/60 text-right">{count} / {DAILY_MSG_LIMIT} messages today</p>
     </div>
   );
 }
@@ -706,8 +641,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const [starters, setStarters] = useState(() => shufflePick(ALL_STARTERS, 4));
   const [recentHover, setRecentHover] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [isResearching, setIsResearching] = useState(false);
-  const [usage, setUsage] = useState<UsageState>({ used: 0, limit: TOKEN_LIMIT, resetAt: null });
+  const [usageCount, setUsageCount] = useState(0);
   const recentHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<{ stop(): void } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -716,7 +650,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchUsage().then(u => setUsage(u));
+    setUsageCount(getUsageCount());
     fetch("/api/ai-conversations")
       .then(r => r.ok ? r.json() : [])
       .then((convs: Conversation[]) => setConversations(applyPinned(convs)))
@@ -803,83 +737,67 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || isResponding) return;
+    if (!text || isResponding || usageCount >= DAILY_MSG_LIMIT) return;
     if (pendingFiles.some(f => f.status === "uploading")) return;
 
+    let queryWithContext = text;
+    const readyFiles = pendingFiles.filter(f => f.analysis);
+    if (readyFiles.length > 0) {
+      const ctx = readyFiles.map(f => `[Attached file: ${f.file.name}]\n${f.analysis}`).join("\n\n");
+      queryWithContext = `${ctx}\n\nUser: ${text}`;
+    }
+
+    // Check if user wants export
     const exportIntent = /\b(convert|export|download|save|generate).*(pdf|doc|word|excel|spreadsheet|xlsx|file|report)\b/i.test(text)
       || /\b(pdf|doc|word|excel|spreadsheet|xlsx)\b/i.test(text);
 
     const fileNames = pendingFiles.map(f => f.file.name);
-    const fileBlobUrls = pendingFiles.map(f => f.blobUrl ?? "").filter(Boolean);
-    const userMsg: AiMessage = {
-      id: crypto.randomUUID(), role: "user", content: text, createdAt: Date.now(),
-      fileUrls: fileNames.length > 0 ? fileNames : undefined,
-      fileBlobUrls: fileBlobUrls.length > 0 ? fileBlobUrls : undefined,
-    };
+    const userMsg: AiMessage = { id: crypto.randomUUID(), role: "user", content: text, createdAt: Date.now(), fileUrls: fileNames.length > 0 ? fileNames : undefined };
     setMessages(prev => [...prev, userMsg]);
-    setInput("");
-    setPendingFiles([]);
-    setIsResponding(true);
-    setError(null);
+    setInput(""); setPendingFiles([]); setIsResponding(true); setError(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
+
+    const newCount = incrementUsage();
+    setUsageCount(newCount);
 
     const assistantId = crypto.randomUUID();
     let fullContent = "";
 
-    // Research mode only for explicit URLs
-    const hasUrl = /https?:\/\/[^\s]+/.test(text);
-    setIsResearching(hasUrl);
-
     try {
-      const endpoint = hasUrl ? "/api/ai-research" : "/api/ai-chat";
-      const body = hasUrl
-        ? JSON.stringify({ query: text })
-        : JSON.stringify({ query: text, difyConversationId: difyConvId });
-
-      const res = await fetch(endpoint, {
+      const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body,
+        body: JSON.stringify({ query: queryWithContext, difyConversationId: difyConvId }),
       });
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(err.error ?? `HTTP ${res.status}`);
       }
-
       setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", createdAt: Date.now() }]);
 
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buf = "";
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
+        const lines = buf.split("\n"); buf = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim();
-          if (!raw) continue;
+          const raw = line.slice(6).trim(); if (!raw) continue;
           try {
             const json = JSON.parse(raw);
-            if (json.type === "dify_conv_id") {
-              setDifyConvId(json.difyConvId);
-              setActiveConvId(json.difyConvId);
-            }
+            if (json.type === "dify_conv_id") { setDifyConvId(json.difyConvId); setActiveConvId(json.difyConvId); }
             if (json.type === "chunk") {
               fullContent += json.chunk;
               setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
             }
-            if (json.type === "done") {
-              refreshConversations().catch(() => {});
-            }
+            if (json.type === "done") await refreshConversations();
           } catch { /* skip */ }
         }
       }
-
+      // Auto-prompt export if response is long and user asked for file
       if (exportIntent && fullContent.length > 200) {
         setTimeout(() => setExportContent(fullContent), 500);
       }
@@ -888,10 +806,8 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
       setMessages(prev => prev.filter(m => m.id !== assistantId));
     } finally {
       setIsResponding(false);
-      setIsResearching(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input, isResponding, difyConvId, pendingFiles]);
+  }, [input, isResponding, difyConvId, pendingFiles, usageCount]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
@@ -953,9 +869,12 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         {/* ─── Full sidebar ─── */}
         {sidebarOpen && (
           <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-            {/* Search full-width at top */}
-            <div className="px-3 pt-3 pb-2">
-              <div className="neon-btn rounded-xl w-full">
+            {/* Collapse + search inline at top */}
+            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+              <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition shrink-0">
+                <PanelLeftClose size={15} />
+              </button>
+              <div className="neon-btn rounded-xl flex-1">
                 <div className="flex items-center gap-2 rounded-xl bg-[var(--background)] px-3 py-2">
                   <Search size={12} className="text-[var(--muted)] shrink-0" />
                   <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations…"
@@ -987,13 +906,9 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
               {filtered.length === 0 && search && <p className="px-3 py-6 text-xs text-[var(--muted)] text-center">No results found.</p>}
             </div>
 
-            <div className="border-t border-[var(--border)] px-3 py-2 flex items-center gap-1">
-              <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-2 flex-1 rounded-lg px-2 py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
+            <div className="border-t border-[var(--border)] px-3 py-2">
+              <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-2 w-full rounded-lg px-2 py-2 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition">
                 <Settings size={13} /> Settings
-              </button>
-              <button onClick={() => setSidebarOpen(false)} title="Collapse sidebar"
-                className="p-2 rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)] transition shrink-0">
-                <PanelLeftClose size={14} />
               </button>
             </div>
           </aside>
@@ -1052,16 +967,9 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                     <div className="flex gap-3 items-start">
                       <AgentLogo size={46} thinking />
                       <div className="flex flex-col gap-1">
-                        <span className="text-[11px] font-semibold text-blue-400 px-1">
-                          {isResearching ? "Deep Research" : "AMZ Navigator"}
-                        </span>
+                        <span className="text-[11px] font-semibold text-blue-400 px-1">AMZ Navigator</span>
                         <div className="rounded-2xl rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                          {isResearching
-                            ? <span className="text-xs text-emerald-500 flex items-center gap-2">
-                                <Globe size={12} className="animate-spin" style={{ animationDuration: "2s" }} />
-                                Searching the web and researching…
-                              </span>
-                            : pendingFiles.length > 0
+                          {pendingFiles.length > 0
                             ? <span className="text-xs text-blue-400 flex items-center gap-2"><span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent spin" />Analyzing file…</span>
                             : <span className="inline-flex gap-1">{[0,1,2].map(i => <span key={i} className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }} />)}</span>
                           }
@@ -1077,7 +985,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
           </div>
 
           {/* Input area */}
-          <div className="shrink-0 border-t border-[var(--border)] px-4 pt-3 pb-2" style={{ background: "#dde3ea" }}>
+          <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-4 pt-3 pb-2">
             <div className="mx-auto max-w-2xl">
               {pendingFiles.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
@@ -1112,19 +1020,18 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                   className={`shrink-0 p-1.5 rounded-lg transition ${isListening ? "text-red-500 animate-pulse" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)]"}`}>
                   <Mic size={14} />
                 </button>
-                <button onClick={send} disabled={!input.trim() || isResponding || uploading || (usage.limit > 0 && usage.used >= usage.limit)}
-                  className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-xl transition-all ${input.trim() && !isResponding && !uploading ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400" : "bg-[var(--accent-soft)] text-[var(--muted)] opacity-50"}`}>
+                <button onClick={send} disabled={!input.trim() || isResponding || uploading || usageCount >= DAILY_MSG_LIMIT}
+                  className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-xl transition-all ${input.trim() && !isResponding && !uploading && usageCount < DAILY_MSG_LIMIT ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400" : "bg-[var(--accent-soft)] text-[var(--muted)] opacity-50"}`}>
                   <Send size={14} />
                 </button>
               </div>
-              <div className="relative flex items-center justify-center mt-1.5">
-                <p className="text-[11px] text-[var(--muted)]/60 text-center">
-                  AMZ Navigator is AI and can make mistakes. Please double-check responses.
-                </p>
-                <div className="absolute right-0">
-                  <UsageRing used={usage.used} limit={usage.limit} resetAt={usage.resetAt} />
-                </div>
+              {/* Usage bar */}
+              <div className="mt-2">
+                <UsageBar count={usageCount} />
               </div>
+              <p className="mt-1 text-center text-[10px] text-[var(--muted)]/50">
+                AMZ Navigator is AI and can make mistakes. Please double-check responses.
+              </p>
             </div>
           </div>
         </div>
