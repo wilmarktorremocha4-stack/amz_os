@@ -886,7 +886,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
         const res = await fetch("/api/ai-chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: queryWithContext, difyConversationId: difyConvId }),
+          body: JSON.stringify({ query: text, difyConversationId: difyConvId }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: "Unknown error" }));

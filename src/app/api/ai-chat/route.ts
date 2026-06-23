@@ -79,8 +79,7 @@ export async function POST(req: NextRequest) {
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "dify_conv_id", difyConvId: newDifyConvId })}\n\n`));
               }
               if (json.event === "message_end") {
-                const tokens: number = json.metadata?.usage?.total_tokens ?? json.usage?.total_tokens ?? 0;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", tokens })}\n\n`));
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
               }
             } catch { /* skip */ }
           }
