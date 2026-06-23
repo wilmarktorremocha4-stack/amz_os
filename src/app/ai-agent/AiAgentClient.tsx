@@ -805,15 +805,6 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     const text = input.trim();
     if (!text || isResponding) return;
     if (pendingFiles.some(f => f.status === "uploading")) return;
-    // Only block if we have confirmed valid usage data (limit > 0)
-    if (usage.limit > 0 && usage.used >= usage.limit) return;
-
-    let queryWithContext = text;
-    const readyFiles = pendingFiles.filter(f => f.analysis);
-    if (readyFiles.length > 0) {
-      const ctx = readyFiles.map(f => `[Attached file: ${f.file.name}]\n${f.analysis}`).join("\n\n");
-      queryWithContext = `${ctx}\n\nUser: ${text}`;
-    }
 
     const exportIntent = /\b(convert|export|download|save|generate).*(pdf|doc|word|excel|spreadsheet|xlsx|file|report)\b/i.test(text)
       || /\b(pdf|doc|word|excel|spreadsheet|xlsx)\b/i.test(text);
@@ -827,108 +818,66 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
-    // Clear pending files but don't revoke blob URLs (kept alive in message)
     setPendingFiles([]);
-    setIsResponding(true); setError(null);
+    setIsResponding(true);
+    setError(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     const assistantId = crypto.randomUUID();
     let fullContent = "";
 
-    // Detect whether to use deep research (URL pasted or non-Amazon topic)
-    const { use: useResearch } = shouldUseResearch(text, pendingFiles.length > 0);
-
-    if (useResearch) setIsResearching(true);
+    // Research mode only for explicit URLs
+    const hasUrl = /https?:\/\/[^\s]+/.test(text);
+    setIsResearching(hasUrl);
 
     try {
-      if (useResearch) {
-        // ── Deep research via OpenAI web search ──
-        const res = await fetch("/api/ai-research", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: text }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: "Research failed" }));
-          throw new Error(err.error ?? `HTTP ${res.status}`);
-        }
-        setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", createdAt: Date.now() }]);
+      const endpoint = hasUrl ? "/api/ai-research" : "/api/ai-chat";
+      const body = hasUrl
+        ? JSON.stringify({ query: text })
+        : JSON.stringify({ query: text, difyConversationId: difyConvId });
 
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n"); buf = lines.pop() ?? "";
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const raw = line.slice(6).trim(); if (!raw) continue;
-            try {
-              const json = JSON.parse(raw);
-              if (json.type === "chunk") {
-                fullContent += json.chunk;
-                setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
-              }
-              if (json.type === "error") throw new Error(json.message);
-              if (json.type === "done") {
-                const tokens: number = json.tokens ?? 0;
-                if (tokens > 0) logTokens(tokens).then(u => { if (u) setUsage(u); }).catch(() => {});
-              }
-            } catch (err) {
-              if (err instanceof Error && err.message !== "skip") throw err;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+
+      setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", createdAt: Date.now() }]);
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+          try {
+            const json = JSON.parse(raw);
+            if (json.type === "dify_conv_id") {
+              setDifyConvId(json.difyConvId);
+              setActiveConvId(json.difyConvId);
             }
-          }
+            if (json.type === "chunk") {
+              fullContent += json.chunk;
+              setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
+            }
+            if (json.type === "done") {
+              refreshConversations().catch(() => {});
+            }
+          } catch { /* skip */ }
         }
-      } else {
-        // ── Standard Dify chat ──
-        const res = await fetch("/api/ai-chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: text, difyConversationId: difyConvId }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: "Unknown error" }));
-          throw new Error(err.error ?? `HTTP ${res.status}`);
-        }
-        setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", createdAt: Date.now() }]);
-
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        let doneTokens = 0;
-
-        // Pure streaming loop — no awaits inside except reader.read()
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n"); buf = lines.pop() ?? "";
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const raw = line.slice(6).trim(); if (!raw) continue;
-            try {
-              const json = JSON.parse(raw) as Record<string, unknown>;
-              if (json.type === "dify_conv_id") {
-                setDifyConvId(json.difyConvId as string);
-                setActiveConvId(json.difyConvId as string);
-              }
-              if (json.type === "chunk") {
-                const chunk = json.chunk as string;
-                fullContent += chunk;
-                setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + chunk } : m));
-              }
-              if (json.type === "done") {
-                doneTokens = (json.tokens as number) ?? 0;
-              }
-            } catch { /* skip */ }
-          }
-        }
-
-        // Side effects after stream closes — never block the stream loop
-        refreshConversations().catch(() => {});
-        if (doneTokens > 0) logTokens(doneTokens).then(u => { if (u) setUsage(u); }).catch(() => {});
       }
 
       if (exportIntent && fullContent.length > 200) {
@@ -942,7 +891,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
       setIsResearching(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input, isResponding, difyConvId, pendingFiles, usage.used, usage.limit, isResearching]);
+  }, [input, isResponding, difyConvId, pendingFiles]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
