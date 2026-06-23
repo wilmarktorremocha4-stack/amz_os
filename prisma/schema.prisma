@@ -317,6 +317,8 @@ model EmailTemplate {
   subject   String
   body      String   @default("")
   bodyJson  Json?
+  bodyHtml  String?
+  category  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -379,6 +381,7 @@ model EmailCampaign {
   name      String
   subject   String
   bodyJson  Json
+  bodyHtml  String?
   fromName  String?
   fromEmail String?
   status    String   @default("draft") // draft | sending | sent

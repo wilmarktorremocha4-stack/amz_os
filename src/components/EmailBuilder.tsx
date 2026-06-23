@@ -5,7 +5,10 @@ import {
   Type, Heading, Image, MousePointer, Minus, ArrowUp, ArrowDown,
   Trash2, Plus, Eye, EyeOff, AlignLeft, AlignCenter, AlignRight,
 } from "lucide-react";
-import { EmailBlock, EmailDoc, newId, renderEmailHtml } from "@/lib/email-builder";
+import { EmailBlock, newId, renderEmailHtml, createElement } from "@/lib/email-builder";
+
+// Legacy flat doc shape — kept for backwards compat during migration
+type EmailDoc = { blocks: EmailBlock[] };
 
 type BlockType = EmailBlock["type"];
 
@@ -19,15 +22,7 @@ const BLOCK_MENU: { type: BlockType; label: string; icon: React.ReactNode }[] = 
 ];
 
 function makeBlock(type: BlockType): EmailBlock {
-  const id = newId();
-  switch (type) {
-    case "heading": return { id, type, text: "Your Heading", level: 1, align: "left" };
-    case "text": return { id, type, content: "Write your text here...", align: "left" };
-    case "button": return { id, type, label: "Click Here", url: "https://", bgColor: "#2563eb", align: "left" };
-    case "image": return { id, type, src: "https://via.placeholder.com/600x200", alt: "Image", align: "center" };
-    case "divider": return { id, type: "divider" };
-    case "spacer": return { id, type: "spacer", px: 24 };
-  }
+  return createElement(type) as EmailBlock;
 }
 
 export function EmailBuilder({ value, onChange }: { value: EmailDoc; onChange: (doc: EmailDoc) => void }) {
@@ -59,7 +54,7 @@ export function EmailBuilder({ value, onChange }: { value: EmailDoc; onChange: (
     update(value.blocks.map((b) => (b.id === id ? ({ ...b, ...patch } as EmailBlock) : b)));
   }
 
-  const previewHtml = preview ? renderEmailHtml(value, { firstName: "Jane", companyName: "Your Brand", senderName: "AMZ OS", unsubscribeUrl: "#" }) : "";
+  const previewHtml = preview ? renderEmailHtml(value as unknown as import("@/lib/email-builder").EmailDoc, { firstName: "Jane", companyName: "Your Brand", senderName: "AMZ OS", unsubscribeUrl: "#" }) : "";
 
   return (
     <div className="flex flex-col gap-4">

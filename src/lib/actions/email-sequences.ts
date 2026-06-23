@@ -32,7 +32,11 @@ export async function addSequenceStep(sequenceId: string, data: { subject: strin
   if (!seq) return;
 
   await prisma.emailSequenceStep.create({
-    data: { sequenceId, subject: data.subject, bodyJson: data.bodyJson, delayDays: data.delayDays, order: data.order },
+    data: {
+      sequenceId, subject: data.subject,
+      bodyJson: data.bodyJson as never,
+      delayDays: data.delayDays, order: data.order,
+    },
   });
   revalidatePath("/email/sequences");
 }
@@ -107,7 +111,7 @@ export async function processSequenceStep(sequenceId: string, stepIndex: number,
       unsubscribeUrl: `${BASE_URL}/api/track/unsubscribe/${recipient.token}`,
     };
 
-    const html = renderEmailHtml(step.bodyJson as EmailDoc, vars);
+    const html = renderEmailHtml(step.bodyJson as unknown as EmailDoc, vars);
     const tracked = injectTracking(html, recipient.token, BASE_URL);
 
     try {

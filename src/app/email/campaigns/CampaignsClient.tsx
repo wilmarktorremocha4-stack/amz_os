@@ -4,8 +4,9 @@ import { useState, useTransition } from "react";
 import { Plus, Send, Trash2, Mail, BarChart3, ChevronDown, Users, X, CheckSquare } from "lucide-react";
 import { createCampaign, updateCampaign, deleteCampaign, sendCampaign } from "@/lib/actions/email-campaigns";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
-import { EmailBuilder } from "@/components/EmailBuilder";
+import { EmailBuilderRoot } from "@/components/email-builder/EmailBuilderRoot";
 import { EmailDoc, DEFAULT_DOC } from "@/lib/email-builder";
+import type { MergeVariable } from "@/lib/merge-variables";
 
 type Stats = { total: number; sent: number; opened: number; clicked: number; bounced: number };
 type Campaign = {
@@ -13,8 +14,12 @@ type Campaign = {
   status: string; sentAt: Date | null; createdAt: Date; stats: Stats;
 };
 type Supplier = { id: string; companyName: string; email: string | null };
+type Template = { id: string; name: string; bodyJson: EmailDoc };
 
-export function CampaignsClient({ campaigns, suppliers }: { campaigns: Campaign[]; suppliers: Supplier[] }) {
+export function CampaignsClient({ campaigns, suppliers, templates = [], mergeVariables = [] }: {
+  campaigns: Campaign[]; suppliers: Supplier[];
+  templates?: Template[]; mergeVariables?: MergeVariable[];
+}) {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Campaign | null>(null);
   const [sending, setSending] = useState<Campaign | null>(null);
@@ -23,6 +28,8 @@ export function CampaignsClient({ campaigns, suppliers }: { campaigns: Campaign[
   const [subject, setSubject] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [html, setHtml] = useState("");
+  const [loadTemplateId, setLoadTemplateId] = useState("");
   const [pending, startTransition] = useTransition();
 
   function openCreate() { setDoc(DEFAULT_DOC); setName(""); setSubject(""); setCreating(true); }
@@ -132,11 +139,25 @@ export function CampaignsClient({ campaigns, suppliers }: { campaigns: Campaign[
                   <input value={subject} onChange={(e) => setSubject(e.target.value)} className="input w-full" placeholder="Partnership opportunity with {{companyName}}" />
                 </div>
               </div>
+              {templates.length > 0 && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Load from template</label>
+                  <select value={loadTemplateId} onChange={e => {
+                    const tpl = templates.find(t => t.id === e.target.value);
+                    if (tpl) { setDoc(JSON.parse(JSON.stringify(tpl.bodyJson))); }
+                    setLoadTemplateId(e.target.value);
+                  }} className="input w-full text-sm">
+                    <option value="">— Select a template —</option>
+                    {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="mb-2 block text-xs font-medium text-[var(--muted)]">Email body</label>
-                <EmailBuilder value={doc} onChange={setDoc} />
+                <div className="h-[520px] overflow-hidden rounded-xl border border-[var(--border)]">
+                  <EmailBuilderRoot doc={doc} onChange={setDoc} onHtmlChange={setHtml} mergeVariables={mergeVariables} />
+                </div>
               </div>
-              <p className="text-xs text-[var(--muted)]">Variables: <code className="bg-[var(--accent-soft)] px-1 rounded">{"{{firstName}}"}</code> <code className="bg-[var(--accent-soft)] px-1 rounded">{"{{companyName}}"}</code> <code className="bg-[var(--accent-soft)] px-1 rounded">{"{{senderName}}"}</code></p>
               <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
                 <button onClick={() => { setCreating(false); setEditing(null); }} className="btn-secondary">Cancel</button>
                 <button onClick={editing ? handleUpdate : handleCreate} disabled={pending || !name || !subject}

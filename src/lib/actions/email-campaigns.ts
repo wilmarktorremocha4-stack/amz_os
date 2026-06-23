@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { sendEmail } from "@/lib/email";
 import { renderEmailHtml, injectTracking, EmailDoc } from "@/lib/email-builder";
+import { resolveMergeVarsForSupplier } from "@/lib/merge-variables";
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://amz-os.vercel.app";
 
@@ -16,10 +17,10 @@ export async function createCampaign(formData: FormData) {
   if (!name || !subject) return;
 
   let bodyJson: EmailDoc;
-  try { bodyJson = JSON.parse(bodyJsonStr); } catch { bodyJson = { blocks: [] }; }
+  try { bodyJson = JSON.parse(bodyJsonStr); } catch { bodyJson = { sections: [], globalBackgroundColor: "#f0f4fa", contentWidth: 600 }; }
 
   await prisma.emailCampaign.create({
-    data: { userId: user.id, name, subject, bodyJson },
+    data: { userId: user.id, name, subject, bodyJson: bodyJson as never, bodyHtml: renderEmailHtml(bodyJson) },
   });
   revalidatePath("/email/campaigns");
 }
@@ -29,9 +30,12 @@ export async function updateCampaign(campaignId: string, data: { name?: string; 
   await prisma.emailCampaign.update({
     where: { id: campaignId, userId: user.id },
     data: {
-      name: data.name,
-      subject: data.subject,
-      bodyJson: data.bodyJson ? data.bodyJson : undefined,
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.subject !== undefined && { subject: data.subject }),
+      ...(data.bodyJson !== undefined && {
+        bodyJson: data.bodyJson as never,
+        bodyHtml: renderEmailHtml(data.bodyJson),
+      }),
     },
   });
   revalidatePath("/email/campaigns");
@@ -74,15 +78,16 @@ export async function sendCampaign(campaignId: string, supplierIds: string[]) {
   for (let i = 0; i < emailsWithSuppliers.length; i++) {
     const s = emailsWithSuppliers[i];
     const recipient = recipients[i];
-    const vars = {
-      firstName: s.contactName?.split(" ")[0] ?? s.companyName,
-      companyName: s.companyName,
-      senderName: user.name ?? user.email,
-      unsubscribeUrl: `${BASE_URL}/api/track/unsubscribe/${recipient.token}`,
-    };
 
-    const html = renderEmailHtml(campaign.bodyJson as EmailDoc, vars);
-    const tracked = injectTracking(html, recipient.token, BASE_URL);
+    const vars = await resolveMergeVarsForSupplier(s.id, {
+      name: campaign.fromName ?? user.name ?? user.email,
+      email: campaign.fromEmail ?? user.email,
+    });
+    vars.unsubscribeUrl = `${BASE_URL}/api/track/unsubscribe/${recipient.token}`;
+
+    const baseHtml = (campaign as { bodyHtml?: string | null }).bodyHtml ?? renderEmailHtml(campaign.bodyJson as unknown as EmailDoc, vars);
+    const resolvedHtml = baseHtml.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+    const tracked = injectTracking(resolvedHtml, recipient.token, BASE_URL);
 
     try {
       await sendEmail({

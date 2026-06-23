@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Plus, Trash2, Mail, Clock, Users, ChevronDown, ChevronRight, X, Play } from "lucide-react";
 import { createSequence, deleteSequence, addSequenceStep, deleteSequenceStep, enrollInSequence } from "@/lib/actions/email-sequences";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
-import { EmailBuilder } from "@/components/EmailBuilder";
+import { EmailBuilderRoot } from "@/components/email-builder/EmailBuilderRoot";
 import { EmailDoc, DEFAULT_DOC } from "@/lib/email-builder";
 
 type Step = { id: string; subject: string; bodyJson: unknown; delayDays: number; order: number };
@@ -149,7 +149,9 @@ export function SequencesClient({ sequences, suppliers }: { sequences: Sequence[
                           <input type="number" min={0} value={stepDelay} onChange={(e) => setStepDelay(Number(e.target.value))} className="input w-20 text-sm" />
                           <span className="text-xs text-[var(--muted)]">days</span>
                         </div>
-                        <EmailBuilder value={stepBody} onChange={setStepBody} />
+                        <div className="h-[400px] overflow-hidden rounded-xl border border-[var(--border)]">
+                          <EmailBuilderRoot doc={stepBody} onChange={setStepBody} onHtmlChange={() => {}} mergeVariables={[]} />
+                        </div>
                         <div className="flex gap-2 justify-end">
                           <button type="button" onClick={() => setAddingStep(null)} className="btn-secondary text-sm">Cancel</button>
                           <button type="button" disabled={pending || !stepSubject} onClick={() => handleAddStep(seq.id)} className="btn-primary text-sm disabled:opacity-50">{pending ? "Adding…" : "Add Step"}</button>
