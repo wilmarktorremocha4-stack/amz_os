@@ -790,7 +790,6 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
               fullContent += json.chunk;
               setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
             }
-            if (json.type === "done") await refreshConversations();
           } catch { /* skip */ }
         }
       }
@@ -803,6 +802,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
       setMessages(prev => prev.filter(m => m.id !== assistantId));
     } finally {
       setIsResponding(false);
+      refreshConversations().catch(() => {});
     }
   }, [input, isResponding, difyConvId, pendingFiles, usageCount]);
 
