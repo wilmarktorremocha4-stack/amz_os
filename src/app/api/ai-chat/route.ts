@@ -70,16 +70,30 @@ export async function POST(req: NextRequest) {
             if (!raw || raw === "[DONE]") continue;
             try {
               const json = JSON.parse(raw);
+              console.log("[ai-chat] dify event:", json.event, "answer length:", (json.answer ?? "").length);
+
+              // Chat/agent app events
               if (json.event === "message" || json.event === "agent_message") {
                 const chunk: string = json.answer ?? "";
+                if (chunk) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "chunk", chunk })}\n\n`));
+              }
+              // Workflow app text chunk
+              if (json.event === "text_chunk") {
+                const chunk: string = json.data?.text ?? json.text ?? "";
                 if (chunk) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "chunk", chunk })}\n\n`));
               }
               if (json.conversation_id && !newDifyConvId) {
                 newDifyConvId = json.conversation_id;
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "dify_conv_id", difyConvId: newDifyConvId })}\n\n`));
               }
-              if (json.event === "message_end") {
+              if (json.event === "message_end" || json.event === "workflow_finished") {
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+              }
+              // Dify error event
+              if (json.event === "error") {
+                const msg = json.message ?? json.msg ?? "Dify agent error";
+                console.error("[ai-chat] dify error event:", msg);
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", message: msg })}\n\n`));
               }
             } catch { /* skip */ }
           }

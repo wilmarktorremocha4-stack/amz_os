@@ -790,7 +790,10 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
               fullContent += json.chunk;
               setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + json.chunk } : m));
             }
-          } catch { /* skip */ }
+            if (json.type === "error") throw new Error(json.message ?? "Agent error");
+          } catch (innerErr) {
+            if (innerErr instanceof Error && innerErr.message !== "skip") throw innerErr;
+          }
         }
       }
       // Auto-prompt export if response is long and user asked for file
