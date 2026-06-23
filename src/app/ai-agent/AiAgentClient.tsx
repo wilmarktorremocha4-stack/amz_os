@@ -126,7 +126,7 @@ function shouldUseResearch(text: string, hasPendingFiles: boolean): { use: boole
 
 /* ─── CSS ─── */
 const STYLE = `
-/* ── Eclipse corona animation (blue gradient) ── */
+/* ── Eclipse corona animation (blue ring + outer glow) ── */
 .avatar-wrap {
   position: relative;
   display: inline-block;
@@ -137,54 +137,24 @@ const STYLE = `
   border-radius: 50%;
   display: block;
 }
-
-/* Rotating gradient corona ring */
-.avatar-think::before {
-  content: '';
-  position: absolute;
-  inset: -5px;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 0deg,
-    #0f172a 0deg,
-    #1e3a8a 40deg,
-    #1d4ed8 90deg,
-    #3b82f6 140deg,
-    #93c5fd 180deg,
-    #60a5fa 220deg,
-    #1d4ed8 270deg,
-    #1e3a8a 320deg,
-    #0f172a 360deg
-  );
-  animation: corona-spin 4s linear infinite;
-  z-index: 0;
-}
-/* Mask to make it look like a ring not a filled circle */
-.avatar-think::after {
-  content: '';
-  position: absolute;
-  inset: 0px;
-  border-radius: 50%;
-  background: transparent;
-  z-index: 1;
-}
-.avatar-think img {
-  position: relative;
-  z-index: 2;
-}
-/* Outer glow pulse */
 .avatar-think {
-  animation: corona-glow 2s ease-in-out infinite;
+  border-radius: 50%;
+  animation: corona-pulse 2.2s ease-in-out infinite;
 }
-@keyframes corona-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes corona-glow {
+@keyframes corona-pulse {
   0%, 100% {
-    filter: drop-shadow(0 0 8px rgba(59,130,246,0.7)) drop-shadow(0 0 20px rgba(29,78,216,0.4));
+    box-shadow:
+      0 0 0 3px #1d4ed8,
+      0 0 12px 5px rgba(59,130,246,0.75),
+      0 0 26px 10px rgba(96,165,250,0.45),
+      0 0 48px 18px rgba(147,197,253,0.2);
   }
   50% {
-    filter: drop-shadow(0 0 14px rgba(96,165,250,0.95)) drop-shadow(0 0 32px rgba(59,130,246,0.6)) drop-shadow(0 0 50px rgba(147,197,253,0.3));
+    box-shadow:
+      0 0 0 4px #3b82f6,
+      0 0 18px 8px rgba(96,165,250,0.95),
+      0 0 38px 16px rgba(59,130,246,0.55),
+      0 0 64px 26px rgba(147,197,253,0.3);
   }
 }
 .neon-btn {
@@ -216,19 +186,12 @@ type PendingFile = { file: File; status: "uploading" | "ready" | "error"; analys
 
 /* ─── Logo with eclipse corona animation ─── */
 function AgentLogo({ size = 40, thinking = false }: { size?: number; thinking?: boolean }) {
-  const pad = thinking ? 5 : 0;
-  const total = size + pad * 2;
   return (
     <div className={`avatar-wrap ${thinking ? "avatar-think" : ""}`}
-      style={{ width: total, height: total, flexShrink: 0 }}>
+      style={{ width: size, height: size, flexShrink: 0 }}>
       <Image src={AGENT_IMG} alt="AMZ Navigator" width={size} height={size}
-        style={{
-          width: size, height: size,
-          objectFit: "cover",
-          borderRadius: "50%",
-          display: "block",
-          margin: thinking ? `${pad}px` : 0,
-        }} unoptimized />
+        style={{ width: size, height: size, objectFit: "cover", borderRadius: "50%", display: "block" }}
+        unoptimized />
     </div>
   );
 }
