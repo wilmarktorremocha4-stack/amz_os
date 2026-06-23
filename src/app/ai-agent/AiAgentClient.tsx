@@ -803,8 +803,10 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || isResponding || usage.used >= usage.limit) return;
+    if (!text || isResponding) return;
     if (pendingFiles.some(f => f.status === "uploading")) return;
+    // Only block if we have confirmed valid usage data (limit > 0)
+    if (usage.limit > 0 && usage.used >= usage.limit) return;
 
     let queryWithContext = text;
     const readyFiles = pendingFiles.filter(f => f.analysis);
@@ -1152,8 +1154,8 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
                   className={`shrink-0 p-1.5 rounded-lg transition ${isListening ? "text-red-500 animate-pulse" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)]"}`}>
                   <Mic size={14} />
                 </button>
-                <button onClick={send} disabled={!input.trim() || isResponding || uploading || usage.used >= usage.limit}
-                  className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-xl transition-all ${input.trim() && !isResponding && !uploading && usage.used < usage.limit ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400" : "bg-[var(--accent-soft)] text-[var(--muted)] opacity-50"}`}>
+                <button onClick={send} disabled={!input.trim() || isResponding || uploading || (usage.limit > 0 && usage.used >= usage.limit)}
+                  className={`shrink-0 flex h-8 w-8 items-center justify-center rounded-xl transition-all ${input.trim() && !isResponding && !uploading ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400" : "bg-[var(--accent-soft)] text-[var(--muted)] opacity-50"}`}>
                   <Send size={14} />
                 </button>
               </div>
