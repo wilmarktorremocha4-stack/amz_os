@@ -14,8 +14,8 @@ interface Props {
 
 const PROVIDERS = [
   { label: "Gmail",      host: "smtp.gmail.com",          port: 465 },
-  { label: "Outlook",    host: "smtp.office365.com",      port: 587 },
-  { label: "Hotmail",    host: "smtp.live.com",           port: 587 },
+  { label: "Outlook",    host: "smtp-mail.outlook.com",   port: 587 },
+  { label: "Hotmail",    host: "smtp-mail.outlook.com",   port: 587 },
   { label: "Yahoo Mail", host: "smtp.mail.yahoo.com",     port: 465 },
   { label: "iCloud",     host: "smtp.mail.me.com",        port: 587 },
   { label: "Zoho Mail",  host: "smtp.zoho.com",           port: 465 },
@@ -165,9 +165,12 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
           <ol className="flex flex-col gap-1 text-xs text-[var(--muted)] list-decimal list-inside">
             <li>Sign in at outlook.com → Settings (gear icon) → View all Outlook settings</li>
             <li>Go to Mail → Sync email → toggle &quot;Let devices and apps use POP&quot; ON</li>
-            <li>Use your full email address and your regular Outlook password below</li>
-            <li>If you have 2FA, generate an App Password at account.live.com/proofs</li>
+            <li>Use your full Outlook/Hotmail address and your regular password below</li>
+            <li>If you have 2FA enabled, generate an App Password instead at account.live.com/proofs</li>
           </ol>
+          <p className="text-xs text-blue-300/70">
+            Host is pre-set to <code className="bg-blue-900/30 px-1 rounded">smtp-mail.outlook.com</code> — works for both @outlook.com and @hotmail.com addresses.
+          </p>
         </div>
       )}
 
