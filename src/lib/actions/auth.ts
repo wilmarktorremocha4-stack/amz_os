@@ -163,13 +163,12 @@ export async function verifySignupOTP(formData: FormData) {
                     Your AMZ OS account is verified and ready. Start tracking suppliers,
                     researching brands, and building your wholesale pipeline.
                   </p>
-                  <a href="${process.env.NEXTAUTH_URL ?? "https://app.operationamz.com"}/login"
+                  <a href="https://amz-os.vercel.app/login"
                     style="display:inline-block;padding:14px 32px;background:#0E90C8;color:#FFFFFF;font-weight:700;font-size:15px;border-radius:10px;text-decoration:none">
                     Log in to AMZ OS &rarr;
                   </a>
-                  <p style="margin:32px 0 0;font-size:13px;color:#94A3B8">
-                    Questions? Reply to this email or reach Brad at
-                    <a href="https://instagram.com/operationamz" style="color:#0E90C8">@operationamz</a>
+                  <p style="margin:32px 0 0;font-size:12px;color:#94A3B8;font-style:italic">
+                    This is an auto-generated email. Please do not reply to this message.
                   </p>
                 </td></tr>
                 <tr><td style="padding:0 40px 24px;border-top:1px solid #F1F5F9">
