@@ -115,7 +115,11 @@ async function processEnrollmentStep(enrollment: EnrollmentWithIncludes) {
         if (supplier.email && step.emailSubject && step.emailBody) {
           const wf = await prisma.workflow.findUnique({ where: { id: enrollment.workflowId }, select: { userId: true } });
           const userSmtpConfig = wf ? await getUserSmtpConfig(wf.userId) : null;
-          await sendEmail({ to: supplier.email, subject: render(step.emailSubject), html: render(step.emailBody), userSmtpConfig });
+          if (!userSmtpConfig) {
+            console.warn(`[workflow] No verified SMTP for workflow ${enrollment.workflowId} — skipping email step`);
+            break;
+          }
+          await sendEmail({ to: supplier.email, subject: render(step.emailSubject), html: render(step.emailBody), userSmtpConfig, requireSmtp: true });
         }
         break;
       }

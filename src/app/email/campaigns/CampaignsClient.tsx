@@ -22,6 +22,7 @@ export function CampaignsClient({ campaigns, suppliers, templates = [], mergeVar
 }) {
   const [creating, setCreating] = useState(false);
   const [sentViaSystem, setSentViaSystem] = useState(false);
+  const [smtpError, setSmtpError] = useState(false);
   const [editing, setEditing] = useState<Campaign | null>(null);
   const [sending, setSending] = useState<Campaign | null>(null);
   const [doc, setDoc] = useState<EmailDoc>(DEFAULT_DOC);
@@ -59,7 +60,11 @@ export function CampaignsClient({ campaigns, suppliers, templates = [], mergeVar
       const result = await sendCampaign(sending.id, ids);
       setSending(null);
       setSelectedIds(new Set());
-      if (result?.sentViaSystem) setSentViaSystem(true);
+      if (result?.error === "NO_SMTP_CONNECTED") {
+        setSmtpError(true);
+      } else if (result?.sentViaSystem) {
+        setSentViaSystem(true);
+      }
     });
   }
 
@@ -67,6 +72,15 @@ export function CampaignsClient({ campaigns, suppliers, templates = [], mergeVar
 
   return (
     <main className="flex flex-1 flex-col gap-6 p-8">
+      {smtpError && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          <AlertCircle size={15} className="shrink-0" />
+          <span>⚠ No email account connected — campaign was not sent.{" "}
+            <a href="/settings" className="underline font-medium hover:text-white">Connect your email in Settings →</a>
+          </span>
+          <button onClick={() => setSmtpError(false)} className="ml-auto shrink-0"><X size={14} /></button>
+        </div>
+      )}
       {sentViaSystem && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
           <AlertCircle size={15} className="shrink-0" />

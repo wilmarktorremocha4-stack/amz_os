@@ -98,6 +98,12 @@ export async function processSequenceStep(sequenceId: string, stepIndex: number,
 
   const userSmtpConfig = await getUserSmtpConfig(userId);
 
+  // Never fall back to Resend for outreach — skip the whole step if no SMTP
+  if (!userSmtpConfig) {
+    console.warn(`[sequences] No verified SMTP for user ${userId} — skipping step ${stepIndex}`);
+    return;
+  }
+
   const enrollments = await prisma.sequenceEnrollment.findMany({
     where: { sequenceId, currentStep: stepIndex, status: "active" },
     include: { supplier: true },
@@ -124,7 +130,7 @@ export async function processSequenceStep(sequenceId: string, stepIndex: number,
     const tracked = injectTracking(safeHtml, recipient.token, BASE_URL);
 
     try {
-      await sendEmail({ to: s.email, subject: step.subject, html: tracked, userSmtpConfig });
+      await sendEmail({ to: s.email, subject: step.subject, html: tracked, userSmtpConfig, requireSmtp: true });
       await prisma.emailRecipient.update({ where: { id: recipient.id }, data: { status: "sent", sentAt: new Date() } });
 
       const nextStep = seq.steps[stepIndex + 1];

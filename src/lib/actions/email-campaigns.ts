@@ -52,13 +52,18 @@ export async function deleteCampaign(campaignId: string) {
   revalidatePath("/email/campaigns");
 }
 
-export async function sendCampaign(campaignId: string, supplierIds: string[]): Promise<{ sentViaSystem: boolean }> {
+export async function sendCampaign(campaignId: string, supplierIds: string[]): Promise<{ sentViaSystem: boolean; error?: string }> {
   const user = await getCurrentUser();
   const userSmtpConfig = await getUserSmtpConfig(user.id);
+
+  if (!userSmtpConfig) {
+    return { sentViaSystem: false, error: "NO_SMTP_CONNECTED" };
+  }
+
   const campaign = await prisma.emailCampaign.findUnique({
     where: { id: campaignId, userId: user.id },
   });
-  if (!campaign) return { sentViaSystem: !userSmtpConfig };
+  if (!campaign) return { sentViaSystem: false };
 
   const suppliers = await prisma.supplier.findMany({
     where: { id: { in: supplierIds }, userId: user.id, archived: false },
@@ -101,6 +106,7 @@ export async function sendCampaign(campaignId: string, supplierIds: string[]): P
         subject: campaign.subject,
         html: tracked,
         userSmtpConfig,
+        requireSmtp: true,
       });
       await prisma.emailRecipient.update({
         where: { id: recipient.id },
@@ -119,5 +125,5 @@ export async function sendCampaign(campaignId: string, supplierIds: string[]): P
 
   revalidatePath("/email/campaigns");
   revalidatePath("/email/analytics");
-  return { sentViaSystem: !userSmtpConfig };
+  return { sentViaSystem: false };
 }
