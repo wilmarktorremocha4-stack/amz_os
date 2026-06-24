@@ -22,57 +22,75 @@ export async function saveSmtpSettings(data: {
   smtpUser: string;
   smtpPass: string;
   smtpFromName: string;
-}) {
-  const user = await getCurrentUser();
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await getCurrentUser();
 
-  if (!data.smtpHost || isBlockedHost(data.smtpHost)) {
-    throw new Error("Invalid SMTP host");
-  }
-  if (!data.smtpUser || !data.smtpUser.includes("@")) {
-    throw new Error("Invalid SMTP username (must be an email address)");
-  }
-  if (!data.smtpPass) {
-    throw new Error("Password is required");
-  }
-  const port = Number(data.smtpPort);
-  if (!port || port < 1 || port > 65535) {
-    throw new Error("Invalid SMTP port");
-  }
+    if (!data.smtpHost || isBlockedHost(data.smtpHost)) {
+      return { success: false, error: "Invalid SMTP host" };
+    }
+    if (!data.smtpUser || !data.smtpUser.includes("@")) {
+      return { success: false, error: "Invalid email address" };
+    }
+    if (!data.smtpPass) {
+      return { success: false, error: "Password is required" };
+    }
+    const port = Number(data.smtpPort);
+    if (!port || port < 1 || port > 65535) {
+      return { success: false, error: "Invalid SMTP port" };
+    }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      smtpHost: data.smtpHost.trim(),
-      smtpPort: port,
-      smtpUser: data.smtpUser.trim().toLowerCase(),
-      smtpPassEncrypted: encrypt(data.smtpPass),
-      smtpFromName: data.smtpFromName ? sanitizeFromName(data.smtpFromName) : null,
-      smtpVerifiedAt: null,
-    },
-  });
+    let encrypted: string;
+    try {
+      encrypted = encrypt(data.smtpPass);
+    } catch {
+      return {
+        success: false,
+        error: "Server is missing SMTP_ENCRYPTION_SECRET. Please add it to your Vercel environment variables.",
+      };
+    }
 
-  revalidatePath("/settings");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        smtpHost: data.smtpHost.trim(),
+        smtpPort: port,
+        smtpUser: data.smtpUser.trim().toLowerCase(),
+        smtpPassEncrypted: encrypted,
+        smtpFromName: data.smtpFromName ? sanitizeFromName(data.smtpFromName) : null,
+        smtpVerifiedAt: null,
+      },
+    });
+
+    revalidatePath("/settings");
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to save settings",
+    };
+  }
 }
 
 export async function testSmtpConnection(): Promise<{ success: boolean; error?: string }> {
-  const user = await getCurrentUser();
-
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      smtpHost: true,
-      smtpPort: true,
-      smtpUser: true,
-      smtpPassEncrypted: true,
-      smtpFromName: true,
-    },
-  });
-
-  if (!dbUser?.smtpHost || !dbUser.smtpUser || !dbUser.smtpPassEncrypted) {
-    return { success: false, error: "SMTP credentials not configured" };
-  }
-
   try {
+    const user = await getCurrentUser();
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        smtpHost: true,
+        smtpPort: true,
+        smtpUser: true,
+        smtpPassEncrypted: true,
+        smtpFromName: true,
+      },
+    });
+
+    if (!dbUser?.smtpHost || !dbUser.smtpUser || !dbUser.smtpPassEncrypted) {
+      return { success: false, error: "SMTP credentials not saved — please fill in the form and try again" };
+    }
+
     await sendEmailViaUserSmtp({
       smtpConfig: {
         smtpHost: dbUser.smtpHost,
@@ -86,11 +104,9 @@ export async function testSmtpConnection(): Promise<{ success: boolean; error?: 
       html: `
         <div style="font-family:sans-serif;padding:32px;max-width:500px">
           <h2 style="color:#0E90C8">Your email is connected!</h2>
-          <p>Your outreach emails from AMZ OS will be sent from
+          <p>Outreach emails from AMZ OS will be sent from
           <strong>${dbUser.smtpUser}</strong>.</p>
-          <p style="color:#64748B;font-size:13px">
-            This test was sent at ${new Date().toLocaleString()}.
-          </p>
+          <p style="color:#64748B;font-size:13px">This is an automated test message.</p>
         </div>
       `,
     });
@@ -103,10 +119,18 @@ export async function testSmtpConnection(): Promise<{ success: boolean; error?: 
     revalidatePath("/settings");
     return { success: true };
   } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Connection failed",
-    };
+    const msg = err instanceof Error ? err.message : "Connection failed";
+    // Surface friendly messages for common auth/TLS errors
+    const friendly = msg.includes("535") || msg.includes("534") || msg.includes("Username and Password not accepted")
+      ? "Wrong email or password. For Gmail/Yahoo use an App Password, not your regular password."
+      : msg.includes("SMTP_ENCRYPTION_SECRET") || msg.includes("scrypt")
+      ? "Server is missing SMTP_ENCRYPTION_SECRET in Vercel environment variables."
+      : msg.includes("ECONNREFUSED") || msg.includes("ETIMEDOUT") || msg.includes("ENOTFOUND")
+      ? `Cannot reach ${msg.includes("ENOTFOUND") ? "the SMTP server" : "mail server"} — check the host/port and try again.`
+      : msg.includes("certificate") || msg.includes("self signed")
+      ? "TLS certificate error — try a different port (465 or 587)."
+      : msg;
+    return { success: false, error: friendly };
   }
 }
 

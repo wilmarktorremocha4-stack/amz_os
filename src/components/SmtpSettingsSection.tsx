@@ -47,7 +47,18 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
     setTestResult(null);
 
     startTransition(async () => {
-      await saveSmtpSettings({ smtpHost: host, smtpPort: port, smtpUser: email, smtpPass: appPassword, smtpFromName: fromName });
+      const saveResult = await saveSmtpSettings({
+        smtpHost: host,
+        smtpPort: port,
+        smtpUser: email,
+        smtpPass: appPassword,
+        smtpFromName: fromName,
+      });
+      if (!saveResult.success) {
+        setTestResult({ success: false, error: saveResult.error });
+        setIsTesting(false);
+        return;
+      }
       const result = await testSmtpConnection();
       setTestResult(result);
       setIsTesting(false);
