@@ -303,7 +303,10 @@ model PasswordResetToken {
   otp       String
   expiresAt DateTime
   used      Boolean  @default(false)
+  attempts  Int      @default(0)
   createdAt DateTime @default(now())
+
+  @@index([email, used, expiresAt])
 }
 
 // --- Contact notes / activity log ---
@@ -577,7 +580,8 @@ model EmailVerificationToken {
   otp       String
   expiresAt DateTime
   used      Boolean  @default(false)
+  attempts  Int      @default(0)
   createdAt DateTime @default(now())
 
-  @@index([email])
+  @@index([email, used, expiresAt])
 }

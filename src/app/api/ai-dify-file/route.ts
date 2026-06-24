@@ -6,8 +6,6 @@ const DIFY_BASE = process.env.DIFY_API_URL ?? "https://api.dify.ai/v1";
 function getDifyKey() {
   return (
     process.env.DIFY_API_KEY ??
-    process.env.NEXT_PUBLIC_UDIFY_APP_KEY ??
-    process.env.NEXT_PUBLIC_APP_KEY ??
     process.env.UDIFY_APP_KEY ??
     ""
   );

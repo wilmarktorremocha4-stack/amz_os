@@ -1,10 +1,15 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { randomInt } from "crypto";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { sendSystemEmail } from "@/lib/email";
 import { signOut } from "@/auth";
+
+function generateOTP(): string {
+  return String(randomInt(100000, 1000000)); // CSPRNG — not Math.random()
+}
 
 export async function signUp(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -45,7 +50,7 @@ export async function signUp(formData: FormData) {
     data: { used: true },
   });
 
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const otp = generateOTP();
   const hashedOtp = await bcrypt.hash(otp, 8);
 
   await prisma.emailVerificationToken.create({
@@ -97,8 +102,8 @@ export async function signUp(formData: FormData) {
       `,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Failed to send email";
-    redirect(`/signup?error=${encodeURIComponent("Account created but verification email failed: " + msg)}`);
+    console.error("[signUp] verification email failed:", err);
+    redirect(`/signup?error=${encodeURIComponent("Verification email could not be sent. Please try again or contact support.")}`);
   }
 
   redirect(`/verify-email?email=${encodeURIComponent(email)}`);
@@ -118,14 +123,23 @@ export async function verifySignupOTP(formData: FormData) {
     redirect(`/verify-email?email=${encodeURIComponent(email)}&error=${encodeURIComponent("Code expired or invalid. Request a new one.")}`);
   }
 
-  const valid = await bcrypt.compare(otp, tokens[0].otp);
+  const token = tokens[0];
+
+  // Lock out after 5 failed attempts — force re-request
+  if (token.attempts >= 5) {
+    await prisma.emailVerificationToken.update({ where: { id: token.id }, data: { used: true } });
+    redirect(`/verify-email?email=${encodeURIComponent(email)}&error=${encodeURIComponent("Too many incorrect attempts. Please request a new code.")}`);
+  }
+
+  const valid = await bcrypt.compare(otp, token.otp);
   if (!valid) {
+    await prisma.emailVerificationToken.update({ where: { id: token.id }, data: { attempts: { increment: 1 } } });
     redirect(`/verify-email?email=${encodeURIComponent(email)}&error=${encodeURIComponent("Incorrect code. Please try again.")}`);
   }
 
   await prisma.$transaction([
     prisma.user.update({ where: { email }, data: { emailVerified: new Date() } }),
-    prisma.emailVerificationToken.update({ where: { id: tokens[0].id }, data: { used: true } }),
+    prisma.emailVerificationToken.update({ where: { id: token.id }, data: { used: true } }),
   ]);
 
   // Send welcome email after verification
@@ -181,7 +195,8 @@ export async function resendVerificationOTP(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
 
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || user.emailVerified) redirect("/login");
+  // Always show same response to prevent email enumeration
+  if (!user || user.emailVerified) redirect(`/verify-email?email=${encodeURIComponent(email)}&sent=1`);
 
   const recent = await prisma.emailVerificationToken.findFirst({
     where: { email, used: false, createdAt: { gt: new Date(Date.now() - 60_000) } },
@@ -192,7 +207,7 @@ export async function resendVerificationOTP(formData: FormData) {
 
   await prisma.emailVerificationToken.updateMany({ where: { email, used: false }, data: { used: true } });
 
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const otp = generateOTP();
   const hashedOtp = await bcrypt.hash(otp, 8);
 
   await prisma.emailVerificationToken.create({

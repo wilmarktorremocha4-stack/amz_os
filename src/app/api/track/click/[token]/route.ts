@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+const APP_HOST = new URL(process.env.NEXTAUTH_URL ?? "https://app.operationamz.com").hostname;
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const url = req.nextUrl.searchParams.get("url") ?? "/";
+  const rawUrl = req.nextUrl.searchParams.get("url") ?? "/";
 
-  // Validate URL to prevent open redirect to non-http(s) schemes
+  // Only allow same-host redirects — block open redirect to external domains
   let safeUrl = "/";
   try {
-    const parsed = new URL(url);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") safeUrl = url;
+    const parsed = new URL(rawUrl);
+    if (parsed.hostname === APP_HOST && (parsed.protocol === "http:" || parsed.protocol === "https:")) {
+      safeUrl = rawUrl;
+    }
   } catch { /* bad URL → redirect home */ }
 
   try {
@@ -25,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           },
         }),
         prisma.emailEvent.create({
-          data: { recipientId: recipient.id, type: "click", url: safeUrl },
+          data: { recipientId: recipient.id, type: "click", url: rawUrl.slice(0, 2048) },
         }),
       ]);
     }

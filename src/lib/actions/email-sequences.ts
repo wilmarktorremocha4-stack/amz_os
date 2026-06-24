@@ -9,6 +9,10 @@ import { renderEmailHtml, injectTracking, EmailDoc } from "@/lib/email-builder";
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://amz-os.vercel.app";
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 export async function createSequence(formData: FormData) {
   const user = await getCurrentUser();
   const name = String(formData.get("name") ?? "").trim();
@@ -114,8 +118,10 @@ export async function processSequenceStep(sequenceId: string, stepIndex: number,
       unsubscribeUrl: `${BASE_URL}/api/track/unsubscribe/${recipient.token}`,
     };
 
-    const html = renderEmailHtml(step.bodyJson as unknown as EmailDoc, vars);
-    const tracked = injectTracking(html, recipient.token, BASE_URL);
+    const rawHtml = renderEmailHtml(step.bodyJson as unknown as EmailDoc, vars);
+    // Escape merge variable values to prevent XSS injection
+    const safeHtml = rawHtml.replace(/\{\{(\w+)\}\}/g, (_, k) => escapeHtml((vars as Record<string, string>)[k] ?? `{{${k}}}`));
+    const tracked = injectTracking(safeHtml, recipient.token, BASE_URL);
 
     try {
       await sendEmail({ to: s.email, subject: step.subject, html: tracked, userSmtpConfig });
@@ -137,6 +143,7 @@ export async function processSequenceStep(sequenceId: string, stepIndex: number,
       }
     } catch (err) {
       console.error("Sequence send failed:", err);
+      await prisma.emailRecipient.update({ where: { id: recipient.id }, data: { status: "failed" } }).catch(() => {});
     }
   }
 }

@@ -10,7 +10,7 @@ export async function getCurrentUser() {
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
   });
-  if (!user) {
+  if (!user || !user.emailVerified) {
     throw new Error("Not authenticated");
   }
 

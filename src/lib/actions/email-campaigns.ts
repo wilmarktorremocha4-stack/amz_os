@@ -10,6 +10,10 @@ import { getUserSmtpConfig } from "@/lib/get-user-smtp";
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://amz-os.vercel.app";
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 export async function createCampaign(formData: FormData) {
   const user = await getCurrentUser();
   const name = String(formData.get("name") ?? "").trim();
@@ -88,7 +92,7 @@ export async function sendCampaign(campaignId: string, supplierIds: string[]): P
     vars.unsubscribeUrl = `${BASE_URL}/api/track/unsubscribe/${recipient.token}`;
 
     const baseHtml = (campaign as { bodyHtml?: string | null }).bodyHtml ?? renderEmailHtml(campaign.bodyJson as unknown as EmailDoc, vars);
-    const resolvedHtml = baseHtml.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+    const resolvedHtml = baseHtml.replace(/\{\{(\w+)\}\}/g, (_, k) => escapeHtml(vars[k] ?? `{{${k}}}`));
     const tracked = injectTracking(resolvedHtml, recipient.token, BASE_URL);
 
     try {
@@ -104,6 +108,7 @@ export async function sendCampaign(campaignId: string, supplierIds: string[]): P
       });
     } catch (err) {
       console.error("Send failed for", s.email, err);
+      await prisma.emailRecipient.update({ where: { id: recipient.id }, data: { status: "failed" } }).catch(() => {});
     }
   }
 

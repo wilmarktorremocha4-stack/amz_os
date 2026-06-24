@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { sendSystemEmail as sendEmail } from "@/lib/email";
 import bcrypt from "bcryptjs";
+import { randomInt } from "crypto";
 
 function generateOTP() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000)); // CSPRNG — not Math.random()
 }
 
 export async function requestPasswordReset(formData: FormData) {
@@ -18,6 +19,12 @@ export async function requestPasswordReset(formData: FormData) {
     // Don't reveal if email exists — show generic success
     redirect("/forgot-password?sent=1");
   }
+
+  // Rate limit: prevent email bombing (max 1 request per 60 seconds)
+  const recent = await prisma.passwordResetToken.findFirst({
+    where: { email, used: false, createdAt: { gt: new Date(Date.now() - 60_000) } },
+  });
+  if (recent) redirect("/forgot-password?sent=1"); // Silent — don't reveal rate limit
 
   // Invalidate old tokens
   await prisma.passwordResetToken.updateMany({
@@ -84,8 +91,8 @@ export async function requestPasswordReset(formData: FormData) {
       `,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Failed to send email";
-    redirect(`/forgot-password?error=${encodeURIComponent(msg)}`);
+    console.error("[passwordReset] email send failed:", err);
+    redirect(`/forgot-password?error=${encodeURIComponent("Email delivery failed. Please try again or contact support.")}`);
   }
 
   redirect(`/forgot-password?sent=1&email=${encodeURIComponent(email)}`);
@@ -109,13 +116,24 @@ export async function verifyOTPAndReset(formData: FormData) {
 
   if (tokens.length === 0) redirect(`/reset-password?error=Code+expired+or+invalid.+Request+a+new+one.${emailParam}`);
 
-  const valid = await bcrypt.compare(otp, tokens[0].otp);
-  if (!valid) redirect(`/reset-password?error=Incorrect+code.+Try+again.${emailParam}`);
+  const token = tokens[0];
+
+  // Lock out after 5 failed attempts
+  if (token.attempts >= 5) {
+    await prisma.passwordResetToken.update({ where: { id: token.id }, data: { used: true } });
+    redirect(`/reset-password?error=Too+many+incorrect+attempts.+Request+a+new+code.${emailParam}`);
+  }
+
+  const valid = await bcrypt.compare(otp, token.otp);
+  if (!valid) {
+    await prisma.passwordResetToken.update({ where: { id: token.id }, data: { attempts: { increment: 1 } } });
+    redirect(`/reset-password?error=Incorrect+code.+Try+again.${emailParam}`);
+  }
 
   const hashed = await bcrypt.hash(password, 10);
   await prisma.$transaction([
     prisma.user.update({ where: { email }, data: { password: hashed } }),
-    prisma.passwordResetToken.update({ where: { id: tokens[0].id }, data: { used: true } }),
+    prisma.passwordResetToken.update({ where: { id: token.id }, data: { used: true } }),
   ]);
 
   redirect("/login?success=Password+reset+successfully.+Please+log+in.");

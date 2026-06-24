@@ -3,7 +3,7 @@ import type { NextAuthConfig } from "next-auth";
 export const authConfig: NextAuthConfig = {
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
-  trustHost: true,
+  trustHost: process.env.AUTH_TRUST_HOST === "true",
   providers: [],
   callbacks: {
     async jwt({ token, user }) {

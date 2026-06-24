@@ -4,12 +4,20 @@ import { authConfig } from "@/auth.config";
 
 const { auth } = NextAuth(authConfig);
 
-const PUBLIC_PATHS = ["/login", "/signup"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+  "/api/auth",
+  "/api/track",
+  "/api/cron",
+];
 
 const proxyHandler = auth((req) => {
   const { pathname } = req.nextUrl;
-  const isPublic =
-    PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/api/auth");
+  const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
 
   if (!req.auth && !isPublic) {
     const loginUrl = new URL("/login", req.nextUrl.origin);
@@ -17,7 +25,7 @@ const proxyHandler = auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (req.auth && isPublic && pathname !== "/api/auth") {
+  if (req.auth && (pathname === "/login" || pathname === "/signup")) {
     return NextResponse.redirect(new URL("/", req.nextUrl.origin));
   }
 

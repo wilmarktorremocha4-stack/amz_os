@@ -114,6 +114,14 @@ async function signedPaapiRequest(asin: string) {
 }
 
 export async function GET(req: NextRequest) {
+  // Require authentication — PA-API is a paid quota resource
+  try {
+    const { getCurrentUser } = await import("@/lib/currentUser");
+    await getCurrentUser();
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const asin = req.nextUrl.searchParams.get("asin")?.trim().toUpperCase();
   if (!asin || !/^[A-Z0-9]{10}$/.test(asin)) {
     return NextResponse.json({ error: "Invalid ASIN format" }, { status: 400 });

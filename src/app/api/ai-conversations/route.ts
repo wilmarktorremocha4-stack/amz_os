@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/currentUser";
 
 const DIFY_API_URL = process.env.DIFY_API_URL ?? "https://api.dify.ai/v1";
-function getDifyKey() {
-  return process.env.DIFY_API_KEY ?? process.env.NEXT_PUBLIC_UDIFY_APP_KEY ?? process.env.NEXT_PUBLIC_APP_KEY ?? "";
+function getDifyKey(): string {
+  return process.env.DIFY_API_KEY ?? "";
 }
 
 export async function GET() {
