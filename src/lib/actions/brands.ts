@@ -82,6 +82,10 @@ export async function sendBrandOutreachEmail(formData: FormData) {
 
   const userSmtpConfig = await getUserSmtpConfig(user.id);
 
+  if (!userSmtpConfig) {
+    redirect(`/research/brands?lookupError=${encodeURIComponent("NO_SMTP_CONNECTED")}`);
+  }
+
   try {
     const draft = await draftBrandOutreachEmail({
       brandName: brand!.name,
@@ -94,6 +98,7 @@ export async function sendBrandOutreachEmail(formData: FormData) {
       subject: draft.subject,
       html: draft.body.replace(/\n/g, "<br />"),
       userSmtpConfig,
+      requireSmtp: true,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Outreach email failed";

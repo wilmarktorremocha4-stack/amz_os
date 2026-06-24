@@ -88,23 +88,26 @@ export async function sendEmailViaUserSmtp({
 }
 
 // ─── UNIFIED SEND ─────────────────────────────────────────────────────────────
-// Campaigns/sequences pass userSmtpConfig when available; falls back to Resend.
+// Pass requireSmtp:true for outreach emails — throws if user hasn't connected SMTP.
+// Omit / pass false for system emails (auth, notifications) that should always send.
 
 export async function sendEmail({
   to,
   subject,
   html,
-  from,
   userSmtpConfig,
+  requireSmtp = false,
 }: {
   to: string;
   subject: string;
   html: string;
-  from?: string;
   userSmtpConfig?: UserSmtpConfig | null;
+  requireSmtp?: boolean;
 }): Promise<void> {
   if (userSmtpConfig) {
     await sendEmailViaUserSmtp({ smtpConfig: userSmtpConfig, to, subject, html });
+  } else if (requireSmtp) {
+    throw new Error("NO_SMTP_CONNECTED");
   } else {
     await sendSystemEmail({ to, subject, html });
   }

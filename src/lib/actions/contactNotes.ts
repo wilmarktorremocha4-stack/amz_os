@@ -17,9 +17,22 @@ function substituteVars(text: string, vars: Record<string, string>): string {
   return text.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? `{{${key}}}`);
 }
 
-export async function sendContactEmail(supplierId: string, to: string, subject: string, body: string) {
+export async function sendContactEmail(
+  supplierId: string,
+  to: string,
+  subject: string,
+  body: string,
+): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   const userSmtpConfig = await getUserSmtpConfig(user.id);
+
+  if (!userSmtpConfig) {
+    return {
+      success: false,
+      error: "NO_SMTP_CONNECTED",
+    };
+  }
+
   const supplier = await prisma.supplier.findUnique({
     where: { id: supplierId },
     select: { companyName: true, contactName: true, email: true, phone: true, website: true },
@@ -36,11 +49,19 @@ export async function sendContactEmail(supplierId: string, to: string, subject: 
   };
   const finalSubject = substituteVars(subject, vars);
   const finalBody = substituteVars(body, vars);
-  await sendEmail({ to, subject: finalSubject, html: finalBody.replace(/\n/g, "<br>"), userSmtpConfig });
+
+  try {
+    await sendEmail({ to, subject: finalSubject, html: finalBody.replace(/\n/g, "<br>"), userSmtpConfig, requireSmtp: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Send failed";
+    return { success: false, error: msg };
+  }
+
   await prisma.contactNote.create({
     data: { supplierId, type: "email_sent", content: finalBody, subject: finalSubject },
   });
   revalidatePath(`/crm/${supplierId}`);
+  return { success: true };
 }
 
 export async function createEmailTemplate(formData: FormData) {

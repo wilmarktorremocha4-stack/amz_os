@@ -37,11 +37,16 @@ export default async function BrandResearchPage({
         </p>
       </div>
 
-      {lookupError && (
+      {lookupError === "NO_SMTP_CONNECTED" ? (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-300">
+          ⚠ No email account connected. You need to connect your email before sending outreach.{" "}
+          <a href="/settings" className="underline font-medium hover:text-white">Go to Settings →</a>
+        </div>
+      ) : lookupError ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           {lookupError}
         </div>
-      )}
+      ) : null}
 
       <form
         action={lookupBrandOnAmazon}

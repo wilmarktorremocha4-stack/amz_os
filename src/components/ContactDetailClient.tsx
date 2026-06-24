@@ -437,6 +437,7 @@ function ConversationPane({
   const [notePending, startNoteTransition] = useTransition();
   const [emailPending, startEmailTransition] = useTransition();
   const [sent, setSent] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   function applyTemplate(id: string) {
     const tmpl = emailTemplates.find((t) => t.id === id);
@@ -448,8 +449,15 @@ function ConversationPane({
 
   function handleSendEmail() {
     if (!supplierEmail || !subject.trim() || !body.trim()) return;
+    setEmailError(null);
     startEmailTransition(async () => {
-      await sendContactEmail(supplierId, supplierEmail, subject, body);
+      const result = await sendContactEmail(supplierId, supplierEmail, subject, body);
+      if (!result.success) {
+        setEmailError(result.error === "NO_SMTP_CONNECTED"
+          ? "NO_SMTP_CONNECTED"
+          : result.error ?? "Failed to send email. Please try again.");
+        return;
+      }
       setSubject("");
       setBody("");
       setSelectedTemplate("");
@@ -546,6 +554,19 @@ function ConversationPane({
                 <code key={v} className="mr-1 rounded bg-[var(--accent-soft)] px-1">&#123;&#123;{v}&#125;&#125;</code>
               ))}
             </p>
+            {emailError === "NO_SMTP_CONNECTED" && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                ⚠ No email account connected.{" "}
+                <Link href="/settings" className="underline font-medium hover:text-white">
+                  Connect your email in Settings →
+                </Link>
+              </div>
+            )}
+            {emailError && emailError !== "NO_SMTP_CONNECTED" && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                Failed to send: {emailError}
+              </div>
+            )}
             <div className="flex items-center justify-between">
               {sent && (
                 <span className="flex items-center gap-1 text-xs text-emerald-500">
