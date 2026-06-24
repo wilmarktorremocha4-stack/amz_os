@@ -19,7 +19,7 @@ export async function sendSystemEmail({
     return;
   }
   const resend = new Resend(apiKey);
-  const fromName = process.env.EMAIL_FROM_NAME ?? "AMZ OS";
+  const fromName = process.env.EMAIL_FROM_NAME ?? "OperationAMZ";
   const fromAddress = process.env.EMAIL_FROM;
 
   if (!fromAddress) {
