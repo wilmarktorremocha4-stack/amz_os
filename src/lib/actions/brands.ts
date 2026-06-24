@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { searchAmazonProducts, getOffersSummary } from "@/lib/amazon";
 import { draftBrandOutreachEmail } from "@/lib/openai";
-import { sendEmail } from "@/lib/email";
+import { sendSystemEmail as sendEmail } from "@/lib/email";
 
 export async function lookupBrandOnAmazon(formData: FormData) {
   const query = String(formData.get("lookupQuery") ?? "").trim();

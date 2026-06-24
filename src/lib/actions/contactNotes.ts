@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
-import { sendEmail } from "@/lib/email";
+import { sendSystemEmail as sendEmail } from "@/lib/email";
 
 export async function addContactNote(supplierId: string, content: string) {
   await prisma.contactNote.create({

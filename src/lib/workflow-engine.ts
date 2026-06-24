@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, sendSystemEmail } from "@/lib/email";
+import { getUserSmtpConfig } from "@/lib/get-user-smtp";
 import { WorkflowStep, STEP_TYPES, TriggerType, TriggerConfig, WorkflowFilter, IfElseCondition } from "./workflow-types";
 
 export async function fireTrigger(
@@ -111,8 +112,11 @@ async function processEnrollmentStep(enrollment: EnrollmentWithIncludes) {
         break;
       }
       case STEP_TYPES.SEND_EMAIL: {
-        if (supplier.email && step.emailSubject && step.emailBody)
-          await sendEmail({ to: supplier.email, subject: render(step.emailSubject), html: render(step.emailBody), from: step.emailFrom });
+        if (supplier.email && step.emailSubject && step.emailBody) {
+          const wf = await prisma.workflow.findUnique({ where: { id: enrollment.workflowId }, select: { userId: true } });
+          const userSmtpConfig = wf ? await getUserSmtpConfig(wf.userId) : null;
+          await sendEmail({ to: supplier.email, subject: render(step.emailSubject), html: render(step.emailBody), userSmtpConfig });
+        }
         break;
       }
       case STEP_TYPES.SEND_SMS: {
@@ -126,7 +130,7 @@ async function processEnrollmentStep(enrollment: EnrollmentWithIncludes) {
       }
       case STEP_TYPES.SEND_INTERNAL_NOTIFY: {
         if (step.notifyTo && step.notifySubject && step.notifyBody)
-          await sendEmail({ to: step.notifyTo, subject: render(step.notifySubject), html: `<p>${render(step.notifyBody)}</p>` });
+          await sendSystemEmail({ to: step.notifyTo, subject: render(step.notifySubject), html: `<p>${render(step.notifyBody)}</p>` });
         break;
       }
       case STEP_TYPES.ADD_TAG: {

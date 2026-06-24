@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { sendSystemEmail as sendEmail } from "@/lib/email";
 import bcrypt from "bcryptjs";
 
 function generateOTP() {

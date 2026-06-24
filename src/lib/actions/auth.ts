@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { sendSystemEmail as sendEmail } from "@/lib/email";
 import { signOut } from "@/auth";
 
 export async function signUp(formData: FormData) {

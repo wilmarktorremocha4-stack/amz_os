@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/currentUser";
 import { sendEmail } from "@/lib/email";
 import { renderEmailHtml, injectTracking, EmailDoc } from "@/lib/email-builder";
 import { resolveMergeVarsForSupplier } from "@/lib/merge-variables";
+import { getUserSmtpConfig } from "@/lib/get-user-smtp";
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://amz-os.vercel.app";
 
@@ -47,12 +48,13 @@ export async function deleteCampaign(campaignId: string) {
   revalidatePath("/email/campaigns");
 }
 
-export async function sendCampaign(campaignId: string, supplierIds: string[]) {
+export async function sendCampaign(campaignId: string, supplierIds: string[]): Promise<{ sentViaSystem: boolean }> {
   const user = await getCurrentUser();
+  const userSmtpConfig = await getUserSmtpConfig(user.id);
   const campaign = await prisma.emailCampaign.findUnique({
     where: { id: campaignId, userId: user.id },
   });
-  if (!campaign) return;
+  if (!campaign) return { sentViaSystem: !userSmtpConfig };
 
   const suppliers = await prisma.supplier.findMany({
     where: { id: { in: supplierIds }, userId: user.id, archived: false },
@@ -94,9 +96,7 @@ export async function sendCampaign(campaignId: string, supplierIds: string[]) {
         to: s.email!,
         subject: campaign.subject,
         html: tracked,
-        from: campaign.fromName && campaign.fromEmail
-          ? `${campaign.fromName} <${campaign.fromEmail}>`
-          : undefined,
+        userSmtpConfig,
       });
       await prisma.emailRecipient.update({
         where: { id: recipient.id },
@@ -114,4 +114,5 @@ export async function sendCampaign(campaignId: string, supplierIds: string[]) {
 
   revalidatePath("/email/campaigns");
   revalidatePath("/email/analytics");
+  return { sentViaSystem: !userSmtpConfig };
 }

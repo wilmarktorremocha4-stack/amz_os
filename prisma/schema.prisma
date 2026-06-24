@@ -40,6 +40,14 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Per-user SMTP sending credentials (encrypted at rest)
+  smtpHost          String?
+  smtpPort          Int?
+  smtpUser          String?
+  smtpPassEncrypted String?
+  smtpFromName      String?
+  smtpVerifiedAt    DateTime?
+
   suppliers          Supplier[]
   brands             Brand[]
   products           Product[]

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Send, Trash2, Mail, BarChart3, ChevronDown, Users, X, CheckSquare } from "lucide-react";
+import { Plus, Send, Trash2, Mail, BarChart3, ChevronDown, Users, X, CheckSquare, AlertCircle } from "lucide-react";
 import { createCampaign, updateCampaign, deleteCampaign, sendCampaign } from "@/lib/actions/email-campaigns";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { EmailBuilderRoot } from "@/components/email-builder/EmailBuilderRoot";
@@ -21,6 +21,7 @@ export function CampaignsClient({ campaigns, suppliers, templates = [], mergeVar
   templates?: Template[]; mergeVariables?: MergeVariable[];
 }) {
   const [creating, setCreating] = useState(false);
+  const [sentViaSystem, setSentViaSystem] = useState(false);
   const [editing, setEditing] = useState<Campaign | null>(null);
   const [sending, setSending] = useState<Campaign | null>(null);
   const [doc, setDoc] = useState<EmailDoc>(DEFAULT_DOC);
@@ -55,9 +56,10 @@ export function CampaignsClient({ campaigns, suppliers, templates = [], mergeVar
     if (!sending) return;
     const ids = [...selectedIds];
     startTransition(async () => {
-      await sendCampaign(sending.id, ids);
+      const result = await sendCampaign(sending.id, ids);
       setSending(null);
       setSelectedIds(new Set());
+      if (result?.sentViaSystem) setSentViaSystem(true);
     });
   }
 
@@ -65,6 +67,15 @@ export function CampaignsClient({ campaigns, suppliers, templates = [], mergeVar
 
   return (
     <main className="flex flex-1 flex-col gap-6 p-8">
+      {sentViaSystem && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
+          <AlertCircle size={15} className="shrink-0" />
+          <span>Campaign sent via system address. To send from your own email,{" "}
+            <a href="/settings" className="underline font-medium">connect your email in Settings</a>.
+          </span>
+          <button onClick={() => setSentViaSystem(false)} className="ml-auto shrink-0"><X size={14} /></button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">Campaigns</h1>
