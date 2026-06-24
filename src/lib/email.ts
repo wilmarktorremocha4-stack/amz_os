@@ -19,9 +19,21 @@ export async function sendSystemEmail({
     return;
   }
   const resend = new Resend(apiKey);
-  const from = process.env.EMAIL_FROM ?? "AMZ OS <onboarding@resend.dev>";
-  const { error } = await resend.emails.send({ from, to, subject, html });
-  if (error) throw new Error(`Resend error: ${error.message}`);
+  const fromName = process.env.EMAIL_FROM_NAME ?? "AMZ OS";
+  const fromAddress = process.env.EMAIL_FROM;
+
+  if (!fromAddress) {
+    console.error("EMAIL_FROM env var is not set — email not sent");
+    return;
+  }
+
+  const from = `"${fromName}" <${fromAddress}>`;
+  const { data, error } = await resend.emails.send({ from, to, subject, html });
+  if (error) {
+    console.error("Resend send error:", error);
+    throw new Error(`Email delivery failed: ${error.message}`);
+  }
+  void data;
 }
 
 // ─── USER SMTP (outreach emails — campaigns, sequences, manual sends) ─────────

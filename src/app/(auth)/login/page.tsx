@@ -28,13 +28,13 @@ async function login(formData: FormData) {
   try {
     await signIn("credentials", { email, password, redirectTo: callbackUrl });
   } catch (err) {
-    // NEXT_REDIRECT means successful login redirect — re-throw it
-    const e = err as { digest?: string };
+    const e = err as { digest?: string; message?: string };
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
-    // Anything else = wrong password / auth failure
-    redirect(
-      `/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`,
-    );
+    // Unverified account — surface a specific error
+    if (e?.message?.includes?.("EMAIL_NOT_VERIFIED")) {
+      redirect(`/login?error=EMAIL_NOT_VERIFIED&verifyEmail=${encodeURIComponent(email)}`);
+    }
+    redirect(`/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`);
   }
 }
 
@@ -45,9 +45,10 @@ export default async function LoginPage({
     error?: string;
     success?: string;
     callbackUrl?: string;
+    verifyEmail?: string;
   }>;
 }) {
-  const { error, success, callbackUrl } = await searchParams;
+  const { error, success, callbackUrl, verifyEmail } = await searchParams;
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center p-6">
@@ -79,11 +80,21 @@ export default async function LoginPage({
               {success}
             </div>
           )}
-          {error && (
+          {error === "EMAIL_NOT_VERIFIED" ? (
+            <div className="mb-4 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-300">
+              Your email address hasn&apos;t been verified yet.{" "}
+              <Link
+                href={verifyEmail ? `/verify-email?email=${encodeURIComponent(verifyEmail)}` : "/verify-email"}
+                className="underline font-medium"
+              >
+                Verify now →
+              </Link>
+            </div>
+          ) : error ? (
             <div className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
               {error}
             </div>
-          )}
+          ) : null}
 
           <form action={login} className="flex flex-col gap-3">
             <input type="hidden" name="callbackUrl" value={callbackUrl ?? "/"} />
