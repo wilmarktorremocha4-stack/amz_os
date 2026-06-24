@@ -29,12 +29,18 @@ async function login(formData: FormData) {
     await signIn("credentials", { email, password, redirectTo: callbackUrl });
   } catch (err) {
     const e = err as { digest?: string; message?: string };
+    // Next.js redirect() throws — must be re-thrown
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
-    // Unverified account — surface a specific error
+    // Unverified account
     if (e?.message?.includes?.("EMAIL_NOT_VERIFIED")) {
       redirect(`/login?error=EMAIL_NOT_VERIFIED&verifyEmail=${encodeURIComponent(email)}`);
     }
-    redirect(`/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`);
+    // Wrong password (NextAuth v5 AuthError)
+    if (err instanceof AuthError) {
+      redirect(`/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`);
+    }
+    // Any other unexpected error — generic message, don't leak internals
+    redirect(`/login?error=${encodeURIComponent("Sign in failed. Please try again.")}`);
   }
 }
 
