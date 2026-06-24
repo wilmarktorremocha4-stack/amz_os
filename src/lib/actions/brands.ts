@@ -6,7 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { searchAmazonProducts, getOffersSummary } from "@/lib/amazon";
 import { draftBrandOutreachEmail } from "@/lib/openai";
-import { sendSystemEmail as sendEmail } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
+import { getUserSmtpConfig } from "@/lib/get-user-smtp";
 
 export async function lookupBrandOnAmazon(formData: FormData) {
   const query = String(formData.get("lookupQuery") ?? "").trim();
@@ -79,6 +80,8 @@ export async function sendBrandOutreachEmail(formData: FormData) {
     redirect(`/research/brands?lookupError=${encodeURIComponent("Brand not found.")}`);
   }
 
+  const userSmtpConfig = await getUserSmtpConfig(user.id);
+
   try {
     const draft = await draftBrandOutreachEmail({
       brandName: brand!.name,
@@ -90,6 +93,7 @@ export async function sendBrandOutreachEmail(formData: FormData) {
       to: contactEmail,
       subject: draft.subject,
       html: draft.body.replace(/\n/g, "<br />"),
+      userSmtpConfig,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Outreach email failed";

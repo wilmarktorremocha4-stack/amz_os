@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
-import { sendSystemEmail as sendEmail } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
+import { getUserSmtpConfig } from "@/lib/get-user-smtp";
 
 export async function addContactNote(supplierId: string, content: string) {
   await prisma.contactNote.create({
@@ -17,7 +18,8 @@ function substituteVars(text: string, vars: Record<string, string>): string {
 }
 
 export async function sendContactEmail(supplierId: string, to: string, subject: string, body: string) {
-  await getCurrentUser();
+  const user = await getCurrentUser();
+  const userSmtpConfig = await getUserSmtpConfig(user.id);
   const supplier = await prisma.supplier.findUnique({
     where: { id: supplierId },
     select: { companyName: true, contactName: true, email: true, phone: true, website: true },
@@ -34,7 +36,7 @@ export async function sendContactEmail(supplierId: string, to: string, subject: 
   };
   const finalSubject = substituteVars(subject, vars);
   const finalBody = substituteVars(body, vars);
-  await sendEmail({ to, subject: finalSubject, html: finalBody.replace(/\n/g, "<br>") });
+  await sendEmail({ to, subject: finalSubject, html: finalBody.replace(/\n/g, "<br>"), userSmtpConfig });
   await prisma.contactNote.create({
     data: { supplierId, type: "email_sent", content: finalBody, subject: finalSubject },
   });
