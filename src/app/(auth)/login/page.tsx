@@ -30,6 +30,13 @@ async function login(formData: FormData) {
   });
   if (!user) {
     await recordLoginAttempt(ip, email, false);
+    // Check if email is in the allowed list — if so, they just haven't signed up yet
+    const allowed = await prisma.allowedEmail.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+    });
+    if (allowed) {
+      redirect(`/login?error=${encodeURIComponent("You have access but haven't signed up yet. Please sign up first to create your account, then log in.")}`);
+    }
     redirect(`/login?error=${encodeURIComponent("This email is not registered. Please contact the admin to get access.")}`);
   }
 
@@ -88,7 +95,7 @@ export default async function LoginPage({
 
         {/* Card */}
         <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-8 shadow-2xl backdrop-blur-2xl">
-          <h1 className="mb-1 text-xl font-semibold text-white">Welcome back</h1>
+          <h1 className="mb-1 text-xl font-semibold text-white">Welcome!</h1>
           <p className="mb-6 text-sm text-blue-100/40">
             Log in to your AMZ OS account.
           </p>
