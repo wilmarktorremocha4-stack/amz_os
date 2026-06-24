@@ -148,9 +148,17 @@ export async function setNewPassword(formData: FormData) {
     redirect(`/forgot-password?error=${encodeURIComponent("Reset session expired. Please request a new code.")}`);
   }
 
+  // Find user by ID from token email — case-insensitive so casing differences don't silently miss the update
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: token.email, mode: "insensitive" } },
+  });
+  if (!user) {
+    redirect(`/forgot-password?error=${encodeURIComponent("Account not found. Please contact the admin.")}`);
+  }
+
   const hashed = await bcrypt.hash(password, 10);
   await prisma.$transaction([
-    prisma.user.update({ where: { email }, data: { password: hashed } }),
+    prisma.user.update({ where: { id: user.id }, data: { password: hashed } }),
     prisma.passwordResetToken.update({ where: { id: tokenId }, data: { used: true } }),
   ]);
 
