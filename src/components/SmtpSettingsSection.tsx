@@ -13,11 +13,13 @@ interface Props {
 }
 
 const PROVIDERS = [
-  { label: "Gmail",      host: "smtp.gmail.com",      port: 465 },
-  { label: "Outlook",    host: "smtp.office365.com",  port: 587 },
-  { label: "Yahoo Mail", host: "smtp.mail.yahoo.com", port: 465 },
-  { label: "Zoho Mail",  host: "smtp.zoho.com",       port: 465 },
-  { label: "Custom",     host: "",                     port: 587 },
+  { label: "Gmail",      host: "smtp.gmail.com",          port: 465 },
+  { label: "Outlook",    host: "smtp.office365.com",      port: 587 },
+  { label: "Hotmail",    host: "smtp.live.com",           port: 587 },
+  { label: "Yahoo Mail", host: "smtp.mail.yahoo.com",     port: 465 },
+  { label: "iCloud",     host: "smtp.mail.me.com",        port: 587 },
+  { label: "Zoho Mail",  host: "smtp.zoho.com",           port: 465 },
+  { label: "Custom",     host: "",                         port: 587 },
 ];
 
 export function SmtpSettingsSection({ initialStatus }: Props) {
@@ -130,31 +132,69 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
 
       {provider === "Gmail" && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex flex-col gap-2">
-          <p className="text-xs font-semibold text-amber-400">
-            STEP 2 — Get your Gmail App Password
-          </p>
+          <p className="text-xs font-semibold text-amber-400">STEP 2 — Get your Gmail App Password</p>
           <ol className="flex flex-col gap-1 text-xs text-[var(--muted)] list-decimal list-inside">
             <li>Go to your Google Account → Security</li>
             <li>Make sure 2-Step Verification is turned ON</li>
             <li>Search for &quot;App passwords&quot; in the search bar</li>
-            <li>Select app: &quot;Mail&quot; → Select device: &quot;Other&quot; → type &quot;AMZ OS&quot;</li>
-            <li>Click Generate — copy the 16-character password shown</li>
+            <li>Select app: &quot;Mail&quot; → device: &quot;Other&quot; → type &quot;AMZ OS&quot;</li>
+            <li>Click Generate — copy the 16-character password</li>
             <li>Paste it in the App Password field below</li>
           </ol>
-          <a
-            href="https://myaccount.google.com/apppasswords"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-fit items-center gap-1 text-xs text-[var(--accent)] hover:underline"
-          >
+          <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer"
+            className="flex w-fit items-center gap-1 text-xs text-[var(--accent)] hover:underline">
             Open Google App Passwords <ExternalLink size={11} />
+          </a>
+        </div>
+      )}
+
+      {(provider === "Outlook" || provider === "Hotmail") && (
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 flex flex-col gap-2">
+          <p className="text-xs font-semibold text-blue-400">STEP 2 — Enable SMTP in Outlook / Hotmail</p>
+          <ol className="flex flex-col gap-1 text-xs text-[var(--muted)] list-decimal list-inside">
+            <li>Sign in at outlook.com → Settings (gear icon) → View all Outlook settings</li>
+            <li>Go to Mail → Sync email → toggle &quot;Let devices and apps use POP&quot; ON</li>
+            <li>Use your full email address and your regular Outlook password below</li>
+            <li>If you have 2FA, generate an App Password at account.live.com/proofs</li>
+          </ol>
+        </div>
+      )}
+
+      {provider === "Yahoo Mail" && (
+        <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-4 flex flex-col gap-2">
+          <p className="text-xs font-semibold text-purple-400">STEP 2 — Get your Yahoo App Password</p>
+          <ol className="flex flex-col gap-1 text-xs text-[var(--muted)] list-decimal list-inside">
+            <li>Sign in at Yahoo → Account Security settings</li>
+            <li>Make sure 2-Step Verification is ON</li>
+            <li>Click &quot;Generate app password&quot; → select &quot;Other app&quot; → name it &quot;AMZ OS&quot;</li>
+            <li>Copy the generated password and paste it below</li>
+          </ol>
+          <a href="https://login.yahoo.com/account/security" target="_blank" rel="noopener noreferrer"
+            className="flex w-fit items-center gap-1 text-xs text-[var(--accent)] hover:underline">
+            Open Yahoo Security Settings <ExternalLink size={11} />
+          </a>
+        </div>
+      )}
+
+      {provider === "iCloud" && (
+        <div className="rounded-xl border border-slate-500/30 bg-slate-500/5 p-4 flex flex-col gap-2">
+          <p className="text-xs font-semibold text-slate-300">STEP 2 — Get your iCloud App-Specific Password</p>
+          <ol className="flex flex-col gap-1 text-xs text-[var(--muted)] list-decimal list-inside">
+            <li>Sign in at appleid.apple.com → Sign-In and Security</li>
+            <li>Click &quot;App-Specific Passwords&quot; → &quot;Generate an app-specific password&quot;</li>
+            <li>Name it &quot;AMZ OS&quot; and click Create</li>
+            <li>Copy the password and paste it below (use your iCloud email above)</li>
+          </ol>
+          <a href="https://appleid.apple.com/account/manage" target="_blank" rel="noopener noreferrer"
+            className="flex w-fit items-center gap-1 text-xs text-[var(--accent)] hover:underline">
+            Open Apple ID Settings <ExternalLink size={11} />
           </a>
         </div>
       )}
 
       <div>
         <label className="mb-2 block text-xs font-semibold text-[var(--muted)]">
-          STEP {provider === "Gmail" ? "3" : "2"} — Enter your credentials
+          STEP {provider === "Custom" ? "2" : "3"} — Enter your credentials
         </label>
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-3">
