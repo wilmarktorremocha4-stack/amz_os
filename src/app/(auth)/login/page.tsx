@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { GlobeDecoration } from "@/components/GlobeDecoration";
+import { checkLoginRateLimit, recordLoginAttempt, getClientIp } from "@/lib/loginRateLimit";
 
 async function login(formData: FormData) {
   "use server";
@@ -15,31 +16,42 @@ async function login(formData: FormData) {
   const authPages = ["/login", "/signup", "/forgot-password", "/reset-password"];
   const callbackUrl = authPages.some((p) => rawCallbackUrl.startsWith(p)) ? "/" : rawCallbackUrl;
 
+  const ip = getClientIp();
+
+  // Rate limit check — block bots and brute-force attacks
+  const { blocked, reason } = await checkLoginRateLimit(ip, email);
+  if (blocked) {
+    redirect(`/login?error=${encodeURIComponent(reason)}`);
+  }
+
   // Check if email exists at all
   const user = await prisma.user.findFirst({
     where: { email: { equals: email, mode: "insensitive" } },
   });
   if (!user) {
-    redirect(
-      `/login?error=${encodeURIComponent("This email is not registered. Please contact the admin to get access.")}`,
-    );
+    await recordLoginAttempt(ip, email, false);
+    redirect(`/login?error=${encodeURIComponent("This email is not registered. Please contact the admin to get access.")}`);
   }
 
   try {
     await signIn("credentials", { email, password, redirectTo: callbackUrl });
+    await recordLoginAttempt(ip, email, true);
   } catch (err) {
     const e = err as { digest?: string; message?: string };
     // Next.js redirect() throws — must be re-thrown
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
     // Unverified account
     if (e?.message?.includes?.("EMAIL_NOT_VERIFIED")) {
+      await recordLoginAttempt(ip, email, false);
       redirect(`/login?error=EMAIL_NOT_VERIFIED&verifyEmail=${encodeURIComponent(email)}`);
     }
     // Wrong password (NextAuth v5 AuthError)
     if (err instanceof AuthError) {
+      await recordLoginAttempt(ip, email, false);
       redirect(`/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`);
     }
-    // Any other unexpected error — generic message, don't leak internals
+    // Any other unexpected error
+    await recordLoginAttempt(ip, email, false);
     redirect(`/login?error=${encodeURIComponent("Sign in failed. Please try again.")}`);
   }
 }
