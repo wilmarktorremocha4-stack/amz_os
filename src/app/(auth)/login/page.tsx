@@ -3,6 +3,7 @@ import Image from "next/image";
 import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { GlobeDecoration } from "@/components/GlobeDecoration";
@@ -13,6 +14,19 @@ const LOCKOUT_AT = 8;
 const WARN_AT = 5;
 const LOCKOUT_MS = 2 * 60 * 1000;
 
+const C_ATTEMPTS = "lra";   // login recent attempts
+const C_LOCKED   = "lrl";   // login recent locked-until
+const C_EMAIL    = "lre";   // login recent email
+
+function cookieOpts(maxAgeSecs?: number) {
+  return {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax" as const,
+    ...(maxAgeSecs !== undefined ? { maxAge: maxAgeSecs } : {}),
+  };
+}
+
 async function login(formData: FormData) {
   "use server";
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -20,9 +34,11 @@ async function login(formData: FormData) {
   const rawCallbackUrl = String(formData.get("callbackUrl") || "/");
   const authPages = ["/login", "/signup", "/forgot-password", "/reset-password"];
   const callbackUrl = authPages.some((p) => rawCallbackUrl.startsWith(p)) ? "/" : rawCallbackUrl;
-  const attempts = Math.max(0, parseInt(String(formData.get("attempts") ?? "0"), 10) || 0);
 
   const ip = getClientIp();
+  const jar = await cookies();
+
+  const attempts = Math.max(0, parseInt(jar.get(C_ATTEMPTS)?.value ?? "0", 10) || 0);
 
   const { blocked, reason } = await checkLoginRateLimit(ip, email);
   if (blocked) {
@@ -47,27 +63,46 @@ async function login(formData: FormData) {
     await signIn("credentials", { email, password, redirectTo: callbackUrl });
   } catch (err) {
     const e = err as { digest?: string; message?: string };
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) {
+      // Successful login — clear attempt cookies then let redirect through
+      try {
+        jar.delete(C_ATTEMPTS);
+        jar.delete(C_LOCKED);
+        jar.delete(C_EMAIL);
+      } catch { /* ignore */ }
+      throw err;
+    }
 
     if (e?.message?.includes?.("EMAIL_NOT_VERIFIED")) {
       await recordLoginAttempt(ip, email, false);
-      redirect(`/login?error=EMAIL_NOT_VERIFIED&verifyEmail=${encodeURIComponent(email)}&attempts=${attempts}`);
+      redirect(`/login?error=EMAIL_NOT_VERIFIED&verifyEmail=${encodeURIComponent(email)}`);
     }
 
     if (err instanceof AuthError) {
       await recordLoginAttempt(ip, email, false);
       const next = attempts + 1;
-      if (next >= LOCKOUT_AT) {
-        const until = Date.now() + LOCKOUT_MS;
-        redirect(`/login?locked=1&until=${until}&email=${encodeURIComponent(email)}&attempts=${next}`);
+      try {
+        jar.set(C_EMAIL, email, cookieOpts(60 * 60)); // keep email for 1 hour
+        if (next >= LOCKOUT_AT) {
+          const until = Date.now() + LOCKOUT_MS;
+          jar.set(C_LOCKED, String(until), cookieOpts(LOCKOUT_MS / 1000));
+          jar.set(C_ATTEMPTS, String(next), cookieOpts(60 * 60));
+          redirect("/login");
+        }
+        jar.set(C_ATTEMPTS, String(next), cookieOpts(60 * 60));
+      } catch {
+        // Cookie setting failed — fall back to URL params
+        if (next >= LOCKOUT_AT) {
+          const until = Date.now() + LOCKOUT_MS;
+          redirect(`/login?locked=1&until=${until}&attempts=${next}&email=${encodeURIComponent(email)}`);
+        }
+        redirect(`/login?error=${encodeURIComponent("Incorrect password. Please try again.")}&attempts=${next}&email=${encodeURIComponent(email)}`);
       }
-      redirect(
-        `/login?error=${encodeURIComponent("Incorrect password. Please try again.")}&attempts=${next}&email=${encodeURIComponent(email)}`
-      );
+      redirect(`/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`);
     }
 
     await recordLoginAttempt(ip, email, false);
-    redirect(`/login?error=${encodeURIComponent("Sign in failed. Please try again.")}&attempts=${attempts}&email=${encodeURIComponent(email)}`);
+    redirect(`/login?error=${encodeURIComponent("Sign in failed. Please try again.")}`);
   }
 }
 
@@ -79,16 +114,25 @@ export default async function LoginPage({
     success?: string;
     callbackUrl?: string;
     verifyEmail?: string;
+    // URL-param fallbacks (used when cookies are unavailable)
     attempts?: string;
     email?: string;
     locked?: string;
     until?: string;
   }>;
 }) {
-  const { error, success, callbackUrl, verifyEmail, attempts: attemptsStr, email: prefillEmail, locked, until } = await searchParams;
-  const attempts = Math.max(0, parseInt(attemptsStr ?? "0", 10) || 0);
-  const lockedUntil = parseInt(until ?? "0", 10) || 0;
-  const isLocked = locked === "1" && lockedUntil > Date.now();
+  const { error, success, callbackUrl, verifyEmail, attempts: urlAttempts, email: urlEmail, locked: urlLocked, until: urlUntil } = await searchParams;
+  const jar = await cookies();
+
+  // Cookie values take priority; fall back to URL params
+  const attempts = Math.max(
+    0,
+    parseInt(jar.get(C_ATTEMPTS)?.value ?? urlAttempts ?? "0", 10) || 0
+  );
+  const rawLockedUntil = parseInt(jar.get(C_LOCKED)?.value ?? urlUntil ?? "0", 10) || 0;
+  const isLocked = (jar.get(C_LOCKED)?.value ? true : urlLocked === "1") && rawLockedUntil > Date.now();
+  const lockedUntil = isLocked ? rawLockedUntil : 0;
+  const prefillEmail = jar.get(C_EMAIL)?.value ?? urlEmail ?? "";
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center p-6">
@@ -157,14 +201,13 @@ export default async function LoginPage({
 
               <form action={login} className="flex flex-col gap-3">
                 <input type="hidden" name="callbackUrl" value={callbackUrl ?? "/"} />
-                <input type="hidden" name="attempts" value={attempts} />
                 <input
                   name="email"
                   type="email"
                   placeholder="Email"
                   required
                   autoComplete="email"
-                  defaultValue={prefillEmail ?? ""}
+                  defaultValue={prefillEmail}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition focus:border-blue-400/50 focus:bg-white/10 focus:ring-2 focus:ring-blue-500/20"
                 />
                 <input
