@@ -3,15 +3,19 @@ import Image from "next/image";
 import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { GlobeDecoration } from "@/components/GlobeDecoration";
 import { LoginLockout } from "@/components/LoginLockout";
 import { checkLoginRateLimit, recordLoginAttempt, getClientIp } from "@/lib/loginRateLimit";
 
-const LOCKOUT_AT = 8;       // attempts before 2-min lockout
-const WARN_AT = 5;          // attempts before showing forgot-password nudge
-const LOCKOUT_MS = 2 * 60 * 1000; // 2 minutes
+const LOCKOUT_AT = 8;
+const WARN_AT = 5;
+const LOCKOUT_MS = 2 * 60 * 1000;
+const COOKIE_ATTEMPTS = "login_attempts";
+const COOKIE_LOCKED   = "login_locked_until";
+const COOKIE_EMAIL    = "login_prefill_email";
 
 async function login(formData: FormData) {
   "use server";
@@ -20,17 +24,20 @@ async function login(formData: FormData) {
   const rawCallbackUrl = String(formData.get("callbackUrl") || "/");
   const authPages = ["/login", "/signup", "/forgot-password", "/reset-password"];
   const callbackUrl = authPages.some((p) => rawCallbackUrl.startsWith(p)) ? "/" : rawCallbackUrl;
-  const attempts = Math.max(0, parseInt(String(formData.get("attempts") ?? "0"), 10) || 0);
 
   const ip = getClientIp();
+  const jar = await cookies();
 
-  // IP-level rate limit check (server-side hard block)
+  // Read current attempt count from cookie
+  const attempts = Math.max(0, parseInt(jar.get(COOKIE_ATTEMPTS)?.value ?? "0", 10) || 0);
+
+  // IP-level rate limit (hard server block)
   const { blocked, reason } = await checkLoginRateLimit(ip, email);
   if (blocked) {
     redirect(`/login?error=${encodeURIComponent(reason)}`);
   }
 
-  // Check if email exists at all
+  // Check email exists
   const user = await prisma.user.findFirst({
     where: { email: { equals: email, mode: "insensitive" } },
   });
@@ -45,8 +52,14 @@ async function login(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent("This email is not registered. Please contact the admin to get access.")}`);
   }
 
+  const cookieOpts = { path: "/login", httpOnly: true, sameSite: "lax" as const, secure: true };
+
   try {
     await signIn("credentials", { email, password, redirectTo: callbackUrl });
+    // Success — clear attempt cookies
+    jar.delete(COOKIE_ATTEMPTS);
+    jar.delete(COOKIE_LOCKED);
+    jar.delete(COOKIE_EMAIL);
     await recordLoginAttempt(ip, email, true);
   } catch (err) {
     const e = err as { digest?: string; message?: string };
@@ -54,23 +67,26 @@ async function login(formData: FormData) {
 
     if (e?.message?.includes?.("EMAIL_NOT_VERIFIED")) {
       await recordLoginAttempt(ip, email, false);
-      redirect(`/login?error=EMAIL_NOT_VERIFIED&verifyEmail=${encodeURIComponent(email)}&attempts=${attempts}`);
+      redirect(`/login?error=EMAIL_NOT_VERIFIED&verifyEmail=${encodeURIComponent(email)}`);
     }
 
     if (err instanceof AuthError) {
       await recordLoginAttempt(ip, email, false);
       const next = attempts + 1;
+      // Save email so it stays pre-filled even after navigating away
+      jar.set(COOKIE_EMAIL, email, cookieOpts);
       if (next >= LOCKOUT_AT) {
         const until = Date.now() + LOCKOUT_MS;
-        redirect(`/login?locked=1&until=${until}&email=${encodeURIComponent(email)}`);
+        jar.set(COOKIE_LOCKED, String(until), { ...cookieOpts, maxAge: LOCKOUT_MS / 1000 });
+        jar.set(COOKIE_ATTEMPTS, String(next), cookieOpts);
+        redirect("/login");
       }
-      redirect(
-        `/login?error=${encodeURIComponent("Incorrect password. Please try again.")}&attempts=${next}&email=${encodeURIComponent(email)}`
-      );
+      jar.set(COOKIE_ATTEMPTS, String(next), cookieOpts);
+      redirect(`/login?error=${encodeURIComponent("Incorrect password. Please try again.")}`);
     }
 
     await recordLoginAttempt(ip, email, false);
-    redirect(`/login?error=${encodeURIComponent("Sign in failed. Please try again.")}&attempts=${attempts}`);
+    redirect(`/login?error=${encodeURIComponent("Sign in failed. Please try again.")}`);
   }
 }
 
@@ -82,16 +98,15 @@ export default async function LoginPage({
     success?: string;
     callbackUrl?: string;
     verifyEmail?: string;
-    attempts?: string;
-    email?: string;
-    locked?: string;
-    until?: string;
   }>;
 }) {
-  const { error, success, callbackUrl, verifyEmail, attempts: attemptsStr, email: prefillEmail, locked, until } = await searchParams;
-  const attempts = Math.max(0, parseInt(attemptsStr ?? "0", 10) || 0);
-  const isLocked = locked === "1" && !!until && Date.now() < parseInt(until, 10);
-  const lockedUntil = isLocked ? parseInt(until!, 10) : 0;
+  const { error, success, callbackUrl, verifyEmail } = await searchParams;
+  const jar = await cookies();
+
+  const attempts = Math.max(0, parseInt(jar.get(COOKIE_ATTEMPTS)?.value ?? "0", 10) || 0);
+  const lockedUntil = parseInt(jar.get(COOKIE_LOCKED)?.value ?? "0", 10) || 0;
+  const isLocked = lockedUntil > Date.now();
+  const prefillEmail = jar.get(COOKIE_EMAIL)?.value ?? "";
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center p-6">
@@ -145,18 +160,21 @@ export default async function LoginPage({
                 </div>
               ) : null}
 
-              {/* Attempt counter */}
+              {/* Attempt counter (1–4 wrong) */}
               {attempts > 0 && attempts < WARN_AT && (
                 <div className="mb-3 rounded-xl border border-orange-400/20 bg-orange-400/10 p-3 text-sm text-orange-300">
                   {attempts} wrong {attempts === 1 ? "attempt" : "attempts"} — {LOCKOUT_AT - attempts} remaining before temporary lockout.
                 </div>
               )}
 
-              {/* Forgot-password nudge at 5+ attempts */}
+              {/* Forgot-password nudge (5+ wrong) */}
               {attempts >= WARN_AT && (
                 <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-300">
                   <strong>{attempts} wrong {attempts === 1 ? "attempt" : "attempts"}.</strong> Struggling to get in?{" "}
-                  <Link href="/forgot-password" className="underline font-medium hover:text-white">
+                  <Link
+                    href={`/forgot-password${prefillEmail ? `?email=${encodeURIComponent(prefillEmail)}` : ""}`}
+                    className="underline font-medium hover:text-white"
+                  >
                     Click here to reset your password →
                   </Link>
                 </div>
@@ -164,14 +182,13 @@ export default async function LoginPage({
 
               <form action={login} className="flex flex-col gap-3">
                 <input type="hidden" name="callbackUrl" value={callbackUrl ?? "/"} />
-                <input type="hidden" name="attempts" value={attempts} />
                 <input
                   name="email"
                   type="email"
                   placeholder="Email"
                   required
                   autoComplete="email"
-                  defaultValue={prefillEmail ?? ""}
+                  defaultValue={prefillEmail}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition focus:border-blue-400/50 focus:bg-white/10 focus:ring-2 focus:ring-blue-500/20"
                 />
                 <input
