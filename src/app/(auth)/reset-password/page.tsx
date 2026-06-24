@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
-import { setNewPassword } from "@/lib/actions/passwordReset";
+import { PasswordMatchForm } from "@/components/PasswordMatchForm";
 import { redirect } from "next/navigation";
 
 export default async function ResetPasswordPage({
@@ -10,7 +10,6 @@ export default async function ResetPasswordPage({
 }) {
   const { error, email, t } = await searchParams;
 
-  // Must arrive here via the OTP verification step — block direct access
   if (!t || !email) redirect("/forgot-password");
 
   return (
@@ -32,34 +31,7 @@ export default async function ResetPasswordPage({
             </div>
           )}
 
-          <form action={setNewPassword} className="flex flex-col gap-3">
-            <input type="hidden" name="email" value={email} />
-            <input type="hidden" name="tokenId" value={t} />
-            <input
-              name="password"
-              type="password"
-              placeholder="New password (8+ characters)"
-              required
-              minLength={8}
-              autoFocus
-              autoComplete="new-password"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition focus:border-blue-400/50 focus:ring-2 focus:ring-blue-500/20"
-            />
-            <input
-              name="confirmPassword"
-              type="password"
-              placeholder="Confirm new password"
-              required
-              autoComplete="new-password"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition focus:border-blue-400/50 focus:ring-2 focus:ring-blue-500/20"
-            />
-            <button
-              type="submit"
-              className="mt-2 w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg hover:from-blue-500 hover:to-blue-400 transition"
-            >
-              Reset password →
-            </button>
-          </form>
+          <PasswordMatchForm email={email} tokenId={t} />
 
           <p className="mt-5 text-center text-sm">
             <Link href="/login" className="text-blue-400 hover:text-white transition">
