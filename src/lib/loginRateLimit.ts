@@ -2,13 +2,11 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_FAILS_PER_IP = 10;
-const MAX_FAILS_PER_EMAIL = 15;
+const MAX_FAILS_PER_IP = 15; // only block by IP, never lock out the account itself
 
 export function getClientIp(): string {
   try {
     const h = headers();
-    // Vercel sets x-forwarded-for; fall back to a placeholder
     const forwarded = (h as unknown as { get: (k: string) => string | null }).get("x-forwarded-for");
     if (forwarded) return forwarded.split(",")[0].trim();
     const real = (h as unknown as { get: (k: string) => string | null }).get("x-real-ip");
@@ -18,23 +16,25 @@ export function getClientIp(): string {
 }
 
 export async function checkLoginRateLimit(ip: string, email: string): Promise<{ blocked: boolean; reason: string }> {
+  // Never block "unknown" IPs (local dev, misconfigured proxy) — only block real IPs
+  if (!ip || ip === "unknown") return { blocked: false, reason: "" };
+
   const since = new Date(Date.now() - WINDOW_MS);
 
-  const [ipFails, emailFails] = await Promise.all([
-    prisma.loginAttempt.count({
-      where: { ip, success: false, createdAt: { gt: since } },
-    }),
-    prisma.loginAttempt.count({
-      where: { email, success: false, createdAt: { gt: since } },
-    }),
-  ]);
+  const ipFails = await prisma.loginAttempt.count({
+    where: { ip, success: false, createdAt: { gt: since } },
+  });
 
+  // Block the IP, NOT the account — the account is never locked out
+  // This means someone can always log in from a different device/network
   if (ipFails >= MAX_FAILS_PER_IP) {
-    return { blocked: true, reason: "Too many failed attempts from your network. Try again in 15 minutes." };
+    return {
+      blocked: true,
+      reason: "Too many failed attempts from this device. Please wait 15 minutes or try from a different device/network.",
+    };
   }
-  if (emailFails >= MAX_FAILS_PER_EMAIL) {
-    return { blocked: true, reason: "Too many failed attempts for this account. Try again in 15 minutes." };
-  }
+
+  void email; // email-level blocking intentionally removed — avoids locking out real users
   return { blocked: false, reason: "" };
 }
 
