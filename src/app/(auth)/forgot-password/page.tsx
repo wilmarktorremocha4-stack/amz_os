@@ -5,9 +5,9 @@ import { requestPasswordReset } from "@/lib/actions/passwordReset";
 export default async function ForgotPasswordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string; email?: string }>;
+  searchParams: Promise<{ error?: string; sent?: string }>;
 }) {
-  const { error, sent, email } = await searchParams;
+  const { error, sent } = await searchParams;
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center p-6">
@@ -19,45 +19,37 @@ export default async function ForgotPasswordPage({
             Enter your email and we&apos;ll send a 6-digit reset code.
           </p>
 
-          {sent ? (
-            <div>
-              <div className="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-300">
-                <p className="font-semibold">Code sent!</p>
-                <p className="mt-1 text-emerald-300/70">Check your inbox (and spam folder) for a 6-digit code.</p>
-              </div>
-              <Link
-                href={`/reset-password${email ? `?email=${encodeURIComponent(email)}` : ""}`}
-                className="block w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-center text-sm font-semibold text-white hover:from-blue-500"
-              >
-                Enter my code →
-              </Link>
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
+              {decodeURIComponent(error)}
             </div>
-          ) : (
-            <form action={requestPasswordReset} className="flex flex-col gap-3">
-              {error && (
-                <div className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
-                  {decodeURIComponent(error)}
-                </div>
-              )}
-              <input
-                name="email"
-                type="email"
-                placeholder="Your email address"
-                required
-                autoComplete="email"
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50 focus:ring-2 focus:ring-blue-500/20"
-              />
-              <button
-                type="submit"
-                className="mt-2 w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-sm font-semibold text-white hover:from-blue-500"
-              >
-                Send reset code →
-              </button>
-            </form>
           )}
 
+          {sent && (
+            <div className="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-300">
+              If that email is registered, a code was sent. Check your inbox.
+            </div>
+          )}
+
+          <form action={requestPasswordReset} className="flex flex-col gap-3">
+            <input
+              name="email"
+              type="email"
+              placeholder="Your email address"
+              required
+              autoComplete="email"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50 focus:ring-2 focus:ring-blue-500/20 transition"
+            />
+            <button
+              type="submit"
+              className="mt-2 w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-sm font-semibold text-white hover:from-blue-500 hover:to-blue-400 transition"
+            >
+              Send reset code →
+            </button>
+          </form>
+
           <p className="mt-5 text-center text-sm text-white/30">
-            <Link href="/login" className="text-blue-400 hover:text-white">
+            <Link href="/login" className="text-blue-400 hover:text-white transition">
               ← Back to login
             </Link>
           </p>

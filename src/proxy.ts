@@ -8,6 +8,7 @@ const PUBLIC_PREFIXES = [
   "/login",
   "/signup",
   "/forgot-password",
+  "/verify-reset",
   "/reset-password",
   "/verify-email",
   "/api/auth",
