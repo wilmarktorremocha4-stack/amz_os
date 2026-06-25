@@ -36,6 +36,19 @@ function getInitials(name: string) {
   return name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
+function wrapSelection(
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>,
+  body: string,
+  setBody: (v: string) => void,
+  tag: string,
+) {
+  const ta = textareaRef.current;
+  if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const selected = body.slice(s, e);
+  setBody(body.slice(0, s) + `<${tag}>${selected || "text"}</${tag}>` + body.slice(e));
+}
+
 export function ContactDetailClient({
   supplier,
   contactTags,
@@ -444,6 +457,187 @@ function OpportunitiesSection({
   );
 }
 
+/* ─── Inline Reply Composer ─────────────────────────────────── */
+function InlineReplyComposer({
+  supplierId,
+  supplierEmail,
+  supplierName,
+  subject: initialSubject,
+  onClose,
+  onSent,
+}: {
+  supplierId: string;
+  supplierEmail: string | null;
+  supplierName: string;
+  subject: string;
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState("");
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function handleSend() {
+    if (!supplierEmail || !subject.trim() || !body.trim()) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await sendContactEmail(supplierId, supplierEmail, subject, body);
+      if (!result.success) { setError(result.error ?? "Failed"); return; }
+      setSent(true);
+      setTimeout(() => { onSent(); }, 1500);
+    });
+  }
+
+  return (
+    <div className="mt-1 rounded-xl border border-blue-300/60 bg-blue-50/30 shadow-sm overflow-hidden">
+      {/* To row */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-blue-200/50">
+        <span className="text-xs text-[var(--muted)] shrink-0 w-10">To</span>
+        <div className="flex-1 flex items-center gap-1.5">
+          {supplierEmail ? (
+            <span className="flex items-center gap-1 rounded-md bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-xs font-medium text-blue-400">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[8px] font-bold text-white">
+                {getInitials(supplierName)[0] ?? "?"}
+              </span>
+              {supplierEmail}
+            </span>
+          ) : (
+            <span className="text-xs text-[var(--muted)] italic">No email on this contact</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
+          <button
+            onClick={() => setShowCc(v => !v)}
+            className={`text-[10px] font-medium transition ${showCc ? "text-blue-400" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
+            CC
+          </button>
+          <button
+            onClick={() => setShowBcc(v => !v)}
+            className={`text-[10px] font-medium transition ${showBcc ? "text-blue-400" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
+            BCC
+          </button>
+          <button onClick={onClose} className="ml-1 text-[var(--muted)] hover:text-red-400 transition">
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* CC row */}
+      {showCc && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-blue-200/50">
+          <span className="text-xs text-[var(--muted)] shrink-0 w-10">CC</span>
+          <input
+            value={cc}
+            onChange={e => setCc(e.target.value)}
+            placeholder="Add CC recipients…"
+            className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]"
+          />
+          <button onClick={() => { setShowCc(false); setCc(""); }} className="text-[var(--muted)] hover:text-red-400">
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* BCC row */}
+      {showBcc && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-blue-200/50">
+          <span className="text-xs text-[var(--muted)] shrink-0 w-10">BCC</span>
+          <input
+            value={bcc}
+            onChange={e => setBcc(e.target.value)}
+            placeholder="Add BCC recipients…"
+            className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]"
+          />
+          <button onClick={() => { setShowBcc(false); setBcc(""); }} className="text-[var(--muted)] hover:text-red-400">
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Subject row */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-blue-200/50">
+        <span className="text-xs text-[var(--muted)] shrink-0 w-10">Subject</span>
+        <input
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]"
+        />
+      </div>
+
+      {/* Body */}
+      <textarea
+        ref={textareaRef}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={4}
+        placeholder="Type a message…"
+        disabled={!supplierEmail}
+        className="w-full resize-none bg-transparent px-4 py-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none disabled:opacity-50"
+      />
+
+      {/* Error */}
+      {error && (
+        <div className="mx-4 mb-2 rounded-lg border border-red-400 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+          {error === "NO_SMTP_CONNECTED" ? (
+            <>⚠ No email account connected. <Link href="/settings" className="underline font-semibold hover:text-red-300">Connect in Settings →</Link></>
+          ) : (
+            <>⚠ {error}</>
+          )}
+        </div>
+      )}
+
+      {/* Bottom toolbar */}
+      <div className="flex items-center gap-1 border-t border-blue-200/50 px-3 py-2">
+        <div className="flex items-center gap-0.5 flex-1">
+          <button title="Bold" onClick={() => wrapSelection(textareaRef, body, setBody, "b")}
+            className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
+            <Bold size={14} />
+          </button>
+          <button title="Italic" onClick={() => wrapSelection(textareaRef, body, setBody, "i")}
+            className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
+            <Italic size={14} />
+          </button>
+          <button title="Underline" onClick={() => wrapSelection(textareaRef, body, setBody, "u")}
+            className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
+            <Underline size={14} />
+          </button>
+          {[
+            { icon: <Type size={14} />, title: "Font" },
+            { icon: <Smile size={14} />, title: "Emoji" },
+            { icon: <Link2 size={14} />, title: "Insert link" },
+            { icon: <Paperclip size={14} />, title: "Attach file" },
+            { icon: <List size={14} />, title: "List" },
+            { icon: <Braces size={14} />, title: "Custom values" },
+            { icon: <Image size={14} />, title: "Insert image" },
+          ].map(({ icon, title }) => (
+            <button key={title} title={title}
+              className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
+              {icon}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {sent && <span className="flex items-center gap-1 text-xs text-emerald-500"><Check size={11} /> Sent!</span>}
+          <button
+            onClick={handleSend}
+            disabled={pending || !supplierEmail || !subject.trim() || !body.trim()}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 hover:bg-blue-500 transition">
+            <Send size={12} />
+            {pending ? "Sending…" : "Send"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Conversation center pane ─────────────────────────────── */
 function ConversationPane({
   supplierId,
@@ -472,15 +666,16 @@ function ConversationPane({
   const [sent, setSent] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const composerRef = useRef<HTMLDivElement>(null);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  function handleReply(replySubject: string) {
-    // Strip leading "Re: " to avoid "Re: Re:"
-    const stripped = replySubject.replace(/^(Re:\s*)+/i, "");
-    setTab("email");
-    setSubject("Re: " + stripped);
-    setBody("");
-    setSelectedTemplate("");
-    setTimeout(() => composerRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+  // Inline reply state
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [replySubject, setReplySubject] = useState("");
+
+  function handleReply(itemId: string, itemSubject: string) {
+    const stripped = itemSubject.replace(/^(Re:\s*)+/i, "");
+    setReplyToId(itemId);
+    setReplySubject("Re: " + stripped);
   }
 
   function applyTemplate(id: string) {
@@ -541,20 +736,31 @@ function ConversationPane({
         ) : (
           <div className="flex flex-col gap-3">
             {timeline.map((item) => (
-              <TimelineItem
-                key={item.id}
-                item={item}
-                supplierInitials={getInitials(supplierName)}
-                supplierEmail={supplierEmail}
-                onReply={handleReply}
-              />
+              <div key={item.id}>
+                <TimelineItem
+                  item={item}
+                  supplierInitials={getInitials(supplierName)}
+                  supplierEmail={supplierEmail}
+                  onReply={(subj) => handleReply(item.id, subj)}
+                />
+                {replyToId === item.id && (
+                  <InlineReplyComposer
+                    supplierId={supplierId}
+                    supplierEmail={supplierEmail}
+                    supplierName={supplierName}
+                    subject={replySubject}
+                    onClose={() => setReplyToId(null)}
+                    onSent={() => setReplyToId(null)}
+                  />
+                )}
+              </div>
             ))}
             <div ref={bottomRef} />
           </div>
         )}
       </div>
 
-      {/* Composer */}
+      {/* Composer — new emails only */}
       <div ref={composerRef} className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)]">
         {/* Tab switcher */}
         <div className="flex gap-0 border-b border-[var(--border)]">
@@ -565,7 +771,7 @@ function ConversationPane({
                 ? "border-blue-500 text-blue-500"
                 : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
             }`}>
-            <Mail size={12} /> Email
+            <Mail size={12} /> New Email
           </button>
           <button
             onClick={() => { setTab("note"); setBody(""); }}
@@ -630,6 +836,9 @@ function ConversationPane({
                   placeholder="Add CC recipients…"
                   className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]"
                 />
+                <button onClick={() => { setShowCc(false); setCc(""); }} className="text-[var(--muted)] hover:text-red-400">
+                  <X size={12} />
+                </button>
               </div>
             )}
 
@@ -643,6 +852,9 @@ function ConversationPane({
                   placeholder="Add BCC recipients…"
                   className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]"
                 />
+                <button onClick={() => { setShowBcc(false); setBcc(""); }} className="text-[var(--muted)] hover:text-red-400">
+                  <X size={12} />
+                </button>
               </div>
             )}
 
@@ -659,6 +871,7 @@ function ConversationPane({
 
             {/* Body */}
             <textarea
+              ref={bodyTextareaRef}
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={5}
@@ -686,14 +899,23 @@ function ConversationPane({
             <div className="flex items-center gap-1 border-t border-[var(--border)] px-3 py-2">
               {/* Formatting icons */}
               <div className="flex items-center gap-0.5 flex-1">
+                <button title="Bold" onClick={() => wrapSelection(bodyTextareaRef, body, setBody, "b")}
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
+                  <Bold size={14} />
+                </button>
+                <button title="Italic" onClick={() => wrapSelection(bodyTextareaRef, body, setBody, "i")}
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
+                  <Italic size={14} />
+                </button>
+                <button title="Underline" onClick={() => wrapSelection(bodyTextareaRef, body, setBody, "u")}
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
+                  <Underline size={14} />
+                </button>
                 {[
                   { icon: <Type size={14} />, title: "Font" },
                   { icon: <Smile size={14} />, title: "Emoji" },
                   { icon: <Link2 size={14} />, title: "Insert link" },
                   { icon: <Paperclip size={14} />, title: "Attach file" },
-                  { icon: <Bold size={14} />, title: "Bold" },
-                  { icon: <Italic size={14} />, title: "Italic" },
-                  { icon: <Underline size={14} />, title: "Underline" },
                   { icon: <List size={14} />, title: "List" },
                   { icon: <Braces size={14} />, title: "Custom values" },
                   { icon: <Image size={14} />, title: "Insert image" },
@@ -865,11 +1087,19 @@ function TimelineItem({
     const toLine = isSent ? supplierEmail : "me";
 
     return (
-      <div className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm overflow-hidden">
+      <div className={`w-full rounded-xl border shadow-sm overflow-hidden ${
+        isSent
+          ? "bg-blue-50/60 border-blue-200/80"
+          : "bg-[var(--surface)] border-[var(--border)]"
+      }`}>
 
         {/* ── Subject title bar ── */}
         <div
-          className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)] cursor-pointer hover:bg-[var(--accent-soft)]/20 transition-colors"
+          className={`flex items-center justify-between px-4 py-2.5 border-b cursor-pointer hover:brightness-95 transition-colors ${
+            isSent
+              ? "border-blue-200/60 bg-blue-100/50"
+              : "border-[var(--border)] hover:bg-[var(--accent-soft)]/20"
+          }`}
           onClick={() => setExpanded(v => !v)}
         >
           <span className="text-sm font-semibold text-[var(--foreground)] truncate flex-1 mr-4">
@@ -915,10 +1145,10 @@ function TimelineItem({
         {/* ── Expanded body ── */}
         {expanded && (
           <>
-            <div className="border-t border-[var(--border)] px-6 py-5">
+            <div className={`border-t px-6 py-5 ${isSent ? "border-blue-200/60" : "border-[var(--border)]"}`}>
               <div className="whitespace-pre-wrap text-sm text-[var(--foreground)] leading-relaxed">{cleanContent}</div>
             </div>
-            <div className="border-t border-[var(--border)] px-4 py-3 flex">
+            <div className={`border-t px-4 py-3 flex ${isSent ? "border-blue-200/60" : "border-[var(--border)]"}`}>
               <button
                 onClick={() => onReply(item.subject ?? "")}
                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-500 transition">
@@ -999,4 +1229,3 @@ function ActivityPane({
     </div>
   );
 }
-
