@@ -81,13 +81,23 @@ export async function sendEmailViaUserSmtp({
     ? `"${smtpConfig.smtpFromName}" <${smtpConfig.smtpUser}>`
     : smtpConfig.smtpUser;
 
-  await transporter.sendMail({
-    from: fromAddress,
-    to,
-    subject,
-    html,
-    ...(replyTo ? { replyTo, headers: { "Reply-To": replyTo } } : {}),
-  });
+  try {
+    await transporter.sendMail({
+      from: fromAddress,
+      to,
+      subject,
+      html,
+      ...(replyTo ? { replyTo, headers: { "Reply-To": replyTo } } : {}),
+    });
+  } catch (err) {
+    if (replyTo) {
+      // Provider rejected with Reply-To — retry without it so sending is never blocked
+      console.warn("[email] Reply-To rejected by provider, retrying without:", err);
+      await transporter.sendMail({ from: fromAddress, to, subject, html });
+    } else {
+      throw err;
+    }
+  }
 }
 
 // ─── UNIFIED SEND ─────────────────────────────────────────────────────────────
