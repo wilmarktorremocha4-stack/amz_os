@@ -498,11 +498,17 @@ function ConversationPane({
   }
 
   const timeline = [...notes].reverse();
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [notes.length]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Timeline */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto px-4 py-5 min-h-0">
         {timeline.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-center py-16">
             <div className="rounded-full bg-[var(--accent-soft)] p-4 text-[var(--accent)]">
@@ -512,10 +518,11 @@ function ConversationPane({
             <p className="text-sm text-[var(--muted)]">Send an email or add a note to get started.</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             {timeline.map((item) => (
               <TimelineItem key={item.id} item={item} />
             ))}
+            <div ref={bottomRef} />
           </div>
         )}
       </div>
@@ -657,28 +664,38 @@ function TimelineItem({ item }: { item: ContactNote }) {
 
   if (isSent) {
     return (
-      <div className="flex flex-col items-end gap-1">
-        {item.subject && (
-          <span className="text-[10px] text-[var(--muted)] pr-1">Re: {item.subject}</span>
-        )}
-        <div className="max-w-[75%] rounded-2xl rounded-tr-sm bg-blue-600 px-4 py-2.5 text-white shadow-sm">
-          <div className="text-xs whitespace-pre-wrap leading-relaxed">{item.content}</div>
+      <div className="flex items-end justify-end gap-2">
+        <div className="flex flex-col items-end gap-1 max-w-[55%]">
+          <div className="rounded-2xl rounded-tr-sm bg-blue-600 px-3.5 py-2.5 text-white shadow-sm">
+            {item.subject && (
+              <div className="mb-1 text-[10px] font-semibold text-blue-200 truncate">{item.subject}</div>
+            )}
+            <div className="text-xs whitespace-pre-wrap leading-relaxed">{item.content}</div>
+          </div>
+          <span className="text-[10px] text-[var(--muted)] pr-1">{date}</span>
         </div>
-        <span className="text-[10px] text-[var(--muted)] pr-1">{date} · You</span>
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow">
+          Me
+        </div>
       </div>
     );
   }
 
   if (isReceived) {
     return (
-      <div className="flex flex-col items-start gap-1">
-        {item.subject && (
-          <span className="text-[10px] text-[var(--muted)] pl-1">{item.subject}</span>
-        )}
-        <div className="max-w-[75%] rounded-2xl rounded-tl-sm bg-[var(--surface)] border border-[var(--border)] px-4 py-2.5 shadow-sm">
-          <div className="text-xs whitespace-pre-wrap leading-relaxed text-[var(--foreground)]">{item.content}</div>
+      <div className="flex items-end gap-2">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white shadow">
+          B
         </div>
-        <span className="text-[10px] text-[var(--muted)] pl-1">{date} · Brand</span>
+        <div className="flex flex-col items-start gap-1 max-w-[55%]">
+          <div className="rounded-2xl rounded-tl-sm bg-[var(--surface)] border border-[var(--border)] px-3.5 py-2.5 shadow-sm">
+            {item.subject && (
+              <div className="mb-1 text-[10px] font-semibold text-[var(--muted)] truncate">{item.subject}</div>
+            )}
+            <div className="text-xs whitespace-pre-wrap leading-relaxed text-[var(--foreground)]">{item.content}</div>
+          </div>
+          <span className="text-[10px] text-[var(--muted)] pl-1">{date}</span>
+        </div>
       </div>
     );
   }
@@ -694,40 +711,53 @@ function ActivityPane({
   notes: ContactNote[];
   supplier: { companyName: string; stage: string; createdAt: string };
 }) {
-  const items: { icon: React.ReactNode; text: string; date: string; color: string }[] = [];
+  const initials = supplier.companyName.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
+
+  type ActivityItem = {
+    avatar: React.ReactNode;
+    label: string;
+    preview: string;
+    date: string;
+    type: string;
+  };
+
+  const items: ActivityItem[] = [];
 
   items.push({
-    icon: <Plus size={12} />,
-    text: `Contact created`,
-    date: new Date(supplier.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-    color: "bg-slate-500/15 text-slate-400",
+    avatar: <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-500/20 text-[10px] font-bold text-slate-400">{initials}</div>,
+    label: "Contact created",
+    preview: supplier.companyName,
+    date: new Date(supplier.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    type: "created",
   });
 
   for (const n of [...notes].reverse()) {
+    const isSent = n.type === "email_sent";
+    const isReceived = n.type === "email_received";
     items.push({
-      icon: n.type === "email_sent" ? <Mail size={12} /> : n.type === "email_received" ? <Mail size={12} /> : <StickyNote size={12} />,
-      text: n.type === "email_sent"
-        ? `Email sent${n.subject ? `: "${n.subject}"` : ""}`
-        : n.type === "email_received"
-        ? `Reply received${n.subject ? `: "${n.subject}"` : ""}`
-        : `Note added`,
-      date: new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      color: n.type === "email_sent" ? "bg-blue-500/15 text-blue-400" : n.type === "email_received" ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400",
+      avatar: isSent
+        ? <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">Me</div>
+        : isReceived
+        ? <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">{initials}</div>
+        : <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-400"><StickyNote size={12} /></div>,
+      label: isSent ? "You sent" : isReceived ? `${supplier.companyName} replied` : "Note",
+      preview: n.subject ?? n.content.slice(0, 40),
+      date: new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      type: n.type,
     });
   }
 
   return (
-    <div className="px-5 py-5">
+    <div className="px-4 py-5">
       <p className="mb-4 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Activity</p>
       <div className="flex flex-col gap-3">
         {items.map((item, i) => (
           <div key={i} className="flex items-start gap-2.5">
-            <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${item.color}`}>
-              {item.icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs text-[var(--foreground)] leading-snug">{item.text}</div>
-              <div className="mt-0.5 text-[10px] text-[var(--muted)]">{item.date}</div>
+            {item.avatar}
+            <div className="flex-1 min-w-0 pt-1">
+              <div className="text-xs font-medium text-[var(--foreground)] leading-snug truncate">{item.label}</div>
+              <div className="text-[10px] text-[var(--muted)] truncate">{item.preview}</div>
+              <div className="mt-0.5 text-[10px] text-[var(--muted)]/60">{item.date}</div>
             </div>
           </div>
         ))}
