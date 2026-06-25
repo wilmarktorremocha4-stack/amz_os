@@ -6,6 +6,21 @@ import { fetchRecentReplies } from "@/lib/imap";
 import { getCurrentUser } from "@/lib/currentUser";
 import { revalidatePath } from "next/cache";
 
+// Strip quoted reply history from email body — keep only the new message
+function stripQuotedText(text: string): string {
+  const lines = text.split("\n");
+  const clean: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Stop at "On [date] ... wrote:" pattern
+    if (/^On .{5,80} wrote:/.test(trimmed)) break;
+    // Skip quoted lines starting with >
+    if (trimmed.startsWith(">")) continue;
+    clean.push(line);
+  }
+  return clean.join("\n").trim();
+}
+
 export async function processRepliesForUser(
   userId: string,
 ): Promise<{ imported: number; supplierIds: string[]; error?: string }> {
@@ -53,9 +68,8 @@ export async function processRepliesForUser(
     });
 
     if (supplier) {
-      const content = msg.bodyText
-        ? msg.bodyText
-        : `(Reply received from ${msg.fromName} — view full message in your inbox)`;
+      const rawBody = msg.bodyText ? stripQuotedText(msg.bodyText) : "";
+      const content = rawBody || `(Reply received from ${msg.fromName} — view full message in your inbox)`;
 
       await prisma.contactNote.create({
         data: {
