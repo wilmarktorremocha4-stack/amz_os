@@ -75,7 +75,8 @@ export async function fetchRecentReplies(config: {
         if (msg.source) {
           try {
             const parsed = await simpleParser(msg.source);
-            bodyText = parsed.text?.trim() ?? parsed.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ?? null;
+            const htmlText = typeof parsed.html === "string" ? parsed.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : null;
+            bodyText = parsed.text?.trim() ?? htmlText ?? null;
             // Trim to 2000 chars max
             if (bodyText && bodyText.length > 2000) bodyText = bodyText.slice(0, 2000) + "…";
           } catch {
