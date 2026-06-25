@@ -692,29 +692,27 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
     );
   }
 
-  const dotsBtn = (
-    <button
-      onClick={() => setShowDetails(v => !v)}
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)] transition shadow-sm"
-      title="Message details">
-      <span className="text-[11px] font-bold leading-none">⋯</span>
-    </button>
-  );
-
   if (isSent) {
     return (
-      <div className="flex items-center justify-end gap-2">
-        <div className="relative flex flex-col items-end gap-1 max-w-[55%]">
+      <div className="flex items-end justify-end gap-2">
+        <div className="relative flex flex-col items-end gap-0.5 max-w-[55%]">
           <div className="rounded-2xl rounded-tr-sm bg-blue-600 px-3.5 py-2.5 text-white shadow-sm">
             {item.subject && (
               <div className="mb-1 text-[10px] font-semibold text-blue-200 truncate">{item.subject}</div>
             )}
             <div className="text-xs whitespace-pre-wrap leading-relaxed">{cleanContent}</div>
           </div>
+          <div className="flex items-center gap-1.5 pr-1">
+            <span className="text-[10px] text-[var(--muted)]">{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+            <button
+              onClick={() => setShowDetails(v => !v)}
+              className="text-[var(--muted)] hover:text-[var(--foreground)] transition"
+              title="Message details">
+              <span className="text-[13px] font-bold leading-none">⋯</span>
+            </button>
+          </div>
           {showDetails && <DetailsPopover />}
-          <span className="text-[10px] text-[var(--muted)] pr-1">{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
         </div>
-        {dotsBtn}
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow">
           Me
         </div>
@@ -724,20 +722,27 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
 
   if (isReceived) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-end gap-2">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow">
           {supplierInitials}
         </div>
-        {dotsBtn}
-        <div className="relative flex flex-col items-start gap-1 max-w-[55%]">
+        <div className="relative flex flex-col items-start gap-0.5 max-w-[55%]">
           <div className="rounded-2xl rounded-tl-sm bg-[var(--surface)] border border-[var(--border)] px-3.5 py-2.5 shadow-sm">
             {item.subject && (
               <div className="mb-1 text-[10px] font-semibold text-[var(--muted)] truncate">{item.subject}</div>
             )}
             <div className="text-xs whitespace-pre-wrap leading-relaxed text-[var(--foreground)]">{cleanContent}</div>
           </div>
+          <div className="flex items-center gap-1.5 pl-1">
+            <button
+              onClick={() => setShowDetails(v => !v)}
+              className="text-[var(--muted)] hover:text-[var(--foreground)] transition"
+              title="Message details">
+              <span className="text-[13px] font-bold leading-none">⋯</span>
+            </button>
+            <span className="text-[10px] text-[var(--muted)]">{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+          </div>
           {showDetails && <DetailsPopover />}
-          <span className="text-[10px] text-[var(--muted)] pl-1">{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
         </div>
       </div>
     );
