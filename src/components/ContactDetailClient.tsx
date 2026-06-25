@@ -703,28 +703,30 @@ function TimelineItem({
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <span className="font-semibold text-base text-gray-900">Message Details</span>
-          <button onClick={() => setShowDetails(false)} className="text-gray-400 hover:text-gray-700 transition text-lg leading-none">×</button>
+          <button onClick={() => setShowDetails(false)} className="text-gray-400 hover:text-gray-700 transition text-xl leading-none">×</button>
         </div>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">From</span>
-            <span className="text-gray-900 font-medium">{isSent ? "Me" : supplierInitials}</span>
-          </div>
-          {item.subject && (
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">Subject</span>
-              <span className="text-gray-800">{item.subject}</span>
-            </div>
-          )}
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">Direction</span>
-            <span className="text-gray-800">{isSent ? "↑ Outbound (Email)" : "↓ Inbound (Email)"}</span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">Date</span>
-            <span className="text-gray-800">{date}</span>
-          </div>
-        </div>
+        <table className="w-full text-sm border-collapse">
+          <tbody>
+            <tr className="align-top">
+              <td className="py-1.5 pr-4 text-gray-400 font-medium whitespace-nowrap w-16">From:</td>
+              <td className="py-1.5 text-gray-900">{isSent ? `Me` : `${supplierInitials} <${supplierEmail ?? ""}>`}</td>
+            </tr>
+            <tr className="align-top">
+              <td className="py-1.5 pr-4 text-gray-400 font-medium whitespace-nowrap">To:</td>
+              <td className="py-1.5 text-gray-900">{isSent ? supplierEmail : "me"}</td>
+            </tr>
+            <tr className="align-top">
+              <td className="py-1.5 pr-4 text-gray-400 font-medium whitespace-nowrap">Date:</td>
+              <td className="py-1.5 text-gray-900">{date}</td>
+            </tr>
+            {item.subject && (
+              <tr className="align-top">
+                <td className="py-1.5 pr-4 text-gray-400 font-medium whitespace-nowrap">Subject:</td>
+                <td className="py-1.5 text-gray-900">{item.subject}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -747,45 +749,45 @@ function TimelineItem({
   if (isSent || isReceived) {
     const senderName = isSent ? "Me" : supplierInitials;
     const toLine = isSent ? supplierEmail : "me";
-    const previewText = item.subject ?? cleanContent.slice(0, 80);
 
     return (
       <div className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm overflow-hidden">
-        {/* Card header — always visible, click to expand */}
+
+        {/* ── Subject title bar ── */}
         <div
-          className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-[var(--accent-soft)]/30 transition-colors"
+          className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)] cursor-pointer hover:bg-[var(--accent-soft)]/20 transition-colors"
           onClick={() => setExpanded(v => !v)}
         >
-          {/* Avatar */}
+          <span className="text-sm font-semibold text-[var(--foreground)] truncate flex-1 mr-4">
+            {item.subject ?? "(no subject)"}
+          </span>
+          <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="rounded p-0.5 text-[var(--muted)] hover:text-[var(--foreground)] transition">
+              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Sender row ── */}
+        <div className="flex items-center gap-3 px-4 py-2.5">
           <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow ${isSent ? "bg-blue-600" : "bg-blue-500"}`}>
             {senderName}
           </div>
-
-          {/* Middle: sender + To line + preview */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-[var(--foreground)]">{senderName}</span>
-              {toLine && (
-                <span className="text-[10px] text-[var(--muted)] truncate">To: {toLine}</span>
-              )}
-            </div>
-            {!expanded && (
-              <div className="mt-0.5 text-xs text-[var(--muted)] truncate">{previewText}</div>
-            )}
-            {expanded && item.subject && (
-              <div className="mt-0.5 text-xs font-medium text-[var(--foreground)] truncate">{item.subject}</div>
+            <span className="text-xs font-semibold text-[var(--foreground)]">{senderName}</span>
+            {toLine && (
+              <span className="ml-2 text-[10px] text-[var(--muted)]">To: {toLine}</span>
             )}
           </div>
-
-          {/* Right: timestamp + reply + dots + chevron */}
-          <div className="flex items-center gap-1.5 shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-[10px] text-[var(--muted)] whitespace-nowrap">{shortDate}</span>
             <button
               onClick={() => onReply(item.subject ?? "")}
               className="flex items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] text-[var(--muted)] hover:text-blue-400 hover:bg-blue-500/10 transition"
               title="Reply">
-              <Reply size={11} />
-              <span>Reply</span>
+              <Reply size={11} /><span>Reply</span>
             </button>
             <button
               onClick={() => setShowDetails(v => !v)}
@@ -793,25 +795,19 @@ function TimelineItem({
               title="Details">
               <MoreVertical size={13} />
             </button>
-            <button
-              onClick={() => setExpanded(v => !v)}
-              className="rounded-md p-1 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition"
-              title={expanded ? "Collapse" : "Expand"}>
-              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            </button>
           </div>
         </div>
 
-        {/* Expanded body */}
+        {/* ── Expanded body ── */}
         {expanded && (
           <>
-            <div className="border-t border-[var(--border)] px-4 py-4">
+            <div className="border-t border-[var(--border)] px-6 py-5">
               <div className="whitespace-pre-wrap text-sm text-[var(--foreground)] leading-relaxed">{cleanContent}</div>
             </div>
-            <div className="border-t border-[var(--border)] px-4 py-2 flex justify-end">
+            <div className="border-t border-[var(--border)] px-4 py-3 flex">
               <button
                 onClick={() => onReply(item.subject ?? "")}
-                className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs text-[var(--foreground)] hover:border-blue-400 hover:text-blue-400 transition">
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-500 transition">
                 <Reply size={12} />
                 Reply
               </button>
