@@ -223,7 +223,7 @@ function SidebarContent({
           unoptimized
         />
         {!collapsed && (
-          <span className="text-xl font-extrabold tracking-widest bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent select-none">
+          <span className="text-2xl font-extrabold tracking-widest bg-gradient-to-r from-cyan-400 via-blue-400 to-blue-500 bg-clip-text text-transparent select-none">
             AMZ OS
           </span>
         )}
