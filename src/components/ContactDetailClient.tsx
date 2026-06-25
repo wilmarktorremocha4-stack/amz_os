@@ -641,14 +641,41 @@ function ConversationPane({
   );
 }
 
+function stripQuoted(text: string): string {
+  const lines = text.split("\n");
+  const clean: string[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (/^On .{5,120} wrote:/.test(t)) break;
+    if (t.startsWith(">")) continue;
+    clean.push(line);
+  }
+  return clean.join("\n").trim();
+}
+
 function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierInitials: string }) {
+  const [showDetails, setShowDetails] = useState(false);
   const isSent = item.type === "email_sent";
   const isReceived = item.type === "email_received";
   const isNote = item.type === "note";
   const date = new Date(item.createdAt).toLocaleString("en-US", {
-    month: "short", day: "numeric",
+    month: "short", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit",
   });
+  const cleanContent = (isSent || isReceived) ? stripQuoted(item.content) : item.content;
+
+  const DetailsPopover = () => (
+    <div className="absolute z-50 mt-1 w-56 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-lg p-3 text-xs"
+      style={{ [isSent ? "right" : "left"]: 0, top: "100%" }}>
+      <div className="font-semibold text-[var(--foreground)] mb-2">Message Details</div>
+      <div className="flex flex-col gap-1.5 text-[var(--muted)]">
+        <div><span className="font-medium text-[var(--foreground)]">Type:</span> {isSent ? "Email Sent" : "Email Received"}</div>
+        {item.subject && <div><span className="font-medium text-[var(--foreground)]">Subject:</span> {item.subject}</div>}
+        <div><span className="font-medium text-[var(--foreground)]">Date:</span> {date}</div>
+        <div><span className="font-medium text-[var(--foreground)]">Direction:</span> {isSent ? "Outbound" : "Inbound"}</div>
+      </div>
+    </div>
+  );
 
   if (isNote) {
     return (
@@ -658,7 +685,7 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
             <StickyNote size={10} className="text-amber-400" />
             <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">Note</span>
           </div>
-          <div className="text-xs text-[var(--foreground)] whitespace-pre-wrap">{item.content}</div>
+          <div className="text-xs text-[var(--foreground)] whitespace-pre-wrap">{cleanContent}</div>
           <div className="mt-1 text-[10px] text-[var(--muted)]">{date}</div>
         </div>
       </div>
@@ -668,14 +695,20 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
   if (isSent) {
     return (
       <div className="flex items-end justify-end gap-2">
-        <div className="flex flex-col items-end gap-1 max-w-[55%]">
-          <div className="rounded-2xl rounded-tr-sm bg-blue-600 px-3.5 py-2.5 text-white shadow-sm">
+        <div className="relative flex flex-col items-end gap-1 max-w-[55%]">
+          <div className="group relative rounded-2xl rounded-tr-sm bg-blue-600 px-3.5 py-2.5 text-white shadow-sm">
             {item.subject && (
               <div className="mb-1 text-[10px] font-semibold text-blue-200 truncate">{item.subject}</div>
             )}
-            <div className="text-xs whitespace-pre-wrap leading-relaxed">{item.content}</div>
+            <div className="text-xs whitespace-pre-wrap leading-relaxed">{cleanContent}</div>
+            <button
+              onClick={() => setShowDetails(v => !v)}
+              className="absolute -top-2 -left-6 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-[var(--surface)] border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] shadow-sm">
+              <span className="text-[10px] font-bold">···</span>
+            </button>
           </div>
-          <span className="text-[10px] text-[var(--muted)] pr-1">{date}</span>
+          {showDetails && <DetailsPopover />}
+          <span className="text-[10px] text-[var(--muted)] pr-1">{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
         </div>
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow">
           Me
@@ -690,14 +723,20 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow">
           {supplierInitials}
         </div>
-        <div className="flex flex-col items-start gap-1 max-w-[55%]">
-          <div className="rounded-2xl rounded-tl-sm bg-[var(--surface)] border border-[var(--border)] px-3.5 py-2.5 shadow-sm">
+        <div className="relative flex flex-col items-start gap-1 max-w-[55%]">
+          <div className="group relative rounded-2xl rounded-tl-sm bg-[var(--surface)] border border-[var(--border)] px-3.5 py-2.5 shadow-sm">
             {item.subject && (
               <div className="mb-1 text-[10px] font-semibold text-[var(--muted)] truncate">{item.subject}</div>
             )}
-            <div className="text-xs whitespace-pre-wrap leading-relaxed text-[var(--foreground)]">{item.content}</div>
+            <div className="text-xs whitespace-pre-wrap leading-relaxed text-[var(--foreground)]">{cleanContent}</div>
+            <button
+              onClick={() => setShowDetails(v => !v)}
+              className="absolute -top-2 -right-6 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-[var(--surface)] border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] shadow-sm">
+              <span className="text-[10px] font-bold">···</span>
+            </button>
           </div>
-          <span className="text-[10px] text-[var(--muted)] pl-1">{date}</span>
+          {showDetails && <DetailsPopover />}
+          <span className="text-[10px] text-[var(--muted)] pl-1">{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
         </div>
       </div>
     );
