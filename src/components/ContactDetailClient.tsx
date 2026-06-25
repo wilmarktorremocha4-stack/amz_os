@@ -618,32 +618,58 @@ function ConversationPane({
 }
 
 function TimelineItem({ item }: { item: ContactNote }) {
-  const isEmail = item.type === "email_sent";
-  const date = new Date(item.createdAt).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
+  const isSent = item.type === "email_sent";
+  const isReceived = item.type === "email_received";
+  const isNote = item.type === "note";
+  const date = new Date(item.createdAt).toLocaleString("en-US", {
+    month: "short", day: "numeric",
     hour: "numeric", minute: "2-digit",
   });
-  return (
-    <div className="flex gap-3">
-      <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-        isEmail ? "bg-blue-500/15 text-blue-400" : "bg-amber-500/15 text-amber-400"
-      }`}>
-        {isEmail ? <Mail size={13} /> : <StickyNote size={13} />}
-      </div>
-      <div className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {isEmail ? "Email sent" : "Note"}
-          </span>
-          <span className="text-[10px] text-[var(--muted)]">{date}</span>
+
+  if (isNote) {
+    return (
+      <div className="flex justify-center">
+        <div className="max-w-[80%] rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-center">
+          <div className="flex items-center gap-1 justify-center mb-1">
+            <StickyNote size={10} className="text-amber-400" />
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">Note</span>
+          </div>
+          <div className="text-xs text-[var(--foreground)] whitespace-pre-wrap">{item.content}</div>
+          <div className="mt-1 text-[10px] text-[var(--muted)]">{date}</div>
         </div>
-        {item.subject && (
-          <div className="mb-1 text-xs font-medium text-[var(--foreground)]">{item.subject}</div>
-        )}
-        <div className="text-xs text-[var(--foreground)] whitespace-pre-wrap">{item.content}</div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (isSent) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        {item.subject && (
+          <span className="text-[10px] text-[var(--muted)] pr-1">Re: {item.subject}</span>
+        )}
+        <div className="max-w-[75%] rounded-2xl rounded-tr-sm bg-blue-600 px-4 py-2.5 text-white shadow-sm">
+          <div className="text-xs whitespace-pre-wrap leading-relaxed">{item.content}</div>
+        </div>
+        <span className="text-[10px] text-[var(--muted)] pr-1">{date} · You</span>
+      </div>
+    );
+  }
+
+  if (isReceived) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        {item.subject && (
+          <span className="text-[10px] text-[var(--muted)] pl-1">{item.subject}</span>
+        )}
+        <div className="max-w-[75%] rounded-2xl rounded-tl-sm bg-[var(--surface)] border border-[var(--border)] px-4 py-2.5 shadow-sm">
+          <div className="text-xs whitespace-pre-wrap leading-relaxed text-[var(--foreground)]">{item.content}</div>
+        </div>
+        <span className="text-[10px] text-[var(--muted)] pl-1">{date} · Brand</span>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 /* ─── Activity right pane ───────────────────────────────────── */
