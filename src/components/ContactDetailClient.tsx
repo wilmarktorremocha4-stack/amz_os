@@ -12,6 +12,7 @@ import { updateSupplierStage, updateContactDetails } from "@/lib/actions/supplie
 import { addTagToContact, removeTagFromContact } from "@/lib/actions/tags";
 import { addContactNote, sendContactEmail } from "@/lib/actions/contactNotes";
 import { createOpportunity } from "@/lib/actions/pipelines";
+import { manualCheckInbox } from "@/lib/actions/fetch-replies";
 
 const STAGES = [
   "RESEARCHING","CONTACTED","FOLLOWED_UP","NEGOTIATING","APPROVED","REJECTED","ONBOARDED",
@@ -58,11 +59,23 @@ export function ContactDetailClient({
 }) {
   const router = useRouter();
 
-  // Refresh immediately on mount + every 10s to pick up inbound replies
+  // Auto-poll IMAP every 30s + refresh UI every 10s — no button clicks needed
   useEffect(() => {
     router.refresh();
-    const id = setInterval(() => router.refresh(), 10_000);
-    return () => clearInterval(id);
+
+    // UI refresh — picks up any newly imported notes
+    const refreshId = setInterval(() => router.refresh(), 10_000);
+
+    // IMAP poll — checks inbox and imports new replies automatically
+    const pollId = setInterval(async () => {
+      await manualCheckInbox();
+      router.refresh();
+    }, 30_000);
+
+    return () => {
+      clearInterval(refreshId);
+      clearInterval(pollId);
+    };
   }, [router]);
 
   const [stage, setStage] = useState(supplier.stage);

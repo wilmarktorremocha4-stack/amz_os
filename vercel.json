@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/fetch-replies",
-      "schedule": "*/15 * * * *"
+      "schedule": "* * * * *"
     }
   ]
 }
