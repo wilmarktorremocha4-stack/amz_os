@@ -6,7 +6,9 @@ import { fetchRecentReplies } from "@/lib/imap";
 import { getCurrentUser } from "@/lib/currentUser";
 import { revalidatePath } from "next/cache";
 
-export async function processRepliesForUser(userId: string): Promise<{ imported: number; error?: string }> {
+export async function processRepliesForUser(
+  userId: string,
+): Promise<{ imported: number; supplierIds: string[]; error?: string }> {
   const dbUser = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -18,7 +20,7 @@ export async function processRepliesForUser(userId: string): Promise<{ imported:
   });
 
   if (!dbUser?.smtpHost || !dbUser.smtpUser || !dbUser.smtpPassEncrypted || !dbUser.smtpVerifiedAt) {
-    return { imported: 0, error: "NO_SMTP_CONNECTED" };
+    return { imported: 0, supplierIds: [], error: "NO_SMTP_CONNECTED" };
   }
 
   let messages;
@@ -30,13 +32,14 @@ export async function processRepliesForUser(userId: string): Promise<{ imported:
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "IMAP connection failed";
-    return { imported: 0, error: msg };
+    return { imported: 0, supplierIds: [], error: msg };
   }
 
   let imported = 0;
+  const supplierIds: string[] = [];
 
   for (const msg of messages) {
-    // Skip emails sent BY the user (their own sent mail is in INBOX sometimes)
+    // Skip emails sent BY the user
     if (msg.fromEmail === dbUser.smtpUser.toLowerCase()) continue;
 
     // Dedup by message-id hash
@@ -50,18 +53,24 @@ export async function processRepliesForUser(userId: string): Promise<{ imported:
     });
 
     if (supplier) {
+      const content = msg.bodyText
+        ? msg.bodyText
+        : `(Reply received from ${msg.fromName} — view full message in your inbox)`;
+
       await prisma.contactNote.create({
         data: {
           supplierId: supplier.id,
           type: "email_received",
           subject: msg.subject,
-          content: `From: ${msg.fromName}\n\n(Reply received — view full message in your email inbox)`,
+          content,
         },
       });
       imported++;
+      if (!supplierIds.includes(supplier.id)) supplierIds.push(supplier.id);
+      // Revalidate this specific contact page immediately
+      revalidatePath(`/crm/${supplier.id}`);
     }
 
-    // Always record so we don't reprocess
     await prisma.importedEmail.create({
       data: {
         hash,
@@ -73,13 +82,13 @@ export async function processRepliesForUser(userId: string): Promise<{ imported:
     });
   }
 
-  return { imported };
+  // Revalidate entire CRM layout to catch any list views
+  if (imported > 0) revalidatePath("/crm", "layout");
+
+  return { imported, supplierIds };
 }
 
-// Server action — called from Settings "Check inbox" button
-export async function manualCheckInbox(): Promise<{ imported: number; error?: string }> {
+export async function manualCheckInbox(): Promise<{ imported: number; supplierIds: string[]; error?: string }> {
   const user = await getCurrentUser();
-  const result = await processRepliesForUser(user.id);
-  if (result.imported > 0) revalidatePath("/crm/[id]", "page");
-  return result;
+  return processRepliesForUser(user.id);
 }

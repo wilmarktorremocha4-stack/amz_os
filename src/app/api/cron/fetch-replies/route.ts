@@ -23,8 +23,8 @@ export async function GET(req: Request) {
 
   let total = 0;
   for (const user of users) {
-    const { imported } = await processRepliesForUser(user.id);
-    total += imported;
+    const result = await processRepliesForUser(user.id);
+    total += result.imported;
   }
 
   return NextResponse.json({ ok: true, imported: total });

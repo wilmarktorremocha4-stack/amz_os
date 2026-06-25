@@ -1,5 +1,6 @@
 import { ImapFlow } from "imapflow";
 import { decrypt } from "@/lib/crypto";
+import { simpleParser } from "mailparser";
 
 export interface InboxMessage {
   uid: number;
@@ -9,6 +10,7 @@ export interface InboxMessage {
   fromName: string;
   fromEmail: string;
   date: Date;
+  bodyText: string | null;
 }
 
 function getImapHost(smtpHost: string): { host: string; port: number } {
@@ -52,16 +54,14 @@ export async function fetchRecentReplies(config: {
       const since = new Date();
       since.setDate(since.getDate() - 30);
 
-      // search() returns number[] | false in imapflow 1.x
       const raw = await client.search({ since }, { uid: true });
       const uids: number[] = Array.isArray(raw) ? raw.slice(-200) : [];
 
       if (uids.length === 0) return messages;
 
-      // Build UID range string e.g. "101,102,103" or use * for all
       const range = uids.join(",");
 
-      for await (const msg of client.fetch(range, { uid: true, envelope: true }, { uid: true })) {
+      for await (const msg of client.fetch(range, { uid: true, envelope: true, source: true }, { uid: true })) {
         const fromAddr = msg.envelope?.from?.[0];
         if (!fromAddr) continue;
 
@@ -70,14 +70,28 @@ export async function fetchRecentReplies(config: {
 
         const fromName = (fromAddr as { name?: string }).name ?? fromEmail;
 
+        // Parse full message source to extract body text
+        let bodyText: string | null = null;
+        if (msg.source) {
+          try {
+            const parsed = await simpleParser(msg.source);
+            bodyText = parsed.text?.trim() ?? parsed.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ?? null;
+            // Trim to 2000 chars max
+            if (bodyText && bodyText.length > 2000) bodyText = bodyText.slice(0, 2000) + "…";
+          } catch {
+            bodyText = null;
+          }
+        }
+
         messages.push({
           uid: msg.uid ?? 0,
           messageId: msg.envelope?.messageId ?? String(msg.uid),
           inReplyTo: (msg.envelope as unknown as { inReplyTo?: string }).inReplyTo ?? null,
           subject: msg.envelope?.subject ?? "(no subject)",
-          fromName: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
+          fromName: fromName ? `${fromName}` : fromEmail,
           fromEmail: fromEmail.toLowerCase(),
           date: msg.envelope?.date ?? new Date(),
+          bodyText,
         });
       }
     } finally {

@@ -36,7 +36,7 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
   const [isPending, startTransition] = useTransition();
   const [isTesting, setIsTesting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const [checkResult, setCheckResult] = useState<{ imported: number; error?: string } | null>(null);
+  const [checkResult, setCheckResult] = useState<{ imported: number; supplierIds?: string[]; error?: string } | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
   function selectProvider(label: string) {
@@ -125,10 +125,21 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
             {isChecking ? "Checking inbox…" : "Check inbox for replies"}
           </button>
           {checkResult && !checkResult.error && (
-            <span className="text-xs text-emerald-400">
-              {checkResult.imported > 0
-                ? `✓ ${checkResult.imported} new ${checkResult.imported === 1 ? "reply" : "replies"} imported`
-                : "✓ No new replies"}
+            <span className="text-xs text-emerald-400 flex flex-col gap-1">
+              {checkResult.imported > 0 ? (
+                <>
+                  <span>✓ {checkResult.imported} new {checkResult.imported === 1 ? "reply" : "replies"} imported</span>
+                  {checkResult.supplierIds && checkResult.supplierIds.length > 0 && (
+                    <span className="flex flex-wrap gap-1">
+                      {checkResult.supplierIds.map(id => (
+                        <a key={id} href={`/crm/${id}`} className="underline text-blue-400 hover:text-blue-300">
+                          View contact →
+                        </a>
+                      ))}
+                    </span>
+                  )}
+                </>
+              ) : "✓ No new replies"}
             </span>
           )}
           {checkResult?.error && checkResult.error !== "NO_SMTP_CONNECTED" && (

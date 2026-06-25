@@ -58,9 +58,10 @@ export function ContactDetailClient({
 }) {
   const router = useRouter();
 
-  // Auto-refresh every 30s to pick up inbound replies
+  // Refresh immediately on mount + every 10s to pick up inbound replies
   useEffect(() => {
-    const id = setInterval(() => router.refresh(), 30_000);
+    router.refresh();
+    const id = setInterval(() => router.refresh(), 10_000);
     return () => clearInterval(id);
   }, [router]);
 
