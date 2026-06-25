@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/email";
 import { renderEmailHtml, injectTracking, EmailDoc } from "@/lib/email-builder";
 import { resolveMergeVarsForSupplier } from "@/lib/merge-variables";
 import { getUserSmtpConfig } from "@/lib/get-user-smtp";
+import { replyToAddress } from "@/lib/reply-token";
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://amz-os.vercel.app";
 
@@ -107,6 +108,7 @@ export async function sendCampaign(campaignId: string, supplierIds: string[]): P
         html: tracked,
         userSmtpConfig,
         requireSmtp: true,
+        replyTo: replyToAddress(user.id, s.id),
       });
       await prisma.emailRecipient.update({
         where: { id: recipient.id },

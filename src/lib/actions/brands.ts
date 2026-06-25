@@ -8,6 +8,7 @@ import { searchAmazonProducts, getOffersSummary } from "@/lib/amazon";
 import { draftBrandOutreachEmail } from "@/lib/openai";
 import { sendEmail } from "@/lib/email";
 import { getUserSmtpConfig } from "@/lib/get-user-smtp";
+import { replyToAddress } from "@/lib/reply-token";
 
 export async function lookupBrandOnAmazon(formData: FormData) {
   const query = String(formData.get("lookupQuery") ?? "").trim();
@@ -86,6 +87,16 @@ export async function sendBrandOutreachEmail(formData: FormData) {
     redirect(`/research/brands?lookupError=${encodeURIComponent("NO_SMTP_CONNECTED")}`);
   }
 
+  // Find or create a CRM supplier so reply-to routing works
+  let supplier = await prisma.supplier.findFirst({
+    where: { userId: user.id, email: { equals: contactEmail, mode: "insensitive" } },
+  });
+  if (!supplier) {
+    supplier = await prisma.supplier.create({
+      data: { userId: user.id, companyName: brand!.name, email: contactEmail, stage: "CONTACTED" },
+    });
+  }
+
   try {
     const draft = await draftBrandOutreachEmail({
       brandName: brand!.name,
@@ -99,6 +110,7 @@ export async function sendBrandOutreachEmail(formData: FormData) {
       html: draft.body.replace(/\n/g, "<br />"),
       userSmtpConfig,
       requireSmtp: true,
+      replyTo: replyToAddress(user.id, supplier.id),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Outreach email failed";

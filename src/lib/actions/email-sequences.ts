@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { sendEmail } from "@/lib/email";
 import { getUserSmtpConfig } from "@/lib/get-user-smtp";
+import { replyToAddress } from "@/lib/reply-token";
 import { renderEmailHtml, injectTracking, EmailDoc } from "@/lib/email-builder";
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://amz-os.vercel.app";
@@ -130,7 +131,7 @@ export async function processSequenceStep(sequenceId: string, stepIndex: number,
     const tracked = injectTracking(safeHtml, recipient.token, BASE_URL);
 
     try {
-      await sendEmail({ to: s.email, subject: step.subject, html: tracked, userSmtpConfig, requireSmtp: true });
+      await sendEmail({ to: s.email, subject: step.subject, html: tracked, userSmtpConfig, requireSmtp: true, replyTo: replyToAddress(userId, s.id) });
       await prisma.emailRecipient.update({ where: { id: recipient.id }, data: { status: "sent", sentAt: new Date() } });
 
       const nextStep = seq.steps[stepIndex + 1];

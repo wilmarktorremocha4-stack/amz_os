@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/currentUser";
 import { sendEmail } from "@/lib/email";
 import { getUserSmtpConfig } from "@/lib/get-user-smtp";
+import { replyToAddress } from "@/lib/reply-token";
 
 export async function addContactNote(supplierId: string, content: string) {
   await prisma.contactNote.create({
@@ -51,7 +52,7 @@ export async function sendContactEmail(
   const finalBody = substituteVars(body, vars);
 
   try {
-    await sendEmail({ to, subject: finalSubject, html: finalBody.replace(/\n/g, "<br>"), userSmtpConfig, requireSmtp: true });
+    await sendEmail({ to, subject: finalSubject, html: finalBody.replace(/\n/g, "<br>"), userSmtpConfig, requireSmtp: true, replyTo: replyToAddress(user.id, supplierId) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Send failed";
     return { success: false, error: msg };

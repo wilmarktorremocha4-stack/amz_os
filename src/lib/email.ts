@@ -51,11 +51,13 @@ export async function sendEmailViaUserSmtp({
   to,
   subject,
   html,
+  replyTo,
 }: {
   smtpConfig: UserSmtpConfig;
   to: string;
   subject: string;
   html: string;
+  replyTo?: string;
 }): Promise<void> {
   const password = decrypt(smtpConfig.smtpPassEncrypted);
 
@@ -84,6 +86,7 @@ export async function sendEmailViaUserSmtp({
     to,
     subject,
     html,
+    ...(replyTo ? { replyTo } : {}),
   });
 }
 
@@ -97,15 +100,17 @@ export async function sendEmail({
   html,
   userSmtpConfig,
   requireSmtp = false,
+  replyTo,
 }: {
   to: string;
   subject: string;
   html: string;
   userSmtpConfig?: UserSmtpConfig | null;
   requireSmtp?: boolean;
+  replyTo?: string;
 }): Promise<void> {
   if (userSmtpConfig) {
-    await sendEmailViaUserSmtp({ smtpConfig: userSmtpConfig, to, subject, html });
+    await sendEmailViaUserSmtp({ smtpConfig: userSmtpConfig, to, subject, html, replyTo });
   } else if (requireSmtp) {
     throw new Error("NO_SMTP_CONNECTED");
   } else {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Mail, Phone, Globe, Plus, X,
@@ -55,6 +56,14 @@ export function ContactDetailClient({
   emailTemplates: EmailTemplate[];
   customFieldFolders: CustomFieldFolder[];
 }) {
+  const router = useRouter();
+
+  // Auto-refresh every 30s to pick up inbound replies
+  useEffect(() => {
+    const id = setInterval(() => router.refresh(), 30_000);
+    return () => clearInterval(id);
+  }, [router]);
+
   const [stage, setStage] = useState(supplier.stage);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [hideEmptyFields, setHideEmptyFields] = useState(false);
