@@ -81,13 +81,23 @@ export async function sendEmailViaUserSmtp({
     ? `"${smtpConfig.smtpFromName}" <${smtpConfig.smtpUser}>`
     : smtpConfig.smtpUser;
 
-  await transporter.sendMail({
-    from: fromAddress,
-    to,
-    subject,
-    html,
-    ...(replyTo ? { replyTo } : {}),
-  });
+  try {
+    await transporter.sendMail({
+      from: fromAddress,
+      to,
+      subject,
+      html,
+      ...(replyTo ? { replyTo } : {}),
+    });
+  } catch (err) {
+    // Some providers (e.g. Yahoo) reject if Reply-To domain MX hasn't propagated.
+    // Retry once without replyTo so sending is never blocked.
+    if (replyTo) {
+      await transporter.sendMail({ from: fromAddress, to, subject, html });
+    } else {
+      throw err;
+    }
+  }
 }
 
 // ─── UNIFIED SEND ─────────────────────────────────────────────────────────────
