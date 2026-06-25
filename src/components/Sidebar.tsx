@@ -212,15 +212,20 @@ function SidebarContent({
   return (
     <div className={`flex h-full flex-col p-3 ${collapsed ? "items-center" : ""}`}>
       {/* Logo */}
-      <div className={`mb-5 flex items-center gap-2 px-1 ${collapsed ? "justify-center" : ""}`}>
+      <div className={`mb-5 flex flex-col items-center gap-1 pt-2`}>
         <Image
           src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a380e1e1c5d711b35ce5f63.png"
           alt="AMZ OS"
-          width={collapsed ? 36 : 180}
-          height={collapsed ? 36 : 60}
-          className={collapsed ? "h-9 w-9 object-contain" : "h-14 w-auto object-contain"}
+          width={collapsed ? 40 : 72}
+          height={collapsed ? 40 : 72}
+          className={collapsed ? "h-10 w-10 object-contain" : "h-18 w-18 object-contain"}
           unoptimized
         />
+        {!collapsed && (
+          <span className="text-sm font-bold tracking-widest bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent select-none">
+            AMZ OS
+          </span>
+        )}
       </div>
 
       <NavLinks />
