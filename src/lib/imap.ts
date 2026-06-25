@@ -6,24 +6,22 @@ export interface InboxMessage {
   messageId: string;
   inReplyTo: string | null;
   subject: string;
-  from: string;
+  fromName: string;
   fromEmail: string;
-  text: string;
-  html: string;
   date: Date;
 }
 
 function getImapHost(smtpHost: string): { host: string; port: number } {
   const map: Record<string, { host: string; port: number }> = {
-    "smtp.gmail.com":          { host: "imap.gmail.com",        port: 993 },
-    "smtp-mail.outlook.com":   { host: "outlook.office365.com", port: 993 },
-    "smtp.office365.com":      { host: "outlook.office365.com", port: 993 },
-    "smtp.mail.yahoo.com":     { host: "imap.mail.yahoo.com",   port: 993 },
-    "smtp.mail.me.com":        { host: "imap.mail.me.com",      port: 993 },
-    "smtp.zoho.com":           { host: "imap.zoho.com",         port: 993 },
-    "smtp.live.com":           { host: "imap-mail.outlook.com", port: 993 },
+    "smtp.gmail.com":         { host: "imap.gmail.com",        port: 993 },
+    "smtp-mail.outlook.com":  { host: "outlook.office365.com", port: 993 },
+    "smtp.office365.com":     { host: "outlook.office365.com", port: 993 },
+    "smtp.mail.yahoo.com":    { host: "imap.mail.yahoo.com",   port: 993 },
+    "smtp.mail.me.com":       { host: "imap.mail.me.com",      port: 993 },
+    "smtp.zoho.com":          { host: "imap.zoho.com",         port: 993 },
+    "smtp.live.com":          { host: "imap-mail.outlook.com", port: 993 },
   };
-  return map[smtpHost] ?? { host: smtpHost.replace("smtp.", "imap."), port: 993 };
+  return map[smtpHost] ?? { host: smtpHost.replace(/^smtp\./, "imap."), port: 993 };
 }
 
 export async function fetchRecentReplies(config: {
@@ -40,52 +38,45 @@ export async function fetchRecentReplies(config: {
     secure: true,
     auth: { user: config.smtpUser, pass: password },
     logger: false,
-    connectionTimeout: 10000,
+    connectionTimeout: 15000,
     greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 
-  const messages: InboxMessage[] = [];
-
   await client.connect();
+  const messages: InboxMessage[] = [];
 
   try {
     const lock = await client.getMailboxLock("INBOX");
-
     try {
       const since = new Date();
       since.setDate(since.getDate() - 30);
 
-      // search returns number[] | false
-      const result = await client.search({ since });
-      const uids: number[] = Array.isArray(result) ? result : [];
-      if (!uids.length) return messages;
+      // search() returns number[] | false in imapflow 1.x
+      const raw = await client.search({ since }, { uid: true });
+      const uids: number[] = Array.isArray(raw) ? raw.slice(-200) : [];
 
-      // Only process last 100 to stay within Vercel limits
-      const recent = uids.slice(-100);
-      const range = recent.join(",");
+      if (uids.length === 0) return messages;
 
-      for await (const msg of client.fetch(range, {
-        uid: true,
-        envelope: true,
-        bodyStructure: true,
-      })) {
-        const from = msg.envelope?.from?.[0];
-        if (!from) continue;
+      // Build UID range string e.g. "101,102,103" or use * for all
+      const range = uids.join(",");
 
-        const fromEmail = (from as { address?: string }).address ?? "";
-        const fromName = (from as { name?: string }).name
-          ? `${(from as { name?: string }).name} <${fromEmail}>`
-          : fromEmail;
+      for await (const msg of client.fetch(range, { uid: true, envelope: true }, { uid: true })) {
+        const fromAddr = msg.envelope?.from?.[0];
+        if (!fromAddr) continue;
+
+        const fromEmail = (fromAddr as { address?: string }).address ?? "";
+        if (!fromEmail) continue;
+
+        const fromName = (fromAddr as { name?: string }).name ?? fromEmail;
 
         messages.push({
-          uid: msg.uid,
-          messageId: msg.envelope?.messageId ?? `${msg.uid}`,
-          inReplyTo: (msg.envelope as { inReplyTo?: string }).inReplyTo ?? null,
+          uid: msg.uid ?? 0,
+          messageId: msg.envelope?.messageId ?? String(msg.uid),
+          inReplyTo: (msg.envelope as unknown as { inReplyTo?: string }).inReplyTo ?? null,
           subject: msg.envelope?.subject ?? "(no subject)",
-          from: fromName,
-          fromEmail,
-          text: "",
-          html: "",
+          fromName: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
+          fromEmail: fromEmail.toLowerCase(),
           date: msg.envelope?.date ?? new Date(),
         });
       }

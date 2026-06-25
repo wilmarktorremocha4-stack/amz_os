@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { saveSmtpSettings, testSmtpConnection, disconnectSmtp } from "@/lib/actions/smtp-settings";
-import { Mail, CheckCircle2, AlertCircle, Loader2, ExternalLink, X } from "lucide-react";
+import { manualCheckInbox } from "@/lib/actions/fetch-replies";
+import { Mail, CheckCircle2, AlertCircle, Loader2, ExternalLink, X, RefreshCw } from "lucide-react";
 
 interface Props {
   initialStatus: {
@@ -34,6 +36,8 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
   const [isPending, startTransition] = useTransition();
   const [isTesting, setIsTesting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [checkResult, setCheckResult] = useState<{ imported: number; error?: string } | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
 
   function selectProvider(label: string) {
     const p = PROVIDERS.find(x => x.label === label)!;
@@ -104,6 +108,34 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
             </p>
           </div>
         </div>
+        {/* Manual inbox check */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              setIsChecking(true);
+              setCheckResult(null);
+              const r = await manualCheckInbox();
+              setCheckResult(r);
+              setIsChecking(false);
+            }}
+            disabled={isChecking}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)] transition disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={isChecking ? "animate-spin" : ""} />
+            {isChecking ? "Checking inbox…" : "Check inbox for replies"}
+          </button>
+          {checkResult && !checkResult.error && (
+            <span className="text-xs text-emerald-400">
+              {checkResult.imported > 0
+                ? `✓ ${checkResult.imported} new ${checkResult.imported === 1 ? "reply" : "replies"} imported`
+                : "✓ No new replies"}
+            </span>
+          )}
+          {checkResult?.error && checkResult.error !== "NO_SMTP_CONNECTED" && (
+            <span className="text-xs text-red-400">⚠ {checkResult.error}</span>
+          )}
+        </div>
+
         {confirmDisconnect ? (
           <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             <AlertCircle size={15} className="shrink-0" />
