@@ -3,33 +3,44 @@ import { prisma } from "@/lib/prisma";
 import { parseReplyToken } from "@/lib/reply-token";
 import crypto from "crypto";
 
-// Resend inbound webhook — fires when a brand replies to reply+{token}@<domain>
+// Parse "Name <email@domain.com>" or plain "email@domain.com"
+function parseEmailAddress(raw: string): { email: string; name: string } {
+  const match = raw.match(/^(.*?)\s*<([^>]+)>$/);
+  if (match) return { name: match[1].trim().replace(/^"|"$/g, ""), email: match[2].toLowerCase() };
+  return { name: raw.toLowerCase(), email: raw.toLowerCase() };
+}
+
+// Resend inbound webhook payload shape:
+// { type: "email.received", created_at: "...", data: { from, to: string[], subject, message_id, ... } }
 export async function POST(req: Request) {
-  let payload: Record<string, unknown>;
+  let payload: { type?: string; data?: Record<string, unknown> };
   try {
     payload = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Extract "To" address from Resend inbound payload
-  // Resend sends: { to: [{email, name}], from: {email, name}, subject, text, html, ... }
-  const toList = (payload.to as { email: string }[] | undefined) ?? [];
-  const fromObj = payload.from as { email?: string; name?: string } | undefined;
-  const subject = (payload.subject as string | undefined) ?? "(no subject)";
-  const fromEmail = (fromObj?.email ?? "").toLowerCase();
-  const fromName = fromObj?.name ?? fromEmail;
-  const messageId = (payload.message_id as string | undefined) ?? crypto.randomBytes(8).toString("hex");
+  if (payload.type !== "email.received") {
+    return NextResponse.json({ ok: true, skipped: "not email.received" });
+  }
+
+  const data = payload.data ?? {};
+  const toList = (data.to as string[] | undefined) ?? [];
+  const fromRaw = (data.from as string | undefined) ?? "";
+  const subject = (data.subject as string | undefined) ?? "(no subject)";
+  const messageId = (data.message_id as string | undefined) ?? crypto.randomBytes(8).toString("hex");
+
+  const { email: fromEmail, name: fromName } = parseEmailAddress(fromRaw);
 
   // Find the reply+ token in the To list
   let token: string | null = null;
   for (const addr of toList) {
-    const match = addr.email.match(/^reply\+([A-Za-z0-9_-]+)@/);
+    const match = addr.match(/^reply\+([A-Za-z0-9_-]+)@/);
     if (match) { token = match[1]; break; }
   }
 
   if (!token) {
-    return NextResponse.json({ ok: true, skipped: "no reply token" });
+    return NextResponse.json({ ok: true, skipped: "no reply token in To" });
   }
 
   const parsed = parseReplyToken(token);
@@ -55,7 +66,7 @@ export async function POST(req: Request) {
         supplierId,
         type: "email_received",
         subject,
-        content: `From: ${fromName} <${fromEmail}>\n\n${(payload.text as string | undefined) ?? "(view in your inbox for full message)"}`,
+        content: `From: ${fromName} <${fromEmail}>`,
       },
     });
   }
