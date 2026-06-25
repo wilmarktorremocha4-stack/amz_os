@@ -718,9 +718,6 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
       <div className="flex items-end justify-end gap-2">
         <div className="relative flex flex-col items-end gap-0.5 max-w-[55%]">
           <div className="rounded-2xl rounded-tr-sm bg-blue-600 px-3.5 py-2.5 text-white shadow-sm">
-            {item.subject && (
-              <div className="mb-1 text-[10px] font-semibold text-blue-200 truncate">{item.subject}</div>
-            )}
             <div className="text-xs whitespace-pre-wrap leading-relaxed">{cleanContent}</div>
           </div>
           <div className="flex items-center gap-1.5 pr-1">
@@ -749,9 +746,6 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
         </div>
         <div className="relative flex flex-col items-start gap-0.5 max-w-[55%]">
           <div className="rounded-2xl rounded-tl-sm bg-[var(--surface)] border border-[var(--border)] px-3.5 py-2.5 shadow-sm">
-            {item.subject && (
-              <div className="mb-1 text-[10px] font-semibold text-[var(--muted)] truncate">{item.subject}</div>
-            )}
             <div className="text-xs whitespace-pre-wrap leading-relaxed text-[var(--foreground)]">{cleanContent}</div>
           </div>
           <div className="flex items-center gap-1.5 pl-1">

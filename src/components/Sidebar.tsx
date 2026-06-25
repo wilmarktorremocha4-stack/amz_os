@@ -212,17 +212,18 @@ function SidebarContent({
   return (
     <div className={`flex h-full flex-col p-3 ${collapsed ? "items-center" : ""}`}>
       {/* Logo */}
-      <div className={`mb-5 flex flex-col items-center gap-1 pt-2`}>
+      <div className={`mb-5 flex flex-col items-center gap-1.5 pt-2`}>
         <Image
           src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a380e1e1c5d711b35ce5f63.png"
           alt="AMZ OS"
-          width={collapsed ? 40 : 72}
-          height={collapsed ? 40 : 72}
-          className={collapsed ? "h-10 w-10 object-contain" : "h-18 w-18 object-contain"}
+          width={collapsed ? 40 : 80}
+          height={collapsed ? 40 : 80}
+          className={collapsed ? "h-10 w-10 object-contain" : "h-20 w-20 object-contain"}
+          style={{ mixBlendMode: "screen" }}
           unoptimized
         />
         {!collapsed && (
-          <span className="text-sm font-bold tracking-widest bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent select-none">
+          <span className="text-xl font-extrabold tracking-widest bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent select-none">
             AMZ OS
           </span>
         )}
