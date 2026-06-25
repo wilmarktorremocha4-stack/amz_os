@@ -668,30 +668,30 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowDetails(false)}>
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
       <div
-        className="relative w-80 rounded-2xl border border-[var(--border)] bg-[var(--bg)] shadow-2xl p-5 text-sm"
+        className="relative w-80 rounded-2xl border border-gray-200 bg-white shadow-2xl p-5 text-sm"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <span className="font-semibold text-base text-[var(--foreground)]">Message Details</span>
-          <button onClick={() => setShowDetails(false)} className="text-[var(--muted)] hover:text-[var(--foreground)] transition text-lg leading-none">×</button>
+          <span className="font-semibold text-base text-gray-900">Message Details</span>
+          <button onClick={() => setShowDetails(false)} className="text-gray-400 hover:text-gray-700 transition text-lg leading-none">×</button>
         </div>
-        <div className="flex flex-col gap-3 text-[var(--muted)]">
+        <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-widest font-semibold text-[var(--muted)]">From</span>
-            <span className="text-[var(--foreground)] font-medium">{isSent ? "Me" : item.subject ?? "Brand"}</span>
+            <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">From</span>
+            <span className="text-gray-900 font-medium">{isSent ? "Me" : item.subject ?? "Brand"}</span>
           </div>
           {item.subject && (
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] uppercase tracking-widest font-semibold text-[var(--muted)]">Subject</span>
-              <span className="text-[var(--foreground)]">{item.subject}</span>
+              <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">Subject</span>
+              <span className="text-gray-800">{item.subject}</span>
             </div>
           )}
           <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-widest font-semibold text-[var(--muted)]">Direction</span>
-            <span className="text-[var(--foreground)]">{isSent ? "↑ Outbound (Email)" : "↓ Inbound (Email)"}</span>
+            <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">Direction</span>
+            <span className="text-gray-800">{isSent ? "↑ Outbound (Email)" : "↓ Inbound (Email)"}</span>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-widest font-semibold text-[var(--muted)]">Date</span>
-            <span className="text-[var(--foreground)]">{date}</span>
+            <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">Date</span>
+            <span className="text-gray-800">{date}</span>
           </div>
         </div>
       </div>
