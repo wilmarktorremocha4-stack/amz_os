@@ -664,15 +664,36 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
   });
   const cleanContent = (isSent || isReceived) ? stripQuoted(item.content) : item.content;
 
-  const DetailsPopover = () => (
-    <div className="absolute z-50 mt-1 w-56 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-lg p-3 text-xs"
-      style={{ [isSent ? "right" : "left"]: 0, top: "100%" }}>
-      <div className="font-semibold text-[var(--foreground)] mb-2">Message Details</div>
-      <div className="flex flex-col gap-1.5 text-[var(--muted)]">
-        <div><span className="font-medium text-[var(--foreground)]">Type:</span> {isSent ? "Email Sent" : "Email Received"}</div>
-        {item.subject && <div><span className="font-medium text-[var(--foreground)]">Subject:</span> {item.subject}</div>}
-        <div><span className="font-medium text-[var(--foreground)]">Date:</span> {date}</div>
-        <div><span className="font-medium text-[var(--foreground)]">Direction:</span> {isSent ? "Outbound" : "Inbound"}</div>
+  const DetailsModal = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowDetails(false)}>
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
+      <div
+        className="relative w-80 rounded-2xl border border-[var(--border)] bg-[var(--bg)] shadow-2xl p-5 text-sm"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-semibold text-base text-[var(--foreground)]">Message Details</span>
+          <button onClick={() => setShowDetails(false)} className="text-[var(--muted)] hover:text-[var(--foreground)] transition text-lg leading-none">×</button>
+        </div>
+        <div className="flex flex-col gap-3 text-[var(--muted)]">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-widest font-semibold text-[var(--muted)]">From</span>
+            <span className="text-[var(--foreground)] font-medium">{isSent ? "Me" : item.subject ?? "Brand"}</span>
+          </div>
+          {item.subject && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] uppercase tracking-widest font-semibold text-[var(--muted)]">Subject</span>
+              <span className="text-[var(--foreground)]">{item.subject}</span>
+            </div>
+          )}
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-widest font-semibold text-[var(--muted)]">Direction</span>
+            <span className="text-[var(--foreground)]">{isSent ? "↑ Outbound (Email)" : "↓ Inbound (Email)"}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-widest font-semibold text-[var(--muted)]">Date</span>
+            <span className="text-[var(--foreground)]">{date}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -708,10 +729,10 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
               onClick={() => setShowDetails(v => !v)}
               className="text-[var(--muted)] hover:text-[var(--foreground)] transition"
               title="Message details">
-              <span className="text-[13px] font-bold leading-none">⋯</span>
+              <span className="text-[15px] font-bold leading-none">⋮</span>
             </button>
           </div>
-          {showDetails && <DetailsPopover />}
+          {showDetails && <DetailsModal />}
         </div>
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow">
           Me
@@ -738,11 +759,11 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
               onClick={() => setShowDetails(v => !v)}
               className="text-[var(--muted)] hover:text-[var(--foreground)] transition"
               title="Message details">
-              <span className="text-[13px] font-bold leading-none">⋯</span>
+              <span className="text-[15px] font-bold leading-none">⋮</span>
             </button>
             <span className="text-[10px] text-[var(--muted)]">{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
           </div>
-          {showDetails && <DetailsPopover />}
+          {showDetails && <DetailsModal />}
         </div>
       </div>
     );
