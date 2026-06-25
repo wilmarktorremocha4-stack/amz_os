@@ -221,9 +221,9 @@ function SidebarContent({
           <Image
             src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a3427f3671890ccaac6cf63.png"
             alt="AMZ OS"
-            width={140}
-            height={56}
-            className="h-12 w-auto object-contain"
+            width={200}
+            height={80}
+            className="h-16 w-auto object-contain"
             unoptimized
           />
         )}
