@@ -555,16 +555,16 @@ function ConversationPane({
               ))}
             </p>
             {emailError === "NO_SMTP_CONNECTED" && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+              <div className="rounded-lg border border-amber-400 bg-amber-400/20 px-3 py-2 text-xs font-medium text-amber-200">
                 ⚠ No email account connected.{" "}
-                <Link href="/settings" className="underline font-medium hover:text-white">
+                <Link href="/settings" className="underline font-semibold text-white hover:text-amber-100">
                   Connect your email in Settings →
                 </Link>
               </div>
             )}
             {emailError && emailError !== "NO_SMTP_CONNECTED" && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                Failed to send: {emailError}
+              <div className="rounded-lg border border-red-400 bg-red-500/20 px-3 py-2 text-xs font-medium text-red-200">
+                ⚠ Failed to send: {emailError}
               </div>
             )}
             <div className="flex items-center justify-between">
@@ -656,12 +656,14 @@ function ActivityPane({
 
   for (const n of [...notes].reverse()) {
     items.push({
-      icon: n.type === "email_sent" ? <Mail size={12} /> : <StickyNote size={12} />,
+      icon: n.type === "email_sent" ? <Mail size={12} /> : n.type === "email_received" ? <Mail size={12} /> : <StickyNote size={12} />,
       text: n.type === "email_sent"
         ? `Email sent${n.subject ? `: "${n.subject}"` : ""}`
+        : n.type === "email_received"
+        ? `Reply received${n.subject ? `: "${n.subject}"` : ""}`
         : `Note added`,
       date: new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      color: n.type === "email_sent" ? "bg-blue-500/15 text-blue-400" : "bg-amber-500/15 text-amber-400",
+      color: n.type === "email_sent" ? "bg-blue-500/15 text-blue-400" : n.type === "email_received" ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400",
     });
   }
 

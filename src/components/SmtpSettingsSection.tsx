@@ -33,6 +33,7 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isTesting, setIsTesting] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   function selectProvider(label: string) {
     const p = PROVIDERS.find(x => x.label === label)!;
@@ -69,6 +70,7 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
   }
 
   async function handleDisconnect() {
+    setConfirmDisconnect(false);
     startTransition(async () => {
       await disconnectSmtp();
       setStatus(null);
@@ -102,13 +104,35 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
             </p>
           </div>
         </div>
-        <button
-          onClick={handleDisconnect}
-          disabled={isPending}
-          className="flex w-fit items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition"
-        >
-          <X size={13} /> Disconnect
-        </button>
+        {confirmDisconnect ? (
+          <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <AlertCircle size={15} className="shrink-0" />
+            <span>Are you sure? Outreach emails will stop working until you reconnect.</span>
+            <div className="ml-auto flex gap-2">
+              <button
+                onClick={handleDisconnect}
+                disabled={isPending}
+                className="rounded-lg bg-red-500 px-3 py-1 text-xs font-semibold text-white hover:bg-red-600 transition disabled:opacity-50"
+              >
+                Yes, disconnect
+              </button>
+              <button
+                onClick={() => setConfirmDisconnect(false)}
+                className="rounded-lg border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDisconnect(true)}
+            disabled={isPending}
+            className="flex w-fit items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition"
+          >
+            <X size={13} /> Disconnect
+          </button>
+        )}
       </section>
     );
   }
@@ -219,6 +243,7 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@gmail.com"
                 type="email"
+                autoComplete="off"
                 className={inputCls}
               />
             </div>
@@ -239,8 +264,9 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
             <input
               value={appPassword}
               onChange={e => setAppPassword(e.target.value)}
-              placeholder={provider === "Gmail" ? "xxxx xxxx xxxx xxxx" : "Your password"}
+              placeholder={provider === "Gmail" ? "xxxx xxxx xxxx xxxx" : "Your app/email password"}
               type="password"
+              autoComplete="new-password"
               className={inputCls}
             />
           </div>
@@ -266,8 +292,8 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
             : "border-red-500/30 bg-red-500/5 text-red-400"
         }`}>
           {testResult.success
-            ? <><CheckCircle2 size={15} className="mt-0.5 shrink-0" /> Connection verified! Check your inbox for a test email.</>
-            : <><AlertCircle size={15} className="mt-0.5 shrink-0" /> <span>Failed: {testResult.error}. Double-check your App Password and make sure 2FA is enabled.</span></>
+            ? <><CheckCircle2 size={15} className="mt-0.5 shrink-0" /> Email connected! A verification email was sent to your inbox.</>
+            : <><AlertCircle size={15} className="mt-0.5 shrink-0" /> <span>Failed: {testResult.error}</span></>
           }
         </div>
       )}
@@ -278,13 +304,12 @@ export function SmtpSettingsSection({ initialStatus }: Props) {
         className="btn-primary flex w-fit items-center gap-2 disabled:opacity-40"
       >
         {isTesting || isPending
-          ? <><Loader2 size={14} className="animate-spin" /> Connecting &amp; sending test email…</>
+          ? <><Loader2 size={14} className="animate-spin" /> Connecting…</>
           : <><Mail size={14} /> Connect &amp; verify</>
         }
       </button>
       <p className="text-[11px] text-[var(--muted)]">
-        A test email will be sent to your own address to confirm the connection works.
-        Your password is encrypted before being stored.
+        A verification email will be sent to your address to confirm the connection. Your password is encrypted before being stored.
       </p>
     </section>
   );

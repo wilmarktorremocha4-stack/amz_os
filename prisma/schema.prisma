@@ -70,6 +70,7 @@ model User {
   workflows          Workflow[]
   aiConversations    AiConversation[]
   aiUsageLogs        AiUsageLog[]
+  importedEmails     ImportedEmail[]
 }
 
 // --- CRM: Wholesale supplier/brand pipeline ---
@@ -595,4 +596,17 @@ model LoginAttempt {
 
   @@index([ip, createdAt])
   @@index([email, createdAt])
+}
+
+model ImportedEmail {
+  id         String    @id @default(cuid())
+  hash       String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromEmail  String
+  subject    String
+  supplierId String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, createdAt])
 }

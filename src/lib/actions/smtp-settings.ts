@@ -106,7 +106,7 @@ export async function testSmtpConnection(): Promise<{ success: boolean; error?: 
           <h2 style="color:#0E90C8">Your email is connected!</h2>
           <p>Outreach emails from AMZ OS will be sent from
           <strong>${dbUser.smtpUser}</strong>.</p>
-          <p style="color:#64748B;font-size:13px">This is an automated test message.</p>
+          <p style="color:#64748B;font-size:13px">This is an automated verification message. No action needed.</p>
         </div>
       `,
     });
