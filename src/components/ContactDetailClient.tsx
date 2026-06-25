@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Mail, Phone, Globe, Plus, X,
   ExternalLink, Send, StickyNote,
-  Check, Pencil,
+  Check, Pencil, Reply, ChevronDown, ChevronUp, MoreVertical,
 } from "lucide-react";
 import { updateSupplierStage, updateContactDetails } from "@/lib/actions/suppliers";
 import { addTagToContact, removeTagFromContact } from "@/lib/actions/tags";
@@ -464,6 +464,17 @@ function ConversationPane({
   const [emailPending, startEmailTransition] = useTransition();
   const [sent, setSent] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+
+  function handleReply(replySubject: string) {
+    // Strip leading "Re: " to avoid "Re: Re:"
+    const stripped = replySubject.replace(/^(Re:\s*)+/i, "");
+    setTab("email");
+    setSubject("Re: " + stripped);
+    setBody("");
+    setSelectedTemplate("");
+    setTimeout(() => composerRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+  }
 
   function applyTemplate(id: string) {
     const tmpl = emailTemplates.find((t) => t.id === id);
@@ -523,7 +534,13 @@ function ConversationPane({
         ) : (
           <div className="flex flex-col gap-3">
             {timeline.map((item) => (
-              <TimelineItem key={item.id} item={item} supplierInitials={getInitials(supplierName)} />
+              <TimelineItem
+                key={item.id}
+                item={item}
+                supplierInitials={getInitials(supplierName)}
+                supplierEmail={supplierEmail}
+                onReply={handleReply}
+              />
             ))}
             <div ref={bottomRef} />
           </div>
@@ -531,7 +548,7 @@ function ConversationPane({
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] p-4">
+      <div ref={composerRef} className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] p-4">
         {/* Tab switcher */}
         <div className="mb-3 flex gap-1 rounded-xl bg-[var(--bg)] p-1 w-fit">
           <button
@@ -653,14 +670,28 @@ function stripQuoted(text: string): string {
   return clean.join("\n").trim();
 }
 
-function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierInitials: string }) {
+function TimelineItem({
+  item,
+  supplierInitials,
+  supplierEmail,
+  onReply,
+}: {
+  item: ContactNote;
+  supplierInitials: string;
+  supplierEmail: string | null;
+  onReply: (subject: string) => void;
+}) {
   const [showDetails, setShowDetails] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const isSent = item.type === "email_sent";
   const isReceived = item.type === "email_received";
   const isNote = item.type === "note";
   const date = new Date(item.createdAt).toLocaleString("en-US", {
     month: "short", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit",
+  });
+  const shortDate = new Date(item.createdAt).toLocaleString("en-US", {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
   const cleanContent = (isSent || isReceived) ? stripQuoted(item.content) : item.content;
 
@@ -677,7 +708,7 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-0.5">
             <span className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">From</span>
-            <span className="text-gray-900 font-medium">{isSent ? "Me" : item.subject ?? "Brand"}</span>
+            <span className="text-gray-900 font-medium">{isSent ? "Me" : supplierInitials}</span>
           </div>
           {item.subject && (
             <div className="flex flex-col gap-0.5">
@@ -713,52 +744,82 @@ function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierI
     );
   }
 
-  if (isSent) {
-    return (
-      <div className="flex items-end justify-end gap-2">
-        <div className="relative flex flex-col items-end gap-0.5 max-w-[55%]">
-          <div className="rounded-2xl rounded-tr-sm bg-blue-600 px-3.5 py-2.5 text-white shadow-sm">
-            <div className="text-xs whitespace-pre-wrap leading-relaxed">{cleanContent}</div>
-          </div>
-          <div className="flex items-center gap-1.5 pr-1">
-            <span className="text-[10px] text-[var(--muted)]">{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
-            <button
-              onClick={() => setShowDetails(v => !v)}
-              className="text-[var(--muted)] hover:text-[var(--foreground)] transition"
-              title="Message details">
-              <span className="text-[15px] font-bold leading-none">⋮</span>
-            </button>
-          </div>
-          {showDetails && <DetailsModal />}
-        </div>
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow">
-          Me
-        </div>
-      </div>
-    );
-  }
+  if (isSent || isReceived) {
+    const senderName = isSent ? "Me" : supplierInitials;
+    const toLine = isSent ? supplierEmail : "me";
+    const previewText = item.subject ?? cleanContent.slice(0, 80);
 
-  if (isReceived) {
     return (
-      <div className="flex items-end gap-2">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow">
-          {supplierInitials}
-        </div>
-        <div className="relative flex flex-col items-start gap-0.5 max-w-[55%]">
-          <div className="rounded-2xl rounded-tl-sm bg-[var(--surface)] border border-[var(--border)] px-3.5 py-2.5 shadow-sm">
-            <div className="text-xs whitespace-pre-wrap leading-relaxed text-[var(--foreground)]">{cleanContent}</div>
+      <div className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm overflow-hidden">
+        {/* Card header — always visible, click to expand */}
+        <div
+          className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-[var(--accent-soft)]/30 transition-colors"
+          onClick={() => setExpanded(v => !v)}
+        >
+          {/* Avatar */}
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow ${isSent ? "bg-blue-600" : "bg-blue-500"}`}>
+            {senderName}
           </div>
-          <div className="flex items-center gap-1.5 pl-1">
+
+          {/* Middle: sender + To line + preview */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs font-semibold text-[var(--foreground)]">{senderName}</span>
+              {toLine && (
+                <span className="text-[10px] text-[var(--muted)] truncate">To: {toLine}</span>
+              )}
+            </div>
+            {!expanded && (
+              <div className="mt-0.5 text-xs text-[var(--muted)] truncate">{previewText}</div>
+            )}
+            {expanded && item.subject && (
+              <div className="mt-0.5 text-xs font-medium text-[var(--foreground)] truncate">{item.subject}</div>
+            )}
+          </div>
+
+          {/* Right: timestamp + reply + dots + chevron */}
+          <div className="flex items-center gap-1.5 shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+            <span className="text-[10px] text-[var(--muted)] whitespace-nowrap">{shortDate}</span>
+            <button
+              onClick={() => onReply(item.subject ?? "")}
+              className="flex items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] text-[var(--muted)] hover:text-blue-400 hover:bg-blue-500/10 transition"
+              title="Reply">
+              <Reply size={11} />
+              <span>Reply</span>
+            </button>
             <button
               onClick={() => setShowDetails(v => !v)}
-              className="text-[var(--muted)] hover:text-[var(--foreground)] transition"
-              title="Message details">
-              <span className="text-[15px] font-bold leading-none">⋮</span>
+              className="rounded-md p-1 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition"
+              title="Details">
+              <MoreVertical size={13} />
             </button>
-            <span className="text-[10px] text-[var(--muted)]">{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="rounded-md p-1 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition"
+              title={expanded ? "Collapse" : "Expand"}>
+              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
           </div>
-          {showDetails && <DetailsModal />}
         </div>
+
+        {/* Expanded body */}
+        {expanded && (
+          <>
+            <div className="border-t border-[var(--border)] px-4 py-4">
+              <div className="whitespace-pre-wrap text-sm text-[var(--foreground)] leading-relaxed">{cleanContent}</div>
+            </div>
+            <div className="border-t border-[var(--border)] px-4 py-2 flex justify-end">
+              <button
+                onClick={() => onReply(item.subject ?? "")}
+                className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs text-[var(--foreground)] hover:border-blue-400 hover:text-blue-400 transition">
+                <Reply size={12} />
+                Reply
+              </button>
+            </div>
+          </>
+        )}
+
+        {showDetails && <DetailsModal />}
       </div>
     );
   }
