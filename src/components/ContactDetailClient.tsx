@@ -333,6 +333,7 @@ export function ContactDetailClient({
           <ConversationPane
             supplierId={supplier.id}
             supplierEmail={supplier.email}
+            supplierName={supplier.companyName}
             notes={contactNotes}
             emailTemplates={emailTemplates}
           />
@@ -445,11 +446,13 @@ function OpportunitiesSection({
 function ConversationPane({
   supplierId,
   supplierEmail,
+  supplierName,
   notes,
   emailTemplates,
 }: {
   supplierId: string;
   supplierEmail: string | null;
+  supplierName: string;
   notes: ContactNote[];
   emailTemplates: EmailTemplate[];
 }) {
@@ -520,7 +523,7 @@ function ConversationPane({
         ) : (
           <div className="flex flex-col gap-3">
             {timeline.map((item) => (
-              <TimelineItem key={item.id} item={item} />
+              <TimelineItem key={item.id} item={item} supplierInitials={getInitials(supplierName)} />
             ))}
             <div ref={bottomRef} />
           </div>
@@ -638,7 +641,7 @@ function ConversationPane({
   );
 }
 
-function TimelineItem({ item }: { item: ContactNote }) {
+function TimelineItem({ item, supplierInitials }: { item: ContactNote; supplierInitials: string }) {
   const isSent = item.type === "email_sent";
   const isReceived = item.type === "email_received";
   const isNote = item.type === "note";
@@ -684,8 +687,8 @@ function TimelineItem({ item }: { item: ContactNote }) {
   if (isReceived) {
     return (
       <div className="flex items-end gap-2">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white shadow">
-          B
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow">
+          {supplierInitials}
         </div>
         <div className="flex flex-col items-start gap-1 max-w-[55%]">
           <div className="rounded-2xl rounded-tl-sm bg-[var(--surface)] border border-[var(--border)] px-3.5 py-2.5 shadow-sm">
