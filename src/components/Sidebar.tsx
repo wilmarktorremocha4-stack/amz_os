@@ -213,20 +213,14 @@ function SidebarContent({
     <div className={`flex h-full flex-col p-3 ${collapsed ? "items-center" : ""}`}>
       {/* Logo */}
       <div className={`mb-5 flex items-center gap-2 px-1 ${collapsed ? "justify-center" : ""}`}>
-        {collapsed ? (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/30">
-            <Boxes size={18} />
-          </div>
-        ) : (
-          <Image
-            src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a3427f3671890ccaac6cf63.png"
-            alt="AMZ OS"
-            width={200}
-            height={80}
-            className="h-16 w-auto object-contain"
-            unoptimized
-          />
-        )}
+        <Image
+          src="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a380e1e1c5d711b35ce5f63.png"
+          alt="AMZ OS"
+          width={collapsed ? 36 : 180}
+          height={collapsed ? 36 : 60}
+          className={collapsed ? "h-9 w-9 object-contain" : "h-14 w-auto object-contain"}
+          unoptimized
+        />
       </div>
 
       <NavLinks />
