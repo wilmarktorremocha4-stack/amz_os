@@ -7,6 +7,8 @@ import {
   ArrowLeft, Mail, Phone, Globe, Plus, X,
   ExternalLink, Send, StickyNote,
   Check, Pencil, Reply, ChevronDown, ChevronUp, MoreVertical,
+  Smile, Paperclip, Image, Trash2, Bold, Italic, Underline,
+  List, Link2, Type, Braces,
 } from "lucide-react";
 import { updateSupplierStage, updateContactDetails } from "@/lib/actions/suppliers";
 import { addTagToContact, removeTagFromContact } from "@/lib/actions/tags";
@@ -459,6 +461,11 @@ function ConversationPane({
   const [tab, setTab] = useState<"email" | "note">("email");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
+  const [showSendMenu, setShowSendMenu] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [notePending, startNoteTransition] = useTransition();
   const [emailPending, startEmailTransition] = useTransition();
@@ -548,101 +555,208 @@ function ConversationPane({
       </div>
 
       {/* Composer */}
-      <div ref={composerRef} className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] p-4">
+      <div ref={composerRef} className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)]">
         {/* Tab switcher */}
-        <div className="mb-3 flex gap-1 rounded-xl bg-[var(--bg)] p-1 w-fit">
+        <div className="flex gap-0 border-b border-[var(--border)]">
           <button
             onClick={() => { setTab("email"); setBody(""); setSubject(""); }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition ${
               tab === "email"
-                ? "bg-[var(--surface)] text-[var(--foreground)] shadow-sm"
-                : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                ? "border-blue-500 text-blue-500"
+                : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
             }`}>
             <Mail size={12} /> Email
           </button>
           <button
             onClick={() => { setTab("note"); setBody(""); }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition ${
               tab === "note"
-                ? "bg-[var(--surface)] text-[var(--foreground)] shadow-sm"
-                : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                ? "border-blue-500 text-blue-500"
+                : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
             }`}>
             <StickyNote size={12} /> Note
           </button>
         </div>
 
         {tab === "email" ? (
-          <div className="flex flex-col gap-2">
-            {emailTemplates.length > 0 && (
-              <select
-                value={selectedTemplate}
-                onChange={(e) => applyTemplate(e.target.value)}
-                className="input w-full bg-[var(--bg)] text-xs">
-                <option value="">Use a template…</option>
-                {emailTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
+          <div className="flex flex-col">
+            {/* To row */}
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)]">
+              <span className="text-xs text-[var(--muted)] shrink-0 w-10">To</span>
+              <div className="flex-1 flex items-center gap-1.5">
+                {supplierEmail ? (
+                  <span className="flex items-center gap-1 rounded-md bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-xs font-medium text-blue-400">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[8px] font-bold text-white">
+                      {getInitials(supplierName)[0] ?? "?"}
+                    </span>
+                    {supplierEmail}
+                  </span>
+                ) : (
+                  <span className="text-xs text-[var(--muted)] italic">No email on this contact</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0 ml-auto">
+                {emailTemplates.length > 0 && (
+                  <select
+                    value={selectedTemplate}
+                    onChange={(e) => applyTemplate(e.target.value)}
+                    className="text-[10px] text-[var(--muted)] bg-transparent border-none outline-none cursor-pointer">
+                    <option value="">Template…</option>
+                    {emailTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  onClick={() => setShowCc(v => !v)}
+                  className={`text-[10px] font-medium transition ${showCc ? "text-blue-400" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
+                  CC
+                </button>
+                <button
+                  onClick={() => setShowBcc(v => !v)}
+                  className={`text-[10px] font-medium transition ${showBcc ? "text-blue-400" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}>
+                  BCC
+                </button>
+              </div>
+            </div>
+
+            {/* CC row */}
+            {showCc && (
+              <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)]">
+                <span className="text-xs text-[var(--muted)] shrink-0 w-10">CC</span>
+                <input
+                  value={cc}
+                  onChange={e => setCc(e.target.value)}
+                  placeholder="Add CC recipients…"
+                  className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]"
+                />
+              </div>
             )}
-            <input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Subject"
-              className="input w-full text-xs"
-            />
+
+            {/* BCC row */}
+            {showBcc && (
+              <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)]">
+                <span className="text-xs text-[var(--muted)] shrink-0 w-10">BCC</span>
+                <input
+                  value={bcc}
+                  onChange={e => setBcc(e.target.value)}
+                  placeholder="Add BCC recipients…"
+                  className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]"
+                />
+              </div>
+            )}
+
+            {/* Subject row */}
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)]">
+              <span className="text-xs text-[var(--muted)] shrink-0 w-10">Subject</span>
+              <input
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Add a subject…"
+                className="flex-1 bg-transparent text-xs outline-none text-[var(--foreground)] placeholder:text-[var(--muted)]"
+              />
+            </div>
+
+            {/* Body */}
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              rows={4}
-              placeholder={supplierEmail ? `Write your email to ${supplierEmail}…` : "No email address on this contact."}
+              rows={5}
+              placeholder="Type a message…"
               disabled={!supplierEmail}
-              className="input w-full resize-none text-xs disabled:opacity-50"
+              className="w-full resize-none bg-transparent px-4 py-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none disabled:opacity-50"
             />
-            <p className="text-[10px] text-[var(--muted)]">
-              Variables:{" "}
-              {["first_name","last_name","company_name","email","phone","website"].map((v) => (
-                <code key={v} className="mr-1 rounded bg-[var(--accent-soft)] px-1">&#123;&#123;{v}&#125;&#125;</code>
-              ))}
-            </p>
+
+            {/* Errors */}
             {emailError === "NO_SMTP_CONNECTED" && (
-              <div className="rounded-lg border border-amber-400 bg-amber-400/20 px-3 py-2 text-xs font-medium text-amber-200">
+              <div className="mx-4 mb-2 rounded-lg border border-amber-400 bg-amber-400/10 px-3 py-2 text-xs font-medium text-amber-400">
                 ⚠ No email account connected.{" "}
-                <Link href="/settings" className="underline font-semibold text-white hover:text-amber-100">
-                  Connect your email in Settings →
+                <Link href="/settings" className="underline font-semibold hover:text-amber-300">
+                  Connect in Settings →
                 </Link>
               </div>
             )}
             {emailError && emailError !== "NO_SMTP_CONNECTED" && (
-              <div className="rounded-lg border border-red-400 bg-red-500/20 px-3 py-2 text-xs font-medium text-red-200">
-                ⚠ Failed to send: {emailError}
+              <div className="mx-4 mb-2 rounded-lg border border-red-400 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                ⚠ {emailError}
               </div>
             )}
-            <div className="flex items-center justify-between">
-              {sent && (
-                <span className="flex items-center gap-1 text-xs text-emerald-500">
-                  <Check size={12} /> Sent!
-                </span>
-              )}
-              {!sent && <span />}
-              <button
-                onClick={handleSendEmail}
-                disabled={emailPending || !supplierEmail || !subject.trim() || !body.trim()}
-                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white disabled:opacity-40 hover:bg-blue-500">
-                <Send size={12} />
-                {emailPending ? "Sending…" : "Send email"}
-              </button>
+
+            {/* Bottom toolbar */}
+            <div className="flex items-center gap-1 border-t border-[var(--border)] px-3 py-2">
+              {/* Formatting icons */}
+              <div className="flex items-center gap-0.5 flex-1">
+                {[
+                  { icon: <Type size={14} />, title: "Font" },
+                  { icon: <Smile size={14} />, title: "Emoji" },
+                  { icon: <Link2 size={14} />, title: "Insert link" },
+                  { icon: <Paperclip size={14} />, title: "Attach file" },
+                  { icon: <Bold size={14} />, title: "Bold" },
+                  { icon: <Italic size={14} />, title: "Italic" },
+                  { icon: <Underline size={14} />, title: "Underline" },
+                  { icon: <List size={14} />, title: "List" },
+                  { icon: <Braces size={14} />, title: "Custom values" },
+                  { icon: <Image size={14} />, title: "Insert image" },
+                ].map(({ icon, title }) => (
+                  <button key={title} title={title}
+                    className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
+                    {icon}
+                  </button>
+                ))}
+              </div>
+
+              {/* Right: trash + send */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {sent && <span className="flex items-center gap-1 text-xs text-emerald-500"><Check size={11} /> Sent!</span>}
+                <button
+                  onClick={() => { setSubject(""); setBody(""); setSelectedTemplate(""); }}
+                  title="Clear draft"
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition">
+                  <Trash2 size={14} />
+                </button>
+                {/* Send button with dropdown */}
+                <div className="relative flex">
+                  <button
+                    onClick={handleSendEmail}
+                    disabled={emailPending || !supplierEmail || !subject.trim() || !body.trim()}
+                    className="flex items-center gap-1.5 rounded-l-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 hover:bg-blue-500 transition">
+                    <Send size={12} />
+                    {emailPending ? "Sending…" : "Send"}
+                  </button>
+                  <button
+                    onClick={() => setShowSendMenu(v => !v)}
+                    className="flex items-center justify-center rounded-r-lg border-l border-blue-500 bg-blue-600 px-1.5 py-1.5 text-white hover:bg-blue-500 transition disabled:opacity-40"
+                    disabled={!supplierEmail}>
+                    <ChevronDown size={12} />
+                  </button>
+                  {showSendMenu && (
+                    <div className="absolute bottom-full right-0 mb-1 w-36 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-lg overflow-hidden z-20">
+                      <button
+                        onClick={() => { handleSendEmail(); setShowSendMenu(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-[var(--foreground)] hover:bg-[var(--accent-soft)] transition">
+                        <Send size={12} /> Send
+                      </button>
+                      <button
+                        onClick={() => setShowSendMenu(false)}
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-[var(--muted)] hover:bg-[var(--accent-soft)] transition">
+                        🕐 Send Later
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col">
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              rows={4}
+              rows={5}
               placeholder="Add a note about this contact…"
-              className="input w-full resize-none text-xs"
+              className="w-full resize-none bg-transparent px-4 py-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none"
             />
-            <div className="flex justify-end">
+            <div className="flex justify-end border-t border-[var(--border)] px-3 py-2">
               <button
                 onClick={handleAddNote}
                 disabled={notePending || !body.trim()}
