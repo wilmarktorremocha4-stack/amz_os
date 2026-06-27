@@ -964,7 +964,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
               {messages.length === 0 && !isResponding ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
                   <AgentLogo size={120} />
-                  <h2 className="text-3xl font-extrabold text-[var(--foreground)] leading-snug">{greeting}</h2>
+                  <h2 className="text-sm sm:text-base font-extrabold text-[var(--foreground)] leading-snug">{greeting}</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
                     {starters.map(s => (
                       <button key={s.text} onClick={() => { setInput(s.text); textareaRef.current?.focus(); }}
