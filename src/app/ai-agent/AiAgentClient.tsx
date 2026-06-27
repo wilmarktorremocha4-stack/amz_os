@@ -692,7 +692,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
 
   const refreshConversations = async () => {
     const res = await fetch("/api/ai-conversations");
-    if (res.ok) setConversations(applyPinned(await res.json()));
+    if (res.ok) setConversations(await res.json());
   };
 
   const handleFileChange = async (newFiles: File[]) => {
