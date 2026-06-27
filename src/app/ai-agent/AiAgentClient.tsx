@@ -14,16 +14,18 @@ const AGENT_IMG = "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/
 const DAILY_MSG_LIMIT = 50; // configurable
 
 const GREETINGS = [
-  "Hello! Grab a coffee and let's start the conversation ☕",
-  "Hey there! What's on your mind today?",
-  "Good to see you! How can I help?",
-  "Hi! I'm here whenever you're ready.",
-  "Welcome back! What are we tackling today?",
-  "Hey! Ask me anything — I'm all ears.",
-  "What's up? Let's figure this out together.",
-  "Hello! I'm ready whenever you are.",
-  "Hey! Happy to help with whatever you need.",
-  "Good to have you here. What can I do for you?",
+  "Have you grabbed a coffee already? Now, let's talk! ☕",
+  "Good to have you here. What are we working on today?",
+  "Ready when you are — what's on your plate?",
+  "Welcome back. Let's make some moves today.",
+  "Hope the day's treating you well. What do you need?",
+  "Alright, let's get into it. What's the mission today?",
+  "You showed up — that's the first step. What's next?",
+  "No small talk needed. What can I help you crush today?",
+  "The grind doesn't stop. What are we tackling?",
+  "Another day, another opportunity. What's on your mind?",
+  "Big things happen one conversation at a time. Let's go.",
+  "Fresh session, fresh focus. What do you want to work on?",
 ];
 
 const ALL_STARTERS = [
