@@ -70,6 +70,8 @@ model User {
   workflows          Workflow[]
   aiConversations    AiConversation[]
   aiUsageLogs        AiUsageLog[]
+  usageLogs          UsageLog[]
+  userFiles          UserFile[]
   importedEmails     ImportedEmail[]
 }
 
@@ -561,6 +563,34 @@ model AiConversation {
   deletedAt          DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([userId, pinned])
+}
+
+model UsageLog {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  messageId  String?
+  tokensUsed Int      @default(0)
+  model      String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model UserFile {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  name       String
+  fileType   String   @default("document")
+  size       Int?
+  mimeType   String?
+  difyFileId String?
+  createdAt  DateTime @default(now())
 
   @@index([userId, createdAt])
 }

@@ -120,3 +120,77 @@ body {
   );
   pointer-events: none;
 }
+
+/* ─── AI Agent: thin scrollbar ─────────────────────────────────────────────── */
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.25); border-radius: 2px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,0.45); }
+
+/* ─── AI Agent: markdown prose ──────────────────────────────────────────────── */
+.prose-chat-light h1, .prose-chat-light h2, .prose-chat-light h3 { color: #111827; font-weight: 700; margin-top: 1em; margin-bottom: 0.5em; }
+.prose-chat-light p { color: #374151; margin-bottom: 0.75em; line-height: 1.7; }
+.prose-chat-light p:last-child { margin-bottom: 0; }
+.prose-chat-light ul, .prose-chat-light ol { color: #374151; padding-left: 1.5em; margin-bottom: 0.75em; }
+.prose-chat-light li { margin-bottom: 0.25em; }
+.prose-chat-light code { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 4px; padding: 0.1em 0.4em; font-size: 0.85em; color: #2563eb; }
+.prose-chat-light pre { background: #f1f5f9 !important; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1em; overflow-x: auto; margin-bottom: 0.75em; }
+.prose-chat-light pre code { background: transparent; border: none; padding: 0; font-size: 0.85em; color: #1e293b; }
+.prose-chat-light blockquote { border-left: 3px solid #93c5fd; padding-left: 1em; color: #64748b; margin: 0.75em 0; }
+.prose-chat-light a { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; }
+.prose-chat-light strong { color: #111827; font-weight: 700; }
+.prose-chat-light table { width: 100%; border-collapse: collapse; margin-bottom: 0.75em; font-size: 0.9em; }
+.prose-chat-light th { background: #eff6ff; border: 1px solid #bfdbfe; padding: 0.5em 0.75em; color: #1d4ed8; font-weight: 600; text-align: left; }
+.prose-chat-light td { border: 1px solid #e2e8f0; padding: 0.5em 0.75em; color: #374151; }
+
+/* ─── AI Agent: message entrance ────────────────────────────────────────────── */
+@keyframes messageIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.message-animate { animation: messageIn 0.25s ease-out forwards; }
+
+/* ─── AnimatedOrb ───────────────────────────────────────────────────────────── */
+@keyframes chart-halo-breathe { 0%, 100% { opacity: 0.55; filter: blur(18px); } 50% { opacity: 0.68; filter: blur(22px); } }
+@keyframes chart-halo-pulse { 0%, 100% { opacity: 0.62; filter: blur(18px); transform: scale(1); } 50% { opacity: 1; filter: blur(25px); transform: scale(1.08); } 76% { opacity: 0.88; filter: blur(22px); transform: scale(1.05); } }
+@keyframes chart-orb-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.015); } 76% { transform: scale(1.05); } }
+@keyframes chart-blob-1 { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(8%,8%) scale(1.08); } }
+@keyframes chart-blob-2 { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-8%,-6%) scale(1.05); } }
+@keyframes chart-rim-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes chart-bar1-cycle { 0%,7% { transform: scaleY(0); opacity: 0; } 14%,88% { transform: scaleY(1); opacity: 1; } 96%,100% { transform: scaleY(0); opacity: 0; } }
+@keyframes chart-bar2-cycle { 0%,22% { transform: scaleY(0); opacity: 0; } 29%,88% { transform: scaleY(1); opacity: 1; } 96%,100% { transform: scaleY(0); opacity: 0; } }
+@keyframes chart-bar3-cycle { 0%,38% { transform: scaleY(0); opacity: 0; } 45%,88% { transform: scaleY(1); opacity: 1; } 96%,100% { transform: scaleY(0); opacity: 0; } }
+@keyframes chart-curve-cycle { 0%,52% { stroke-dashoffset: 300; opacity: 0; } 54% { opacity: 1; } 70%,88% { stroke-dashoffset: 0; opacity: 1; } 96%,100% { stroke-dashoffset: 300; opacity: 0; } }
+@keyframes chart-arrow-cycle { 0%,66% { opacity: 0; } 72%,88% { opacity: 1; } 96%,100% { opacity: 0; } }
+.chart-orb { position: absolute; inset: 0; }
+.chart-halo { position: absolute; inset: -20%; border-radius: 50%; background: radial-gradient(circle, rgba(0,210,255,0.45), rgba(30,90,255,0.18) 55%, transparent 78%); pointer-events: none; }
+.chart-orb-body { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; background: #040918; }
+.chart-blob { position: absolute; border-radius: 50%; mix-blend-mode: screen; }
+.chart-blob-1 { width: 76%; height: 76%; top: -6%; left: -6%; background: radial-gradient(circle, #22e6ff, transparent 70%); }
+.chart-blob-2 { width: 82%; height: 82%; bottom: -12%; right: -9%; background: radial-gradient(circle, #3d6bff, transparent 70%); }
+.chart-bar { transform-box: fill-box; transform-origin: 50% 100%; }
+.chart-curve { stroke-dasharray: 300; }
+.chart-rim { position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(150,220,255,0.3); pointer-events: none; }
+.chart-arc { position: absolute; inset: 6%; border-radius: 50%; border: 1.5px solid transparent; border-top-color: rgba(180,235,255,0.5); pointer-events: none; }
+.chart-orb--idle .chart-halo { animation: chart-halo-breathe 5s ease-in-out infinite; }
+.chart-orb--idle .chart-bar-1, .chart-orb--idle .chart-bar-2, .chart-orb--idle .chart-bar-3 { transform: scaleY(1); opacity: 1; }
+.chart-orb--idle .chart-curve { stroke-dashoffset: 0; opacity: 1; }
+.chart-orb--idle .chart-arrow { opacity: 1; }
+.chart-orb--active { animation: chart-orb-pulse 1.7s ease-in-out infinite; }
+.chart-orb--active .chart-halo { animation: chart-halo-pulse 1.7s ease-in-out infinite; }
+.chart-orb--active .chart-blob-1 { animation: chart-blob-1 1.7s ease-in-out infinite; }
+.chart-orb--active .chart-blob-2 { animation: chart-blob-2 1.7s ease-in-out infinite; }
+.chart-orb--active .chart-bar-1 { animation: chart-bar1-cycle 1.7s ease-in-out infinite; }
+.chart-orb--active .chart-bar-2 { animation: chart-bar2-cycle 1.7s ease-in-out infinite; }
+.chart-orb--active .chart-bar-3 { animation: chart-bar3-cycle 1.7s ease-in-out infinite; }
+.chart-orb--active .chart-curve { animation: chart-curve-cycle 1.7s ease-in-out infinite; }
+.chart-orb--active .chart-arrow { animation: chart-arrow-cycle 1.7s ease-in-out infinite; }
+.chart-orb--active .chart-arc { animation: chart-rim-spin 1.7s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .chart-orb--idle .chart-halo,
+  .chart-orb--active, .chart-orb--active .chart-halo, .chart-orb--active .chart-blob-1,
+  .chart-orb--active .chart-blob-2, .chart-orb--active .chart-bar-1, .chart-orb--active .chart-bar-2,
+  .chart-orb--active .chart-bar-3, .chart-orb--active .chart-curve, .chart-orb--active .chart-arrow,
+  .chart-orb--active .chart-arc { animation: none !important; }
+  .chart-orb--active .chart-bar-1, .chart-orb--active .chart-bar-2,
+  .chart-orb--active .chart-bar-3 { transform: scaleY(1); opacity: 1; }
+  .chart-orb--active .chart-curve { stroke-dashoffset: 0; opacity: 1; }
+  .chart-orb--active .chart-arrow { opacity: 1; }
+}

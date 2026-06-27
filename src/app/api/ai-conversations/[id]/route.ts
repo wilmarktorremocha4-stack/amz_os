@@ -70,17 +70,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await getCurrentUser();
     const { id } = await params;
-    const key = getDifyKey();
+    let title = "Deleted Chat";
+    try { const body = await req.json(); if (body?.title) title = body.title; } catch {}
 
-    await fetch(`${DIFY_API_URL}/conversations/${id}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ user: user.id }),
+    // Soft delete — moves to Archive tab in Settings, fully restorable
+    await prisma.aiConversation.upsert({
+      where: { id },
+      update: { deletedAt: new Date(), title },
+      create: { id, userId: user.id, title, deletedAt: new Date() },
     });
+
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
