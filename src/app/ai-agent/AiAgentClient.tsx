@@ -66,18 +66,6 @@ function shufflePick<T>(arr: T[], n: number): T[] {
 }
 
 /* ─── localStorage helpers ─── */
-function getPinnedIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem("ai-pinned-ids") ?? "[]") as string[]; } catch { return []; }
-}
-function savePinnedIds(ids: string[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem("ai-pinned-ids", JSON.stringify(ids));
-}
-function applyPinned(convs: Conversation[]): Conversation[] {
-  const ids = getPinnedIds();
-  return convs.map(c => ({ ...c, pinned: ids.includes(c.id) }));
-}
 
 type ArchivedConv = { id: string; title: string; deletedAt: string };
 function getArchived(): ArchivedConv[] {
@@ -638,7 +626,7 @@ function UsageBar({ count }: { count: number }) {
 
 /* ─── Main ─── */
 export default function AiAgentClient({ initialConversations }: { initialConversations: Conversation[] }) {
-  const [conversations, setConversations] = useState<Conversation[]>(() => applyPinned(initialConversations));
+  const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
   const [archived, setArchived] = useState<ArchivedConv[]>(() => getArchived());
   const [storedFiles, setStoredFiles] = useState<StoredFileRecord[]>(() => getStoredFiles());
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -670,7 +658,7 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     setUsageCount(getUsageCount());
     fetch("/api/ai-conversations")
       .then(r => r.ok ? r.json() : [])
-      .then((convs: Conversation[]) => setConversations(applyPinned(convs)))
+      .then((convs: Conversation[]) => setConversations(convs))
       .catch(() => {});
   }, []);
 
@@ -838,12 +826,24 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
     setConversations(prev => prev.map(c => c.id === convId ? { ...c, title } : c));
   };
 
-  const handlePin = (convId: string) => {
+  const handlePin = async (convId: string) => {
     const conv = conversations.find(c => c.id === convId); if (!conv) return;
-    const ids = getPinnedIds();
-    const newIds = conv.pinned ? ids.filter(id => id !== convId) : [...ids, convId];
-    savePinnedIds(newIds);
-    setConversations(prev => prev.map(c => c.id === convId ? { ...c, pinned: !c.pinned } : c));
+    const newPinned = !conv.pinned;
+    // Optimistic UI update
+    setConversations(prev => {
+      const updated = prev.map(c => c.id === convId ? { ...c, pinned: newPinned } : c);
+      return updated.sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+    });
+    // Save to Supabase — syncs across CRM and standalone app
+    await fetch(`/api/ai-conversations/${convId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned: newPinned }),
+    });
   };
 
   const handleDelete = (convId: string) => {
@@ -853,7 +853,6 @@ export default function AiAgentClient({ initialConversations }: { initialConvers
       saveArchived(newArchived); setArchived(newArchived);
     }
     setConversations(prev => prev.filter(c => c.id !== convId));
-    savePinnedIds(getPinnedIds().filter(id => id !== convId));
     if (activeConvId === convId) startNew();
     setDeleteModal(null);
   };

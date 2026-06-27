@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/currentUser";
+import { prisma } from "@/lib/prisma";
 
 const DIFY_API_URL = process.env.DIFY_API_URL ?? "https://api.dify.ai/v1";
 function getDifyKey() {
+  return process.env.DIFY_API_KEY ?? "";
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -40,6 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const key = getDifyKey();
 
+    // Update title in Dify
     if (typeof body.title === "string") {
       await fetch(`${DIFY_API_URL}/conversations/${id}/name`, {
         method: "POST",
@@ -47,6 +50,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         body: JSON.stringify({ name: body.title, user: user.id }),
       });
     }
+
+    // Persist pinned and/or title to Supabase so it syncs across all apps
+    const dbUpdate: { pinned?: boolean; title?: string; userId?: string } = {};
+    if (typeof body.pinned === "boolean") dbUpdate.pinned = body.pinned;
+    if (typeof body.title === "string") dbUpdate.title = body.title;
+
+    if (Object.keys(dbUpdate).length > 0) {
+      await prisma.aiConversation.upsert({
+        where: { id },
+        update: dbUpdate,
+        create: { id, userId: user.id, title: body.title ?? "New Chat", pinned: body.pinned ?? false },
+      });
+    }
+
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
